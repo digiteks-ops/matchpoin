@@ -1,0 +1,314 @@
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { createClient } from "@/lib/supabase/client";
+import { Trophy, Search, MapPin, Medal, Crown, TrendingUp } from "lucide-react";
+import type { City } from "@/types/database.types";
+
+interface LeaderboardRow {
+  userId: string;
+  name: string;
+  rating: number;
+  peakRating: number;
+  matchesPlayed: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  cityName: string;
+  cityId: string | null;
+  isProvisional: boolean;
+}
+
+type ProfileRow = {
+  user_id: string;
+  display_name: string | null;
+  preferred_court_id: string | null;
+  tennis_courts: {
+    name: string;
+    city_id: string;
+    cities: { name: string; province: string } | { name: string; province: string }[] | null;
+  } | null;
+};
+
+type RatingRow = {
+  user_id: string;
+  current_rating: number | null;
+  peak_rating: number | null;
+  matches_played: number | null;
+  wins: number | null;
+  losses: number | null;
+};
+
+export default function LeaderboardPage() {
+  const [rows, setRows] = useState<LeaderboardRow[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCity, setSelectedCity] = useState("all");
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const supabase = createClient();
+        const [profilesResult, ratingsResult, citiesResult] = await Promise.all([
+          supabase
+            .from("player_profiles")
+            .select("user_id, display_name, preferred_court_id, tennis_courts(name, city_id, cities(name, province))")
+            .eq("is_profile_public", true)
+            .limit(500),
+          supabase
+            .from("player_ratings")
+            .select("user_id, current_rating, peak_rating, matches_played, wins, losses")
+            .limit(1000),
+          supabase.from("cities").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
+        ]);
+
+        if (citiesResult.data) setCities(citiesResult.data as City[]);
+
+        const ratingByUser = new Map<string, RatingRow>();
+        ((ratingsResult.data ?? []) as unknown as RatingRow[]).forEach((r) =>
+          ratingByUser.set(r.user_id, r)
+        );
+
+        const merged: LeaderboardRow[] = ((profilesResult.data ?? []) as unknown as ProfileRow[]).map(
+          (p) => {
+            const rating = ratingByUser.get(p.user_id);
+            const court = p.tennis_courts;
+            const city = court?.cities
+              ? Array.isArray(court.cities)
+                ? court.cities[0]
+                : court.cities
+              : null;
+            const matchesPlayed = rating?.matches_played ?? 0;
+            const wins = rating?.wins ?? 0;
+            return {
+              userId: p.user_id,
+              name: p.display_name || "Pemain MATCHPOIN",
+              rating: Number(rating?.current_rating ?? 1),
+              peakRating: Number(rating?.peak_rating ?? rating?.current_rating ?? 1),
+              matchesPlayed,
+              wins,
+              losses: rating?.losses ?? 0,
+              winRate: matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : 0,
+              cityName: city?.name || "Makassar",
+              cityId: court?.city_id ?? null,
+              isProvisional: matchesPlayed === 0,
+            };
+          }
+        );
+
+        merged.sort(
+          (a, b) =>
+            b.rating - a.rating ||
+            b.wins - a.wins ||
+            b.matchesPlayed - a.matchesPlayed ||
+            a.name.localeCompare(b.name)
+        );
+
+        setRows(merged);
+      } catch (err) {
+        console.error("Error loading leaderboard:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const filtered = useMemo(() => {
+    return rows.filter((r) => {
+      if (selectedCity !== "all" && r.cityId !== selectedCity) return false;
+      if (searchQuery.trim() && !r.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      return true;
+    });
+  }, [rows, searchQuery, selectedCity]);
+
+  const ranked = filtered.map((row, index) => ({ ...row, rank: index + 1 }));
+  const podium = ranked.slice(0, 3);
+
+  return (
+    <div className="flex-1 bg-slate-50 py-8 md:py-12">
+      <div className="container mx-auto px-4 sm:px-6 space-y-8">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-matchpoin-navy bg-white border border-slate-200 px-3 py-1 rounded-full">
+              <Trophy className="w-3.5 h-3.5 text-matchpoin-tennis" />
+              <span>Peringkat Pemain</span>
+            </div>
+            <h1 className="text-3xl font-extrabold font-heading text-slate-900 tracking-tight">Leaderboard MATCHPOIN</h1>
+            <p className="text-slate-600 text-xs sm:text-sm max-w-xl leading-relaxed">
+              Peringkat berdasarkan MATCHPOIN Rating dari pertandingan yang telah dikonfirmasi.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Link href="/players">
+              <Button variant="outline">Cari Lawan</Button>
+            </Link>
+            <Link href="/matches">
+              <Button variant="tennis" className="text-matchpoin-navy font-bold">
+                Buat Pertandingan
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+            <Input
+              type="search"
+              placeholder="Cari pemain..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 bg-slate-50 border-slate-200 text-sm"
+            />
+          </div>
+          <select
+            value={selectedCity}
+            onChange={(e) => setSelectedCity(e.target.value)}
+            className="h-10 w-full sm:w-56 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700"
+            aria-label="Filter kota"
+          >
+            <option value="all">Semua Kota</option>
+            {cities.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-32 rounded-2xl bg-white border border-slate-200 animate-pulse" />
+            ))}
+          </div>
+        ) : podium.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {podium.map((p, index) => (
+              <Card
+                key={p.userId}
+                className={`border-slate-200 ${index === 0 ? "bg-matchpoin-navy text-white" : "bg-white"}`}
+              >
+                <CardContent className="p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div
+                      className={`w-10 h-10 rounded-full flex items-center justify-center font-black font-heading ${
+                        index === 0
+                          ? "bg-matchpoin-tennis text-matchpoin-navy"
+                          : "bg-slate-100 text-slate-700"
+                      }`}
+                    >
+                      {p.rank}
+                    </div>
+                    {index === 0 ? (
+                      <Crown className="w-6 h-6 text-matchpoin-tennis" />
+                    ) : (
+                      <Medal className="w-5 h-5 text-slate-400" />
+                    )}
+                  </div>
+                  <div>
+                    <p className={`font-bold font-heading truncate ${index === 0 ? "text-white" : "text-slate-900"}`}>
+                      {p.name}
+                    </p>
+                    <p className={`text-xs flex items-center gap-1 ${index === 0 ? "text-slate-300" : "text-slate-500"}`}>
+                      <MapPin className="w-3 h-3" />
+                      {p.cityName}
+                    </p>
+                  </div>
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className={`text-[10px] uppercase font-bold ${index === 0 ? "text-slate-400" : "text-slate-400"}`}>
+                        Rating
+                      </p>
+                      <p className={`text-2xl font-extrabold font-heading ${index === 0 ? "text-matchpoin-tennis" : "text-matchpoin-navy"}`}>
+                        {p.rating.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="text-right text-xs">
+                      <p className={index === 0 ? "text-slate-300" : "text-slate-500"}>
+                        {p.wins}W · {p.losses}L
+                      </p>
+                      <p className={index === 0 ? "text-slate-400" : "text-slate-400"}>{p.matchesPlayed} match</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon={Trophy}
+            title="Belum Ada Peringkat"
+            description="Belum ada pemain publik yang dapat ditampilkan. Jadilah yang pertama tampil di leaderboard."
+            action={
+              <Link href="/register">
+                <Button variant="tennis" className="text-matchpoin-navy font-bold">
+                  Daftar Pemain
+                </Button>
+              </Link>
+            }
+          />
+        )}
+
+        {!isLoading && ranked.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+            <div className="hidden sm:grid grid-cols-12 gap-3 px-5 py-3 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200">
+              <span className="col-span-1">#</span>
+              <span className="col-span-5">Pemain</span>
+              <span className="col-span-2">Kota</span>
+              <span className="col-span-2 text-right">Rating</span>
+              <span className="col-span-2 text-right">Rekor</span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {ranked.map((p) => (
+                <div key={p.userId} className="grid grid-cols-12 gap-3 px-5 py-3 items-center text-sm">
+                  <div className="col-span-2 sm:col-span-1">
+                    <span className="font-bold text-slate-500">{p.rank}</span>
+                  </div>
+                  <div className="col-span-10 sm:col-span-5 min-w-0">
+                    <Link href={`/players/${p.userId}`} className="font-semibold text-slate-900 hover:text-matchpoin-navy truncate block">
+                      {p.name}
+                    </Link>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {p.isProvisional && (
+                        <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200">
+                          Provisori
+                        </Badge>
+                      )}
+                      <span className="text-[10px] text-slate-400 sm:hidden">{p.cityName}</span>
+                    </div>
+                  </div>
+                  <div className="col-span-4 hidden sm:block sm:col-span-2 text-xs text-slate-500">{p.cityName}</div>
+                  <div className="col-span-4 sm:col-span-2 text-right">
+                    <span className="font-extrabold font-heading text-matchpoin-navy">{p.rating.toFixed(2)}</span>
+                  </div>
+                  <div className="col-span-8 sm:col-span-2 text-right text-xs text-slate-600">
+                    <span className="font-bold text-emerald-600">{p.wins}W</span>
+                    <span className="text-slate-300"> · </span>
+                    <span className="font-bold text-rose-600">{p.losses}L</span>
+                    <span className="text-slate-400"> · {p.winRate}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-start gap-3 text-xs text-slate-500">
+          <TrendingUp className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+          <p>
+            Rating diperbarui hanya setelah hasil pertandingan dikonfirmasi oleh kedua pihak atau melewati batas sanggahan 48 jam.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

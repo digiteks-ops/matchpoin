@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 14% 96%; /* #F4F5F7 Light Gray */
+    --foreground: 218 72% 15%; /* #0B1F44 Deep Navy */
+
+    --card: 0 0% 100%;
+    --card-foreground: 218 72% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 218 72% 15%;
+
+    --primary: 218 72% 15%; /* #0B1F44 Deep Navy */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 90%;
+    --secondary-foreground: 218 72% 15%;
+
+    --muted: 220 14% 92%;
+    --muted-foreground: 215 16% 47%; /* #64748B Slate */
+
+    --accent: 81 100% 50%; /* #A6FF00 Tennis Green */
+    --accent-foreground: 218 72% 15%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 81 100% 50%; /* Tennis Green focus ring */
+
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 218 72% 8%;
+    --foreground: 210 20% 98%;
+
+    --card: 218 70% 12%;
+    --card-foreground: 210 20% 98%;
+
+    --popover: 218 70% 12%;
+    --popover-foreground: 210 20% 98%;
+
+    --primary: 81 100% 50%; /* Tennis Green highlight in dark mode */
+    --primary-foreground: 218 72% 15%;
+
+    --secondary: 218 50% 18%;
+    --secondary-foreground: 210 20% 98%;
+
+    --muted: 218 50% 18%;
+    --muted-foreground: 215 16% 65%;
+
+    --accent: 81 100% 50%;
+    --accent-foreground: 218 72% 15%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 20% 98%;
+
+    --border: 218 50% 20%;
+    --input: 218 50% 20%;
+    --ring: 81 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Custom Tennis Accent utilities */
+.tennis-badge {
+  background-color: #A6FF00;
+  color: #0B1F44;
+  font-weight: 700;
+}
+
+.navy-card {
+  background: linear-gradient(135deg, #0B1F44 0%, #133177 100%);
+  color: #FFFFFF;
+}

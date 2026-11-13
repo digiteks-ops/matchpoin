@@ -1,0 +1,52 @@
+import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { getMatchDetail } from "@/lib/services/match-service";
+import { getMatchResult } from "@/lib/services/rating-service";
+import { MatchDetailClient, type ViewerInfo } from "@/components/matches/match-detail-client";
+
+export const dynamic = "force-dynamic";
+
+export default async function MatchDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const match = await getMatchDetail(params.id);
+  if (!match) notFound();
+
+  const result = await getMatchResult(params.id);
+
+  let viewer: ViewerInfo = {
+    id: user?.id ?? null,
+    isParticipant: false,
+    isOrganizer: false,
+    isPending: false,
+    isInvited: false,
+    inviteId: null,
+    team: null,
+  };
+
+  if (user) {
+    const confirmed = match.participants.find((p) => p.userId === user.id);
+    const pending = match.pendingRequests.find((p) => p.userId === user.id);
+    const invited = match.invitedPlayers.find((p) => p.userId === user.id);
+    const participant = confirmed ?? pending ?? invited;
+
+    viewer = {
+      id: user.id,
+      isParticipant: Boolean(confirmed),
+      isOrganizer: match.organizerId === user.id,
+      isPending: Boolean(pending),
+      isInvited: Boolean(invited),
+      inviteId: invited?.id ?? null,
+      team: participant?.team ?? null,
+    };
+  }
+
+  return <MatchDetailClient match={match} result={result} viewer={viewer} />;
+}
