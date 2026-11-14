@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -51,6 +52,8 @@ export default function LeaderboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCity, setSelectedCity] = useState("all");
+  const [province, setProvince] = useState<string>("");
+  const [provinceOptions, setProvinceOptions] = useState<string[]>([]);
 
   useEffect(() => {
     async function load() {
@@ -69,7 +72,13 @@ export default function LeaderboardPage() {
           supabase.from("cities").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
         ]);
 
-        if (citiesResult.data) setCities(citiesResult.data as City[]);
+        if (citiesResult.data) {
+          setCities(citiesResult.data as City[]);
+          const provinces = Array.from(
+            new Set((citiesResult.data as City[]).map((c) => c.province).filter(Boolean))
+          ).sort();
+          setProvinceOptions(provinces);
+        }
 
         const ratingByUser = new Map<string, RatingRow>();
         ((ratingsResult.data ?? []) as unknown as RatingRow[]).forEach((r) =>
@@ -169,19 +178,41 @@ export default function LeaderboardPage() {
               className="pl-9 bg-slate-50 border-slate-200 text-sm"
             />
           </div>
-          <select
-            value={selectedCity}
-            onChange={(e) => setSelectedCity(e.target.value)}
-            className="h-10 w-full sm:w-56 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700"
-            aria-label="Filter kota"
-          >
-            <option value="all">Semua Kota</option>
-            {cities.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+
+          <div className="space-y-2 w-full sm:w-56">
+            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Provinsi</Label>
+            <select
+              value={province}
+              onChange={(e) => {
+                const val = e.target.value;
+                setProvince(val);
+                setSelectedCity("all");
+              }}
+              className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus:border-matchpoin-tennis"
+            >
+              <option value="">Pilih Provinsi...</option>
+              {provinceOptions.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2 w-full sm:w-56">
+            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Kota / Kabupaten</Label>
+            <select
+              value={selectedCity}
+              onChange={(e) => setSelectedCity(e.target.value)}
+              disabled={!province}
+              className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus:border-matchpoin-tennis disabled:opacity-50"
+            >
+              <option value="all">Semua Kota</option>
+              {cities
+                .filter((c) => !province || c.province === province)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+            </select>
+          </div>
         </div>
 
         {isLoading ? (

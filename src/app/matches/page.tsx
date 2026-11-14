@@ -106,6 +106,9 @@ export default async function MatchesPage() {
                     >
                       {isFull ? "Penuh" : "Open"}
                     </Badge>
+                    <Badge variant="secondary" className="text-[10px]">
+                      Race to {match.raceToScore}
+                    </Badge>
                   </div>
 
                   <div className="space-y-2 text-xs text-slate-600">
@@ -135,6 +138,11 @@ export default async function MatchesPage() {
                       <Trophy className="w-3.5 h-3.5 text-slate-400" />
                       {match.organizerName}
                     </span>
+                  </div>
+                  <div className="flex items-center gap-2 pt-2 text-[10px] text-slate-400">
+                    <span>Race to {match.raceToScore}</span>
+                    <span>•</span>
+                    <span>Tukar lapangan di {match.courtSwitchAt}</span>
                   </div>
                 </Link>
               );

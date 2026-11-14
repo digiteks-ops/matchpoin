@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PhotoUpload } from "@/components/matches/photo-upload";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import type { OpenMatchDetail } from "@/lib/services/match-service";
 import type { MatchResultView } from "@/lib/services/rating-service";
 import { formatIndonesianDate, formatIndonesianTime } from "@/lib/utils";
@@ -285,6 +286,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
   return (
     <div className="flex-1 bg-slate-50 py-8 md:py-12">
       <div className="container mx-auto px-4 sm:px-6 max-w-5xl space-y-6">
+        <LoadingOverlay isBusy={isBusy} message="Memproses aksi pertandingan..." />
         <div className="flex items-center justify-between">
           <Link
             href="/matches"
@@ -378,6 +380,9 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
               <Badge variant="secondary">{match.umpireOption === "dengan_wasit" ? "Dengan Wasit" : "Tanpa Wasit"}</Badge>
               {match.umpireName && <Badge variant="secondary">Wasit: {match.umpireName}</Badge>}
               <Badge variant="secondary">Rating {match.minRating.toFixed(2)} – {match.maxRating.toFixed(2)}</Badge>
+              <Badge variant="secondary">Race to {match.raceToScore}</Badge>
+              <Badge variant="secondary">Tukar lapangan di {match.courtSwitchAt}</Badge>
+              {match.courtSwapped && <Badge variant="secondary">Lapangan sudah ditukar</Badge>}
               {match.status !== "cancelled" && (
                 <Badge variant={isFull ? "secondary" : "outline"} className={isFull ? "" : "border-emerald-200 text-emerald-700"}>
                   {isFull ? "Slot penuh" : `${match.availableSlots} slot tersedia`}
@@ -439,7 +444,11 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                         disabled={isBusy}
                         onClick={() => handleAccept(p.userId)}
                       >
-                        <Check className="w-3.5 h-3.5 mr-1" />
+                        {isBusy ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5 mr-1" />
+                        )}
                         Terima
                       </Button>
                       <Button
@@ -449,7 +458,11 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                         disabled={isBusy}
                         onClick={() => handleReject(p.userId)}
                       >
-                        <XCircle className="w-3.5 h-3.5 mr-1" />
+                        {isBusy ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                        ) : (
+                          <XCircle className="w-3.5 h-3.5 mr-1" />
+                        )}
                         Tolak
                       </Button>
                     </div>
@@ -478,7 +491,11 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                         disabled={isBusy}
                         onClick={() => handleCancelInvite(p.userId)}
                       >
-                        <XCircle className="w-3.5 h-3.5 mr-1" />
+                        {isBusy ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                        ) : (
+                          <XCircle className="w-3.5 h-3.5 mr-1" />
+                        )}
                         Batalkan
                       </Button>
                     </div>
@@ -578,8 +595,17 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                     {canConfirm && !showDisputeForm && (
                       <div className="flex flex-wrap gap-2 pt-2">
                         <Button variant="tennis" className="text-matchpoin-navy font-bold" disabled={isBusy} onClick={handleConfirm}>
-                          <Check className="w-4 h-4 mr-2" />
-                          Konfirmasi Skor
+                          {isBusy ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                              Memproses...
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-4 h-4 mr-2" />
+                              Konfirmasi Skor
+                            </>
+                          )}
                         </Button>
                         <Button variant="outline" disabled={isBusy} onClick={() => setShowDisputeForm(true)}>
                           <ShieldAlert className="w-4 h-4 mr-2" />
@@ -604,7 +630,14 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                             Batal
                           </Button>
                           <Button type="submit" size="sm" variant="tennis" className="text-matchpoin-navy font-bold" disabled={isBusy}>
-                            Kirim Sanggahan
+                            {isBusy ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                                Mengirim...
+                              </>
+                            ) : (
+                              "Kirim Sanggahan"
+                            )}
                           </Button>
                         </div>
                       </form>
@@ -734,9 +767,18 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
 
                 {viewer.id && !viewer.isParticipant && !viewer.isPending && !viewer.isInvited && match.status === "open" && !isFull && (
                   <Button variant="tennis" className="w-full text-matchpoin-navy font-bold" disabled={isBusy} onClick={handleJoin}>
-                    <Users className="w-4 h-4 mr-2" />
-                    Ajukan Slot
-                  </Button>
+                  {isBusy ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                      Memproses...
+                    </>
+                  ) : (
+                    <>
+                      <Users className="w-4 h-4 mr-2" />
+                      Ajukan Slot
+                    </>
+                  )}
+                </Button>
                 )}
 
                 {viewer.id && viewer.isPending && (
@@ -756,7 +798,11 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                         disabled={isBusy}
                         onClick={() => handleInviteResponse("accept")}
                       >
-                        <Check className="w-3.5 h-3.5 mr-1" />
+                        {isBusy ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5 mr-1" />
+                        )}
                         Terima
                       </Button>
                       <Button
@@ -766,7 +812,11 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                         disabled={isBusy}
                         onClick={() => handleInviteResponse("decline")}
                       >
-                        <XCircle className="w-3.5 h-3.5 mr-1" />
+                        {isBusy ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                        ) : (
+                          <XCircle className="w-3.5 h-3.5 mr-1" />
+                        )}
                         Tolak
                       </Button>
                     </div>
@@ -782,7 +832,14 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
 
                 {viewer.id && viewer.isOrganizer && match.status !== "cancelled" && (
                   <Button variant="outline" className="w-full text-red-600" disabled={isBusy} onClick={handleCancel}>
-                    Batalkan Pertandingan
+                    {isBusy ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                        Membatalkan...
+                      </>
+                    ) : (
+                      "Batalkan Pertandingan"
+                    )}
                   </Button>
                 )}
 

@@ -54,6 +54,10 @@ export default function EditProfilePage() {
   const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
   const [preferredTimes, setPreferredTimes] = useState<string[]>([]);
 
+  // Province / City cascading dropdown state
+  const [province, setProvince] = useState<string>("");
+  const [provinceOptions, setProvinceOptions] = useState<string[]>([]);
+
   useEffect(() => {
     async function loadProfile() {
       try {
@@ -76,7 +80,19 @@ export default function EditProfilePage() {
           .eq("is_active", true)
           .order("sort_order", { ascending: true });
 
-        if (citiesData) setCities(citiesData as City[]);
+        if (citiesData) {
+          setCities(citiesData as City[]);
+          const provinces = Array.from(
+            new Set((citiesData as City[]).map((c) => c.province).filter(Boolean))
+          ).sort();
+          setProvinceOptions(provinces);
+
+          // Pre-select province when a city is already saved
+          if (cityId) {
+            const selectedCity = (citiesData as City[]).find((c) => c.id === cityId);
+            if (selectedCity) setProvince(selectedCity.province);
+          }
+        }
 
         // Fetch user record
         const { data: userData } = await supabase
@@ -348,19 +364,43 @@ export default function EditProfilePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="city">Domisili Kota</Label>
+                  <Label htmlFor="province">Provinsi</Label>
+                  <select
+                    id="province"
+                    value={province}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setProvince(val);
+                      setCityId(""); // reset city when province changes
+                    }}
+                    className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+                  >
+                    <option value="">Pilih Provinsi...</option>
+                    {provinceOptions.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="city">Kota / Kabupaten</Label>
                   <select
                     id="city"
                     value={cityId}
                     onChange={(e) => setCityId(e.target.value)}
+                    disabled={!province}
                     className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
                   >
                     <option value="">Pilih Kota...</option>
-                    {cities.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.province})
-                      </option>
-                    ))}
+                    {cities
+                      .filter((c) => !province || c.province === province)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
                   </select>
                 </div>
 

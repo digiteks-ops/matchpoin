@@ -22,6 +22,9 @@ export interface CreateOpenMatchInput {
   minRating?: number;
   maxRating?: number;
   level?: string;
+  reclubLink?: string;
+  raceToScore?: number;
+  courtSwitchAt?: number;
 }
 
 export interface MatchParticipantInfo {
@@ -62,6 +65,9 @@ export interface OpenMatchDetail {
   pendingRequests: MatchParticipantInfo[];
   invitedPlayers: MatchParticipantInfo[];
   createdAt: string;
+  raceToScore: number;
+  courtSwitchAt: number;
+  courtSwapped: boolean;
 }
 
 export const MATCH_CATEGORY_LABELS: Record<MatchCategory, string> = {

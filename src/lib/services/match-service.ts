@@ -162,6 +162,10 @@ export async function createOpenMatch(
     min_rating: input.minRating ?? 1.0,
     max_rating: input.maxRating ?? 10.0,
     level: input.level ?? "all",
+    reclub_link: input.reclubLink || null,
+    race_to: input.raceToScore ?? 8,
+    court_switch_at: input.courtSwitchAt ?? 4,
+    court_swapped: false,
   };
 
   const { data: matchData, error: matchError } = await supabase
@@ -685,6 +689,9 @@ function buildMatchDetail(
     currentPlayers,
     availableSlots,
     status,
+    raceToScore: Number(meta.race_to ?? 8),
+    courtSwitchAt: Number(meta.court_switch_at ?? 4),
+    courtSwapped: Boolean(meta.court_swapped),
     participants: confirmed,
     pendingRequests: pending,
     invitedPlayers: invited,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ export interface CourtOption {
   name: string;
   address: string;
   cityName: string;
+  province: string;
 }
 
 interface CreateMatchFormProps {
@@ -29,17 +30,34 @@ export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatc
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<MatchCategory>("mens_singles");
   const [courtId, setCourtId] = useState(courts[0]?.id ?? "");
+  const [province, setProvince] = useState<string>("");
+  const [provinceOptions, setProvinceOptions] = useState<string[]>([]);
   const [matchDate, setMatchDate] = useState("");
   const [startTime, setStartTime] = useState("16:00");
   const [durationMinutes, setDurationMinutes] = useState(90);
   const [level, setLevel] = useState("all");
   const [umpireOption, setUmpireOption] = useState<UmpirePreference>("tanpa_wasit");
   const [description, setDescription] = useState("");
+  const [reclubLink, setReclubLink] = useState("");
+  const [raceToScore, setRaceToScore] = useState(8);
+  const [courtSwitchAt, setCourtSwitchAt] = useState(4);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  useEffect(() => {
+    const provinces = Array.from(new Set(courts.map((c) => c.province).filter(Boolean))).sort();
+    setProvinceOptions(provinces);
+    if (!province && provinces.length > 0) {
+      setProvince(provinces[0]);
+      const firstInProvince = courts.find((c) => c.province === provinces[0]);
+      if (firstInProvince) setCourtId(firstInProvince.id);
+    }
+  }, [courts, province]);
+
   const today = new Date().toISOString().slice(0, 10);
+
+  const filteredCourts = courts.filter((c) => !province || c.province === province);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -56,6 +74,15 @@ export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatc
     }
     if (!matchDate || !startTime) {
       setError("Tanggal dan jam mulai wajib diisi.");
+      return;
+    }
+
+    if (raceToScore < 4 || raceToScore > 20) {
+      setError("Skor pertandingan harus antara 4 sampai 20 poin.");
+      return;
+    }
+    if (courtSwitchAt < 1 || courtSwitchAt >= raceToScore) {
+      setError("Tukar lapangan harus antara 1 sampai " + (raceToScore - 1) + " poin.");
       return;
     }
 
@@ -80,6 +107,9 @@ export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatc
           category,
           umpireOption,
           level,
+          reclubLink: reclubLink.trim() || undefined,
+          raceToScore,
+          courtSwitchAt,
         }),
       });
 
@@ -213,21 +243,47 @@ export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatc
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="province">Provinsi</Label>
+            <select
+              id="province"
+              value={province}
+              onChange={(e) => {
+                const val = e.target.value;
+                setProvince(val);
+                const firstInProvince = courts.find((c) => c.province === val);
+                if (firstInProvince) setCourtId(firstInProvince.id);
+              }}
+              disabled={isSubmitting}
+              className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+            >
+              <option value="">Pilih Provinsi...</option>
+              {provinceOptions.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="court">Lapangan</Label>
             <select
               id="court"
               value={courtId}
               onChange={(e) => setCourtId(e.target.value)}
+              disabled={isSubmitting || !province || filteredCourts.length === 0}
               className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
-              disabled={isSubmitting}
             >
-              {courts.length === 0 && <option value="">Belum ada lapangan</option>}
-              {courts.map((court) => (
+              <option value="">Pilih Kota / Lapangan...</option>
+              {filteredCourts.map((court) => (
                 <option key={court.id} value={court.id}>
                   {court.name} — {court.cityName}
                 </option>
               ))}
             </select>
+            {province && filteredCourts.length === 0 && (
+              <p className="text-[11px] text-amber-700">Belum ada lapangan di provinsi ini.</p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -309,8 +365,54 @@ export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatc
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="reclubLink">Link Reclub (opsional)</Label>
+            <Input
+              id="reclubLink"
+              type="url"
+              value={reclubLink}
+              onChange={(e) => setReclubLink(e.target.value)}
+              placeholder="https://reclub.id/..."
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div className="space-y-2 pt-3 border-t border-slate-200">
+            <Label>Aturan Pertandingan</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="raceToScore">Race To (poin menang)</Label>
+                <Input
+                  id="raceToScore"
+                  type="number"
+                  min={4}
+                  max={20}
+                  value={raceToScore}
+                  onChange={(e) => setRaceToScore(Number(e.target.value))}
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="courtSwitchAt">Tukar Lapangan di Poin</Label>
+                <Input
+                  id="courtSwitchAt"
+                  type="number"
+                  min={1}
+                  max={raceToScore - 1}
+                  value={courtSwitchAt}
+                  onChange={(e) => setCourtSwitchAt(Number(e.target.value))}
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-500">
+              Pemain pertama mencapai {raceToScore} poin menang. Lapangan ditukar otomatis saat seseorang
+              mencapai {courtSwitchAt} poin (hanya 1 kali).
+            </p>
+          </div>
+
           <div className="pt-2 flex justify-end">
-            <Button type="submit" variant="tennis" disabled={isSubmitting || courts.length === 0} className="text-matchpoin-navy font-bold gap-2">
+            <Button type="submit" variant="tennis" disabled={isSubmitting || filteredCourts.length === 0 || !courtId} className="text-matchpoin-navy font-bold gap-2">
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarPlus className="w-4 h-4" />}
               Buat Pertandingan
             </Button>

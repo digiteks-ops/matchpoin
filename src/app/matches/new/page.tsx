@@ -17,7 +17,7 @@ export default async function NewMatchPage({
 
   const { data: courts, error } = await supabase
     .from("tennis_courts")
-    .select("id, name, address, city_id, cities(name)")
+    .select("id, name, address, city_id, cities(name, province)")
     .eq("status", "available")
     .order("name", { ascending: true })
     .limit(100);
@@ -39,17 +39,21 @@ export default async function NewMatchPage({
     name: string;
     address: string;
     city_id: string;
-    cities: { name: string } | { name: string }[] | null;
-  }[]).map((court) => ({
-    id: court.id,
-    name: court.name,
-    address: court.address,
-    cityName: court.cities
+    cities: { name: string; province: string } | { name: string; province: string }[] | null;
+  }[]).map((court) => {
+    const city = court.cities
       ? Array.isArray(court.cities)
-        ? court.cities[0]?.name ?? "Makassar"
-        : court.cities.name
-      : "Makassar",
-  }));
+        ? court.cities[0]
+        : court.cities
+      : { name: "Makassar", province: "Sulawesi Selatan" };
+    return {
+      id: court.id,
+      name: court.name,
+      address: court.address,
+      cityName: city.name,
+      province: city.province,
+    };
+  });
 
   return (
     <div className="flex-1 bg-slate-50 py-8 md:py-12">
