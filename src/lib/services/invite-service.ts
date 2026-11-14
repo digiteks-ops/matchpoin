@@ -5,6 +5,7 @@ import {
   logicalMaxPlayers,
   type MatchCategory,
 } from "@/lib/matches/constants";
+import { hasPlayedBefore } from "@/lib/services/match-service";
 
 export type InviteStatus = "invited" | "confirmed" | "declined" | "revoked";
 
@@ -110,6 +111,11 @@ export async function invitePlayerToMatch(
   if (!match) throw new Error("Pertandingan tidak ditemukan.");
   if (match.organizer_id !== organizerId) {
     throw new Error("Hanya penyelenggara yang dapat mengundang pemain.");
+  }
+
+  const alreadyPlayed = await hasPlayedBefore(supabase, organizerId, inviteeId);
+  if (alreadyPlayed) {
+    throw new Error("Anda sudah pernah bertanding dengan pemain ini. Anti-rematch aktif.");
   }
   if (match.status !== "open") {
     throw new Error("Undangan hanya dapat dikirim untuk pertandingan yang masih dibuka.");
@@ -264,7 +270,7 @@ export async function respondToInvite(
 
   const { data: row, error: rowError } = await supabase
     .from("match_participants")
-    .select("id, match_id, user_id, metadata, matches(status, metadata)")
+    .select("id, match_id, user_id, team, metadata, matches(status, metadata)")
     .eq("id", participantRowId)
     .maybeSingle();
 
@@ -327,6 +333,7 @@ export async function respondToInvite(
     .update({
       metadata: { ...meta(row.metadata), status: "confirmed" },
       confirmed_at: new Date().toISOString(),
+      team: row.team ?? 2,
     })
     .eq("id", participantRowId)
     .eq("user_id", userId);

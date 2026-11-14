@@ -7,9 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { AlertCircle, Loader2, CalendarPlus } from "lucide-react";
+import { AlertCircle, Loader2, CalendarPlus, RotateCcw, Trophy } from "lucide-react";
 import { MATCH_CATEGORY_LABELS, type MatchCategory, type UmpirePreference } from "@/lib/matches/constants";
 import { ERROR_CREATE_MATCH, ERROR_NETWORK, isOffline, logError } from "@/lib/errors";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
+import { toPlatformIsoString } from "@/lib/utils";
 
 export interface CourtOption {
   id: string;
@@ -39,11 +41,13 @@ export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatc
   const [umpireOption, setUmpireOption] = useState<UmpirePreference>("tanpa_wasit");
   const [description, setDescription] = useState("");
   const [reclubLink, setReclubLink] = useState("");
-  const [raceToScore, setRaceToScore] = useState(8);
-  const [courtSwitchAt, setCourtSwitchAt] = useState(4);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Aturan liga fix: Race to 8, tukar lapangan di poin 4 (1x)
+  const RACE_TO_SCORE = 8;
+  const COURT_SWITCH_AT = 4;
 
   useEffect(() => {
     const provinces = Array.from(new Set(courts.map((c) => c.province).filter(Boolean))).sort();
@@ -77,13 +81,12 @@ export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatc
       return;
     }
 
-    if (raceToScore < 4 || raceToScore > 20) {
-      setError("Skor pertandingan harus antara 4 sampai 20 poin.");
-      return;
-    }
-    if (courtSwitchAt < 1 || courtSwitchAt >= raceToScore) {
-      setError("Tukar lapangan harus antara 1 sampai " + (raceToScore - 1) + " poin.");
-      return;
+    if (matchDate || startTime) {
+      const startsAt = toPlatformIsoString(matchDate, startTime);
+      if (!startsAt || new Date(startsAt).getTime() < Date.now()) {
+        setError("Jadwal pertandingan harus di waktu yang akan datang.");
+        return;
+      }
     }
 
     if (isOffline()) {
@@ -108,8 +111,8 @@ export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatc
           umpireOption,
           level,
           reclubLink: reclubLink.trim() || undefined,
-          raceToScore,
-          courtSwitchAt,
+          raceToScore: RACE_TO_SCORE,
+          courtSwitchAt: COURT_SWITCH_AT,
         }),
       });
 
@@ -378,43 +381,43 @@ export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatc
           </div>
 
           <div className="space-y-2 pt-3 border-t border-slate-200">
-            <Label>Aturan Pertandingan</Label>
+            <Label>Aturan Pertandingan (Liga)</Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="raceToScore">Race To (poin menang)</Label>
-                <Input
-                  id="raceToScore"
-                  type="number"
-                  min={4}
-                  max={20}
-                  value={raceToScore}
-                  onChange={(e) => setRaceToScore(Number(e.target.value))}
-                  disabled={isSubmitting}
-                />
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2">
+                  <Trophy className="w-3.5 h-3.5 text-matchpoin-tennis" />
+                  <span>Race to {RACE_TO_SCORE}</span>
+                </div>
+                <p className="text-[10px] text-slate-500">Pemain pertama mencapai {RACE_TO_SCORE} poin menang.</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="courtSwitchAt">Tukar Lapangan di Poin</Label>
-                <Input
-                  id="courtSwitchAt"
-                  type="number"
-                  min={1}
-                  max={raceToScore - 1}
-                  value={courtSwitchAt}
-                  onChange={(e) => setCourtSwitchAt(Number(e.target.value))}
-                  disabled={isSubmitting}
-                />
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2">
+                  <RotateCcw className="w-3.5 h-3.5 text-matchpoin-navy" />
+                  <span>Tukar lapangan di poin {COURT_SWITCH_AT}</span>
+                </div>
+                <p className="text-[10px] text-slate-500">Saat seseorang mencapai {COURT_SWITCH_AT} poin, sisi lapangan ditukar (1x).</p>
               </div>
             </div>
             <p className="text-[10px] text-slate-500">
-              Pemain pertama mencapai {raceToScore} poin menang. Lapangan ditukar otomatis saat seseorang
-              mencapai {courtSwitchAt} poin (hanya 1 kali).
+              Aturan ini tidak dapat diubah dan berlaku untuk semua pertandingan liga MATCHPOIN Q1 2027.
             </p>
           </div>
 
+          <LoadingOverlay isBusy={isSubmitting} message="Membuat pertandingan..." />
+
           <div className="pt-2 flex justify-end">
             <Button type="submit" variant="tennis" disabled={isSubmitting || filteredCourts.length === 0 || !courtId} className="text-matchpoin-navy font-bold gap-2">
-              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarPlus className="w-4 h-4" />}
-              Buat Pertandingan
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Membuat...
+                </>
+              ) : (
+                <>
+                  <CalendarPlus className="w-4 h-4" />
+                  Buat Pertandingan
+                </>
+              )}
             </Button>
           </div>
         </form>

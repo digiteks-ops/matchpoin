@@ -19,6 +19,45 @@ export * from "@/lib/matches/constants";
 
 const VALID_STATUSES: MatchStatus[] = ["open", "full", "in_progress", "completed", "cancelled"];
 
+/**
+ * Cek apakah dua pemain sudah pernah bertanding dalam match yang Completed.
+ * Digunakan untuk anti-rematch dalam liga.
+ */
+export async function hasPlayedBefore(
+  supabase: ReturnType<typeof createClient>,
+  userIdA: string,
+  userIdB: string
+): Promise<boolean> {
+  const { data: results } = await supabase
+    .from("match_results")
+    .select("match_id")
+    .eq("status", "confirmed");
+
+  if (!results || results.length === 0) return false;
+
+  const matchIds = results.map((r) => r.match_id);
+  const { data: participants } = await supabase
+    .from("match_participants")
+    .select("match_id, user_id")
+    .in("match_id", matchIds);
+
+  if (!participants) return false;
+
+  const matchPlayerSets: Record<string, string[]> = {};
+  for (const p of participants) {
+    if (!matchPlayerSets[p.match_id]) matchPlayerSets[p.match_id] = [];
+    matchPlayerSets[p.match_id].push(p.user_id);
+  }
+
+  const matchIdList = Object.keys(matchPlayerSets);
+  for (let i = 0; i < matchIdList.length; i++) {
+    const players = matchPlayerSets[matchIdList[i]];
+    if (players.includes(userIdA) && players.includes(userIdB)) return true;
+  }
+
+  return false;
+}
+
 type MatchMetadata = {
   category?: string;
   umpire_option?: string;

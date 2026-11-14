@@ -148,8 +148,8 @@ async function getMatchContext(matchId: string) {
   const confirmed = (participants ?? []).filter(
     (p) => p.is_organizer || metadataObject(p.metadata).status === "confirmed"
   );
-  const team1 = confirmed.filter((p) => (p.team === 2 ? 2 : 1) === 1);
-  const team2 = confirmed.filter((p) => (p.team === 2 ? 2 : 1) === 2);
+  const team1 = confirmed.filter((p) => p.team === 1);
+  const team2 = confirmed.filter((p) => p.team === 2);
 
   return { supabase, match, meta, category, team1, team2 };
 }

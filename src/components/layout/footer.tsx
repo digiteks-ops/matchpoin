@@ -47,6 +47,11 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/league" className="hover:text-matchpoin-tennis transition-colors">
+                  Liga Q1 2027
+                </Link>
+              </li>
+              <li>
                 <Link href="/login" className="hover:text-matchpoin-tennis transition-colors">
                   Masuk Akun
                 </Link>

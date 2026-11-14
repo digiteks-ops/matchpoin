@@ -108,8 +108,8 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
   const isFull = match.currentPlayers >= match.maxPlayers;
   const requiredPlayers = match.maxPlayers;
   const playersPerTeam = Math.ceil(requiredPlayers / 2);
-  const team1Players = match.participants.filter((p) => (p.team === 2 ? 2 : 1) === 1).length;
-  const team2Players = match.participants.filter((p) => (p.team === 2 ? 2 : 1) === 2).length;
+  const team1Players = match.participants.filter((p) => p.team === 1).length;
+  const team2Players = match.participants.filter((p) => p.team === 2).length;
 
   const submitterName = useMemo(() => {
     if (!result?.submittedBy) return "Pemain";
