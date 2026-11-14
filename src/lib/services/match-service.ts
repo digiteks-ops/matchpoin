@@ -109,7 +109,19 @@ async function getProfilesForUsers(userIds: string[]) {
   const unique = Array.from(new Set(userIds.filter(Boolean)));
   if (unique.length === 0) return new Map<string, { full_name: string | null; avatar_url: string | null; gender: string | null; rating: number }>();
 
-  const { data } = await supabase
+  // 1. Read user account names from public.users (authoritative source for full_name)
+  const { data: usersData } = await supabase
+    .from("users")
+    .select("id, full_name, avatar_url")
+    .in("id", unique);
+
+  const userMap = new Map<string, { full_name: string | null; avatar_url: string | null }>();
+  (usersData ?? []).forEach((u) => {
+    userMap.set(u.id, { full_name: u.full_name, avatar_url: u.avatar_url ?? null });
+  });
+
+  // 2. Read player profile details from player_profiles (for rating, etc.)
+  const { data: profilesData } = await supabase
     .from("player_profiles")
     .select("user_id, display_name, preferred_hand, backhand")
     .in("user_id", unique);
@@ -123,23 +135,19 @@ async function getProfilesForUsers(userIds: string[]) {
   (ratings ?? []).forEach((r) => ratingMap.set(r.user_id, Number(r.current_rating ?? 1)));
 
   const profileMap = new Map<string, { full_name: string | null; avatar_url: string | null; gender: string | null; rating: number }>();
-  (data ?? []).forEach((p) => {
-    profileMap.set(p.user_id, {
-      full_name: p.display_name,
-      avatar_url: null,
-      gender: null,
-      rating: ratingMap.get(p.user_id) ?? 1,
-    });
-  });
-
-  // Public users table is not readable by RLS; player_profiles is the public source.
   unique.forEach((id) => {
-    const existing = profileMap.get(id);
+    const userInfo = userMap.get(id);
+    const profile = profilesData?.find((p) => p.user_id === id);
+
+    // Prefer users.full_name (account name) over player_profiles.display_name (tennis profile name)
+    // This ensures the organizer/host name always matches the account that created the match.
+    const fullName = userInfo?.full_name ?? profile?.display_name ?? null;
+
     profileMap.set(id, {
-      full_name: existing?.full_name || "Pemain MATCHPOIN",
-      avatar_url: existing?.avatar_url ?? null,
-      gender: existing?.gender ?? null,
-      rating: existing?.rating ?? ratingMap.get(id) ?? 1,
+      full_name: fullName || "Pemain MATCHPOIN",
+      avatar_url: userInfo?.avatar_url ?? null,
+      gender: null,
+      rating: ratingMap.get(id) ?? 1,
     });
   });
 
