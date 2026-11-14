@@ -144,7 +144,7 @@ async function getProfilesForUsers(userIds: string[]) {
     const fullName = userInfo?.full_name ?? profile?.display_name ?? null;
 
     profileMap.set(id, {
-      full_name: fullName || "Pemain MATCHPOIN",
+      full_name: fullName || "Pemain",
       avatar_url: userInfo?.avatar_url ?? null,
       gender: null,
       rating: ratingMap.get(id) ?? 1,
@@ -224,8 +224,74 @@ export async function createOpenMatch(
     }
   }
 
+  const isDoublesCategory = input.category.includes("doubles");
+  const matchType = input.matchType ?? "private";
+  const partnerUserId = (input.partnerUserId ?? "").trim() || null;
+  const opponentUserId = (input.opponentUserId ?? "").trim() || null;
+  const opponentPartnerUserId = (input.opponentPartnerUserId ?? "").trim() || null;
+  if (isDoublesCategory) {
+    if (!partnerUserId) {
+      throw new Error("Pilih partner Anda untuk pertandingan ganda.");
+    }
+    if (partnerUserId === userId) {
+      throw new Error("Anda tidak dapat memilih diri sendiri sebagai partner.");
+    }
+    // Open doubles: opponent positions are optional and filled by joiners.
+    // Private doubles: all 4 positions must be selected up front.
+    if (matchType === "private") {
+      if (!opponentUserId) {
+        throw new Error("Pilih lawan untuk tim lawan (Team B).");
+      }
+      if (!opponentPartnerUserId) {
+        throw new Error("Pilih partner lawan untuk tim lawan (Team B).");
+      }
+      if (opponentUserId === userId) {
+        throw new Error("Lawan tidak boleh sama dengan Host.");
+      }
+      if (opponentPartnerUserId === userId) {
+        throw new Error("Partner lawan tidak boleh sama dengan Host.");
+      }
+      if (opponentUserId === partnerUserId) {
+        throw new Error("Lawan dan partner Host tidak boleh sama.");
+      }
+      if (opponentPartnerUserId === partnerUserId) {
+        throw new Error("Partner lawan dan partner Host tidak boleh sama.");
+      }
+      if (opponentPartnerUserId === opponentUserId) {
+        throw new Error("Lawan dan partner lawan tidak boleh sama.");
+      }
+      const { data: opponentProfile } = await supabase
+        .from("player_profiles")
+        .select("user_id")
+        .eq("user_id", opponentUserId)
+        .maybeSingle();
+      if (!opponentProfile) {
+        throw new Error("Lawan yang dipilih tidak ditemukan.");
+      }
+      const { data: opponentPartnerProfile } = await supabase
+        .from("player_profiles")
+        .select("user_id")
+        .eq("user_id", opponentPartnerUserId)
+        .maybeSingle();
+      if (!opponentPartnerProfile) {
+        throw new Error("Partner lawan yang dipilih tidak ditemukan.");
+      }
+    }
+    const { data: partnerProfile } = await supabase
+      .from("player_profiles")
+      .select("user_id")
+      .eq("user_id", partnerUserId)
+      .maybeSingle();
+    if (!partnerProfile) {
+      throw new Error("Partner yang dipilih tidak ditemukan.");
+    }
+  } else if (partnerUserId) {
+    throw new Error("Partner hanya diperlukan untuk pertandingan ganda.");
+  }
+
   const metadata: MatchMetadata = {
     category: input.category,
+    match_type: matchType,
     umpire_option: input.umpireOption,
     umpire_name: input.umpireName || null,
     min_rating: input.minRating ?? 1.0,
@@ -288,6 +354,65 @@ export async function createOpenMatch(
     throw new Error(toUserMessage(participantError, "Pertandingan gagal dibuat."));
   }
 
+  if (isDoublesCategory && partnerUserId) {
+    const { error: partnerError } = await supabase.from("match_participants").insert({
+      match_id: matchData.id,
+      user_id: partnerUserId,
+      is_organizer: false,
+      team: 1,
+      metadata: { status: "confirmed", added_by: userId, role: "host_partner" },
+      confirmed_at: new Date().toISOString(),
+    });
+
+    if (partnerError) {
+      logError("match.create.partner", partnerError, { matchId: matchData.id, userId, partnerUserId });
+      await supabase.from("match_participants").delete().eq("match_id", matchData.id);
+      await supabase.from("matches").delete().eq("id", matchData.id);
+      throw new Error(toUserMessage(partnerError, "Gagal menambahkan partner. Pertandingan dibatalkan."));
+    }
+
+    // Private doubles: also create opponent team positions up front.
+    if (matchType === "private") {
+      if (opponentUserId) {
+        const { error: opponentError } = await supabase.from("match_participants").insert({
+          match_id: matchData.id,
+          user_id: opponentUserId,
+          is_organizer: false,
+          team: 2,
+          metadata: { status: "confirmed", added_by: userId, role: "opponent" },
+          confirmed_at: new Date().toISOString(),
+        });
+
+        if (opponentError) {
+          logError("match.create.opponent", opponentError, { matchId: matchData.id, userId, opponentUserId });
+          await supabase.from("match_participants").delete().eq("match_id", matchData.id);
+          await supabase.from("matches").delete().eq("id", matchData.id);
+          throw new Error(toUserMessage(opponentError, "Gagal menambahkan lawan. Pertandingan dibatalkan."));
+        }
+      }
+
+      if (opponentPartnerUserId) {
+        const { error: opponentPartnerError } = await supabase.from("match_participants").insert({
+          match_id: matchData.id,
+          user_id: opponentPartnerUserId,
+          is_organizer: false,
+          team: 2,
+          metadata: { status: "confirmed", added_by: userId, role: "opponent_partner" },
+          confirmed_at: new Date().toISOString(),
+        });
+
+        if (opponentPartnerError) {
+          logError("match.create.opponentPartner", opponentPartnerError, { matchId: matchData.id, userId, opponentPartnerUserId });
+          await supabase.from("match_participants").delete().eq("match_id", matchData.id);
+          await supabase.from("matches").delete().eq("id", matchData.id);
+          throw new Error(toUserMessage(opponentPartnerError, "Gagal menambahkan partner lawan. Pertandingan dibatalkan."));
+        }
+      }
+    }
+
+    await resyncPlayerCount(supabase, matchData.id);
+  }
+
   return matchData.id;
 }
 
@@ -302,7 +427,7 @@ export async function requestJoinOpenMatch(
 
   const { data: match } = await supabase
     .from("matches")
-    .select("id, organizer_id, status, metadata")
+    .select("id, organizer_id, status, metadata, max_players")
     .eq("id", matchId)
     .maybeSingle();
 
@@ -313,42 +438,67 @@ export async function requestJoinOpenMatch(
   if (match.status !== "open") throw new Error("Pendaftaran pertandingan ini sudah ditutup.");
 
   const category = normalizeCategory(asMetadata(match.metadata).category ?? "mens_singles");
-  const confirmed = await countConfirmedPlayers(supabase, matchId);
-  if (confirmed >= logicalMaxPlayers(category)) throw new Error("Slot pertandingan sudah penuh.");
+  const isDoublesCategory = category.includes("doubles");
+  const matchType = asMetadata(match.metadata).match_type as MatchType ?? "private";
+  const playersPerTeam = Math.ceil(logicalMaxPlayers(category) / 2);
 
-  const { data: existing } = await supabase
+  // Count confirmed players per team for doubles open matches.
+  const { data: roster } = await supabase
     .from("match_participants")
-    .select("id, metadata")
-    .eq("match_id", matchId)
-    .eq("user_id", userId)
-    .maybeSingle();
+    .select("id, user_id, team, metadata")
+    .eq("match_id", matchId);
 
-  if (existing) {
-    const status = asParticipantMetadata(existing.metadata).status;
-    if (status === "pending") {
-      throw new Error("Anda sudah mengajukan permohonan bergabung pada pertandingan ini.");
-    }
+  const confirmedByTeam: Record<1 | 2, string[]> = { 1: [], 2: [] };
+  (roster ?? []).forEach((p: any) => {
+    const status = asParticipantMetadata(p.metadata).status;
+    const team = (p.team === 2 ? 2 : 1) as 1 | 2;
     if (status === "confirmed" || status === "invited") {
+      confirmedByTeam[team].push(p.user_id);
+    }
+  });
+
+  // Prevent duplicate participation.
+  const alreadyInTeam1 = confirmedByTeam[1].includes(userId);
+  const alreadyInTeam2 = confirmedByTeam[2].includes(userId);
+  if (alreadyInTeam1 || alreadyInTeam2) {
+    const existing = (roster ?? []).find((p: any) => p.user_id === userId);
+    if (existing) {
+      const status = asParticipantMetadata(existing.metadata).status;
+      if (status === "pending") {
+        throw new Error("Anda sudah mengajukan permohonan bergabung pada pertandingan ini.");
+      }
       throw new Error("Anda sudah terdaftar pada pertandingan ini.");
     }
-    // A previous rejection can be re-requested: reuse the row instead of
-    // inserting a duplicate.
-    const { error: reviveError } = await supabase
-      .from("match_participants")
-      .update({ metadata: { ...asParticipantMetadata(existing.metadata), status: "pending" } })
-      .eq("id", existing.id);
+    throw new Error("Anda sudah terdaftar pada pertandingan ini.");
+  }
 
-    if (reviveError) {
-      logError("match.join.revive", reviveError, { matchId, userId });
-      throw new Error(toUserMessage(reviveError, "Gagal mengajukan permohonan."));
+  // Determine which team the joiner should be assigned to.
+  // For doubles open matches: fill Team B (challengers) first, then Team A partner slot.
+  let assignedTeam: 1 | 2 = 2;
+  if (isDoublesCategory && matchType === "open") {
+    const teamBOpen = confirmedByTeam[2].length < playersPerTeam;
+    const teamAOpen = confirmedByTeam[1].length < playersPerTeam;
+    if (!teamBOpen && !teamAOpen) {
+      throw new Error("Slot pertandingan sudah penuh.");
     }
-    return;
+    assignedTeam = teamBOpen ? 2 : 1;
+  } else {
+    // Singles or private doubles: check total capacity.
+    const totalConfirmed = confirmedByTeam[1].length + confirmedByTeam[2].length;
+    if (totalConfirmed >= logicalMaxPlayers(category)) throw new Error("Slot pertandingan sudah penuh.");
+    assignedTeam = isDoublesCategory ? 2 : 2;
+  }
+
+  // Double-check capacity for the assigned team (race condition guard).
+  if (confirmedByTeam[assignedTeam].length >= playersPerTeam) {
+    throw new Error("Slot pertandingan sudah penuh.");
   }
 
   const { error } = await supabase.from("match_participants").insert({
     match_id: matchId,
     user_id: userId,
     is_organizer: false,
+    team: assignedTeam,
     metadata: { status: "pending" },
   });
 
@@ -752,12 +902,13 @@ function buildMatchDetail(
   const invited = all.filter((p) => p.status === "invited");
   const organizerParticipant = all.find((p) => p.isOrganizer) ?? confirmed.find((p) => p.userId === match.organizer_id);
   const organizerProfile = profileMap.get(match.organizer_id);
-  const organizerName =
+  const resolvedOrganizerName =
     (organizerParticipant?.fullName && organizerParticipant.fullName !== "Pemain"
       ? organizerParticipant.fullName
-      : organizerProfile?.full_name && organizerProfile.full_name !== "Pemain MATCHPOIN"
+      : organizerProfile?.full_name && organizerProfile.full_name !== "Pemain"
       ? organizerProfile.full_name
-      : null) || "Penyelenggara";
+      : null) || "Host";
+  const organizerName = resolvedOrganizerName;
 
   // Host/organizer must always be Side 1 (Team A). Normalize display order for clarity.
   const sideSorted = [...confirmed].sort((a, b) => {

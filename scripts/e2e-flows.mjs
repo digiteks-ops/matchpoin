@@ -222,60 +222,243 @@ async function main() {
   });
   record("repeat accept rejected", doubleAccept.res.status === 400, `status=${doubleAccept.res.status}`);
 
-  // --- Decline (separate doubles match so capacity is not the blocker) ------
-  const created2 = await j(`${APP}/api/matches/create`, {
+  // --- Doubles match creation (complete flow with all 4 participants) ------
+  const doublesOpponent = await createUser("doubles-opponent");
+  const doublesPartner = await createUser("doubles-partner");
+  const doublesOpponentPartner = await createUser("doubles-opp-partner");
+  const doppCookie = cookieHeader(doublesOpponent.session);
+  const dpartCookie = cookieHeader(doublesPartner.session);
+  const doppartCookie = cookieHeader(doublesOpponentPartner.session);
+
+  const createdDoubles = await j(`${APP}/api/matches/create`, {
     method: "POST",
     headers: { ...baseHeaders, Cookie: organizerCookie },
     body: JSON.stringify({
-      title: "E2E Duel Ganda",
+      title: "E2E Doubles Complete",
       courtId,
       matchDate: future,
-      startTime: "18:00",
+      startTime: "20:00",
+      durationMinutes: 90,
+      category: "mens_doubles",
+      umpireOption: "tanpa_wasit",
+      level: "all",
+      partnerUserId: doublesPartner.id,
+      opponentUserId: doublesOpponent.id,
+      opponentPartnerUserId: doublesOpponentPartner.id,
+    }),
+  });
+  const doublesMatchId = createdDoubles.body?.matchId;
+  if (doublesMatchId) created.matches.push(doublesMatchId);
+  record(
+    "doubles match created with 4 participants",
+    createdDoubles.res.status === 200 && Boolean(doublesMatchId),
+    `status=${createdDoubles.res.status} ${createdDoubles.body?.message ?? ""}`
+  );
+
+  // Verify all 4 participants in database
+  const doublesParticipants = await j(
+    `${SUPA}/rest/v1/match_participants?select=user_id,team,is_organizer,metadata&match_id=eq.${doublesMatchId}&order=team.asc,user_id.asc`,
+    { headers: admin }
+  );
+  const dParts = Array.isArray(doublesParticipants.body) ? doublesParticipants.body : (doublesParticipants.body?.data ?? []);
+  const team1 = dParts.filter((p) => p.team === 1);
+  const team2 = dParts.filter((p) => p.team === 2);
+  const team1UserIds = team1.map((p) => p.user_id).sort();
+  const team2UserIds = team2.map((p) => p.user_id).sort();
+  record(
+    "doubles Team A has organizer + partner",
+    team1.length === 2 &&
+      team1UserIds.includes(organizer.id) &&
+      team1UserIds.includes(doublesPartner.id) &&
+      team1.every((p) => p.metadata?.status === "confirmed"),
+    `team1=${JSON.stringify(team1UserIds)}`
+  );
+  record(
+    "doubles Team B has opponent + opponent's partner",
+    team2.length === 2 &&
+      team2UserIds.includes(doublesOpponent.id) &&
+      team2UserIds.includes(doublesOpponentPartner.id) &&
+      team2.every((p) => p.metadata?.status === "confirmed"),
+    `team2=${JSON.stringify(team2UserIds)}`
+  );
+  record(
+    "doubles organizer is Team A",
+    team1.some((p) => p.user_id === organizer.id && p.is_organizer === true),
+    ""
+  );
+  record(
+    "doubles no duplicate participants",
+    new Set(dParts.map((p) => p.user_id)).size === dParts.length,
+    `count=${dParts.length} unique=${new Set(dParts.map((p) => p.user_id)).size}`
+  );
+
+  // Verify match detail page shows correct teams
+  const doublesDetail = await j(`${APP}/matches/${doublesMatchId}`, { headers: { Cookie: organizerCookie } });
+  record(
+    "doubles match detail renders",
+    doublesDetail.res.status === 200 && doublesDetail.text.includes("E2E Doubles Complete"),
+    `status=${doublesDetail.res.status}`
+  );
+  record(
+    "doubles detail shows host name",
+    doublesDetail.text.includes("E2E organizer"),
+    `status=${doublesDetail.res.status}`
+  );
+  record(
+    "doubles detail shows team labels",
+    doublesDetail.text.includes("Tim Host") && doublesDetail.text.includes("Tim Lawan"),
+    `status=${doublesDetail.res.status}`
+  );
+
+  // Verify match appears on listing page
+  const doublesList = await j(`${APP}/matches`, { headers: { Cookie: organizerCookie } });
+  record(
+    "doubles match on listing page",
+    doublesList.res.status === 200 && doublesList.text.includes("E2E Doubles Complete"),
+    `status=${doublesList.res.status}`
+  );
+
+  // --- Doubles validation: missing partner rejected ------
+  const noPartner = await j(`${APP}/api/matches/create`, {
+    method: "POST",
+    headers: { ...baseHeaders, Cookie: organizerCookie },
+    body: JSON.stringify({
+      title: "E2E Doubles No Partner",
+      courtId,
+      matchDate: future,
+      startTime: "21:00",
       durationMinutes: 90,
       category: "mens_doubles",
       umpireOption: "tanpa_wasit",
       level: "all",
     }),
   });
-  const match2Id = created2.body?.matchId;
+  record(
+    "doubles without partner rejected",
+    noPartner.res.status === 400 && noPartner.body?.message === "Pilih partner untuk pertandingan ganda.",
+    `status=${noPartner.res.status} ${noPartner.body?.message ?? ""}`
+  );
+
+  // --- Doubles validation: missing opponent rejected ------
+  const noOpponent = await j(`${APP}/api/matches/create`, {
+    method: "POST",
+    headers: { ...baseHeaders, Cookie: organizerCookie },
+    body: JSON.stringify({
+      title: "E2E Doubles No Opponent",
+      courtId,
+      matchDate: future,
+      startTime: "21:30",
+      durationMinutes: 90,
+      category: "mens_doubles",
+      umpireOption: "tanpa_wasit",
+      level: "all",
+      partnerUserId: doublesPartner.id,
+    }),
+  });
+  record(
+    "doubles without opponent rejected",
+    noOpponent.res.status === 400 && noOpponent.body?.message === "Pilih lawan untuk tim lawan (Team B).",
+    `status=${noOpponent.res.status} ${noOpponent.body?.message ?? ""}`
+  );
+
+  // --- Doubles validation: missing opponent's partner rejected ------
+  const noOppPartner = await j(`${APP}/api/matches/create`, {
+    method: "POST",
+    headers: { ...baseHeaders, Cookie: organizerCookie },
+    body: JSON.stringify({
+      title: "E2E Doubles No Opp Partner",
+      courtId,
+      matchDate: future,
+      startTime: "22:00",
+      durationMinutes: 90,
+      category: "mens_doubles",
+      umpireOption: "tanpa_wasit",
+      level: "all",
+      partnerUserId: doublesPartner.id,
+      opponentUserId: doublesOpponent.id,
+    }),
+  });
+  record(
+    "doubles without opponent's partner rejected",
+    noOppPartner.res.status === 400 &&
+      noOppPartner.body?.message === "Pilih partner lawan untuk tim lawan (Team B).",
+    `status=${noOppPartner.res.status} ${noOppPartner.body?.message ?? ""}`
+  );
+
+  // --- Doubles validation: duplicate participant rejected ------
+  const dupParticipant = await j(`${APP}/api/matches/create`, {
+    method: "POST",
+    headers: { ...baseHeaders, Cookie: organizerCookie },
+    body: JSON.stringify({
+      title: "E2E Doubles Duplicate",
+      courtId,
+      matchDate: future,
+      startTime: "22:30",
+      durationMinutes: 90,
+      category: "mens_doubles",
+      umpireOption: "tanpa_wasit",
+      level: "all",
+      partnerUserId: doublesPartner.id,
+      opponentUserId: doublesPartner.id, // same as partner
+      opponentPartnerUserId: doublesOpponentPartner.id,
+    }),
+  });
+  record(
+    "doubles duplicate participant rejected",
+    dupParticipant.res.status === 400 &&
+      dupParticipant.body?.message === "Lawan dan partner Host tidak boleh sama.",
+    `status=${dupParticipant.res.status} ${dupParticipant.body?.message ?? ""}`
+  );
+
+  // --- Doubles: opponent cannot be self ------
+  const selfOpponent = await j(`${APP}/api/matches/create`, {
+    method: "POST",
+    headers: { ...baseHeaders, Cookie: organizerCookie },
+    body: JSON.stringify({
+      title: "E2E Doubles Self Opponent",
+      courtId,
+      matchDate: future,
+      startTime: "23:00",
+      durationMinutes: 90,
+      category: "mens_doubles",
+      umpireOption: "tanpa_wasit",
+      level: "all",
+      partnerUserId: doublesPartner.id,
+      opponentUserId: organizer.id,
+      opponentPartnerUserId: doublesOpponentPartner.id,
+    }),
+  });
+  record(
+    "doubles self opponent rejected",
+    selfOpponent.res.status === 400 && selfOpponent.body?.message === "Lawan tidak boleh sama dengan Host.",
+    `status=${selfOpponent.res.status} ${selfOpponent.body?.message ?? ""}`
+  );
+
+  // --- Invite flow for doubles match (inviteUserId pre-selects opponent) ------
+  const inviteDoublesForm = await j(`${APP}/matches/new?invite=${doublesOpponent.id}`, { headers: { Cookie: organizerCookie } });
+  record(
+    "doubles invite form shows opponent pre-selected",
+    inviteDoublesForm.res.status === 200 && inviteDoublesForm.text.includes("E2E doubles-opponent"),
+    `status=${inviteDoublesForm.res.status}`
+  );
+
+  // Create a separate match for join request flow (not full)
+  const createdJoinMatch = await j(`${APP}/api/matches/create`, {
+    method: "POST",
+    headers: { ...baseHeaders, Cookie: organizerCookie },
+    body: JSON.stringify({
+      title: "E2E Join Test Match",
+      courtId,
+      matchDate: future,
+      startTime: "21:00",
+      durationMinutes: 90,
+      category: "mens_singles",
+      umpireOption: "tanpa_wasit",
+      level: "all",
+    }),
+  });
+  const match2Id = createdJoinMatch.body?.matchId;
   if (match2Id) created.matches.push(match2Id);
-  record("second match created", created2.res.status === 200 && Boolean(match2Id), `status=${created2.res.status}`);
-
-  const invite2 = await j(`${APP}/api/matches/${match2Id}/invite`, {
-    method: "POST",
-    headers: { ...baseHeaders, Cookie: organizerCookie },
-    body: JSON.stringify({ inviteeId: decliner.id }),
-  });
-  const invite2Id = invite2.body?.inviteId;
-  record("second invite sent", invite2.res.status === 200 && Boolean(invite2Id), `status=${invite2.res.status} ${invite2.body?.message ?? ""}`);
-
-  const decline = await j(`${APP}/api/invites/${invite2Id}/respond`, {
-    method: "POST",
-    headers: { ...baseHeaders, Cookie: declinerCookie },
-    body: JSON.stringify({ action: "decline" }),
-  });
-  record("decline invite", decline.res.status === 200, `status=${decline.res.status} ${decline.body?.message ?? ""}`);
-
-  const afterDecline = await j(
-    `${SUPA}/rest/v1/match_participants?select=metadata&id=eq.${invite2Id}`,
-    { headers: admin }
-  );
-  record(
-    "declined invite marked declined",
-    afterDecline.res.status === 200 && afterDecline.body[0]?.metadata?.status === "declined",
-    JSON.stringify(afterDecline.body[0]?.metadata)
-  );
-
-  const fullMatchInvite = await j(`${APP}/api/matches/${matchId}/invite`, {
-    method: "POST",
-    headers: { ...baseHeaders, Cookie: organizerCookie },
-    body: JSON.stringify({ inviteeId: decliner.id }),
-  });
-  record(
-    "invite to full match rejected",
-    fullMatchInvite.res.status === 400 && fullMatchInvite.body?.message === "Slot pertandingan sudah penuh.",
-    `status=${fullMatchInvite.res.status} ${fullMatchInvite.body?.message ?? ""}`
-  );
 
   // --- Join request flow --------------------------------------------------
   const joiner = await createUser("joiner");

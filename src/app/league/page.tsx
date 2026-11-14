@@ -55,6 +55,27 @@ const CATEGORIES = [
 
 type RegStep = 1 | 2 | 3;
 
+const REG_OPEN = "2026-11-15";
+const REG_CLOSE = "2026-12-31";
+
+function todayJakarta(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Makassar",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function isRegistrationPeriodOpen(): boolean {
+  const today = todayJakarta();
+  return today >= REG_OPEN && today <= REG_CLOSE;
+}
+
+function isRegistrationClosed(): boolean {
+  return todayJakarta() > REG_CLOSE;
+}
+
 function pickCity(rel: unknown): { name: string; province: string } | null {
   if (!rel || typeof rel !== "object") return null;
   const cities = (rel as { cities?: { name: string; province: string } | { name: string; province: string }[] | null }).cities;
@@ -128,7 +149,9 @@ export default function LeaguePage() {
         .from("leagues")
         .select("id, name, category, season, start_date, end_date, status, max_players")
         .eq("category", category)
-        .eq("season", "Q1 2027")
+        .in("status", ["upcoming", "active"])
+        .order("start_date", { ascending: true })
+        .limit(1)
         .maybeSingle();
 
       const lg = (leagueRow as LeagueRow | null) ?? null;
@@ -309,7 +332,9 @@ export default function LeaguePage() {
         .from("leagues")
         .select("id, name, category, season, start_date, end_date, status, max_players")
         .eq("category", cat)
-        .eq("season", "Q1 2027")
+        .in("status", ["upcoming", "active"])
+        .order("start_date", { ascending: true })
+        .limit(1)
         .maybeSingle();
       const leagueRow = (lg as LeagueRow | null) ?? null;
       setRegLeague(leagueRow);
@@ -349,8 +374,12 @@ export default function LeaguePage() {
     setRegError(null);
     setRegLoading(true);
     try {
+      if (!isRegistrationPeriodOpen()) {
+        setRegError(isRegistrationClosed() ? "Pendaftaran telah ditutup (batas 31 Desember 2026)." : "Pendaftaran dibuka mulai 15 November 2026.");
+        return;
+      }
       if (regLeague.status !== "active" && regLeague.status !== "upcoming") {
-        setRegError("Pendaftaran kategori ini tidak tersedia atau sudah ditutup.");
+        setRegError("Pendaftaran kategori ini tidak tersedia.");
         return;
       }
       if (regParticipantsCount >= regLeague.max_players) {
@@ -411,7 +440,9 @@ export default function LeaguePage() {
   }), [standings, provinceFilter, cityFilter]);
 
   const regCatMeta = CATEGORIES.find((c) => c.id === regCategory) ?? CATEGORIES[0];
-  const regOpenOk = regLeague && (regLeague.status === "active" || regLeague.status === "upcoming") && regParticipantsCount < regLeague.max_players;
+  const regPeriodOpen = isRegistrationPeriodOpen();
+  const regClosed = isRegistrationClosed();
+  const regOpenOk = regLeague && regPeriodOpen && (regLeague.status === "active" || regLeague.status === "upcoming") && regParticipantsCount < regLeague.max_players;
 
   return (
     <div className="flex-1 bg-slate-50 py-8 md:py-12">
@@ -420,12 +451,15 @@ export default function LeaguePage() {
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-matchpoin-navy bg-white border border-slate-200 px-3 py-1 rounded-full">
               <Trophy className="w-3.5 h-3.5 text-matchpoin-tennis" />
-              <span>Season 1 League · Q1 2027</span>
+              <span>{league?.season || "Season 1 League"}</span>
             </div>
             <h1 className="text-3xl font-extrabold font-heading text-slate-900 tracking-tight">Liga Season 1 MATCHPOIN</h1>
             <p className="text-slate-600 text-xs sm:text-sm max-w-xl leading-relaxed">
-              Daftar per kategori, lihat peserta & klasemen. Poin: Menang 3 · Kalah 0 · WO 8–0 (3 poin). Hanya hasil terverifikasi.
+              Daftar per kategori, lihat peserta & klasemen. Pendaftaran: 15 Nov 2026 – 31 Des 2026 (WITA). Poin: Menang 3 · Kalah 0 · WO 8–0 (3 poin).
             </p>
+            <Badge variant={regPeriodOpen ? "outline" : "secondary"} className={regPeriodOpen ? "border-emerald-200 text-emerald-700 bg-emerald-50 w-fit" : "w-fit"}>
+              Status Pendaftaran: {regPeriodOpen ? "OPEN" : regClosed ? "CLOSED" : "Belum Dibuka"}
+            </Badge>
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <Button variant="tennis" className="text-matchpoin-navy font-bold" onClick={openRegistration}>
@@ -465,10 +499,11 @@ export default function LeaguePage() {
                     ))}
                   </div>
                   <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
-                    <div className="font-semibold text-slate-800">{regCatMeta.label} — {regLeague?.season ?? "Q1 2027"}</div>
-                    <div>Status: <Badge variant={regOpenOk ? "outline" : "secondary"} className="text-[10px]">{regLeague?.status ?? "tidak tersedia"}</Badge></div>
-                    <div>Kuota: {regParticipantsCount}/{regLeague?.max_players ?? 12} peserta · {regOpenOk ? "Pendaftaran dibuka" : "Pendaftaran tidak tersedia/penuh/ditutup"}</div>
+                    <div className="font-semibold text-slate-800">{regCatMeta.label} — {regLeague?.season ?? "-"}</div>
+                    <div>Status Pendaftaran: <Badge variant={regOpenOk ? "outline" : "secondary"} className="text-[10px]">{regPeriodOpen ? "OPEN" : regClosed ? "CLOSED" : "Belum Dibuka"}</Badge></div>
+                    <div>Kuota: {regParticipantsCount}/{regLeague?.max_players ?? 12} peserta · {regOpenOk ? "Dapat mendaftar" : "Tidak dapat mendaftar (periode/kuota/status)"}</div>
                     {regAlready && <div className="text-emerald-700 font-semibold">Anda sudah terdaftar di kategori ini.</div>}
+                    {!regLeague && <div className="text-amber-700">Data liga kategori ini belum tersedia.</div>}
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" size="sm" onClick={() => setRegOpen(false)}>Batal</Button>
@@ -528,12 +563,13 @@ export default function LeaguePage() {
         <Card className="border-slate-200">
           <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div className="space-y-1">
-              <div className="font-bold text-slate-800">{selectedCategoryMeta.label} · {league?.season ?? "Q1 2027"}</div>
+              <div className="font-bold text-slate-800">{selectedCategoryMeta.label} · {league?.season ?? "-"}</div>
               <div className="text-slate-500">Status liga: <strong className="capitalize">{league?.status ?? "tidak tersedia"}</strong> · Peserta terdaftar: <strong>{participants.length}</strong>/{league?.max_players ?? 12}</div>
-              <div className="text-slate-500">Periode: {league?.start_date ?? "-"} s/d {league?.end_date ?? "-"}</div>
+              <div className="text-slate-500">Periode liga: {league?.start_date ?? "-"} s/d {league?.end_date ?? "-"}</div>
+              <div className="text-slate-500">Periode pendaftaran: 15 Nov 2026 – 31 Des 2026 (WITA)</div>
             </div>
-            <Badge variant={league && (league.status === "active" || league.status === "upcoming") ? "outline" : "secondary"} className="w-fit">
-              {league && (league.status === "active" || league.status === "upcoming") ? "Pendaftaran terbuka (sesuai kuota)" : "Tidak menerima pendaftaran"}
+            <Badge variant={regPeriodOpen ? "outline" : "secondary"} className="w-fit">
+              {regPeriodOpen ? "Pendaftaran OPEN" : regClosed ? "Pendaftaran CLOSED" : "Pendaftaran belum dibuka"}
             </Badge>
           </CardContent>
         </Card>

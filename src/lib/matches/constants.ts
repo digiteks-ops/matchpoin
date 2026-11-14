@@ -5,6 +5,8 @@ export type MatchCategory =
   | "womens_doubles"
   | "mixed_doubles";
 
+export type MatchType = "private" | "open";
+
 export type UmpirePreference = "dengan_wasit" | "tanpa_wasit";
 
 export type MatchStatus = "open" | "full" | "in_progress" | "completed" | "cancelled";
@@ -20,6 +22,7 @@ export interface CreateOpenMatchInput {
   startTime: string; // HH:mm:ss
   durationMinutes?: number;
   category: MatchCategory;
+  matchType?: MatchType;
   umpireOption: UmpirePreference;
   umpireName?: string;
   minRating?: number;
@@ -28,6 +31,9 @@ export interface CreateOpenMatchInput {
   reclubLink?: string;
   raceToScore?: number;
   courtSwitchAt?: number;
+  partnerUserId?: string;
+  opponentUserId?: string;
+  opponentPartnerUserId?: string;
 }
 
 export interface MatchParticipantInfo {

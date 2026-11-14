@@ -77,90 +77,65 @@ export default function PlayersDirectoryPage() {
         } = await supabase.auth.getUser();
         setCurrentUser(authUser);
 
-        const [citiesResult, profilesResult, ratingsResult] = await Promise.all([
+        const [citiesResult, publicPlayersResult] = await Promise.all([
           supabase.from("cities").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
           supabase
-            .from("player_profiles")
-            .select(
-              "user_id, display_name, bio, playing_since, preferred_hand, backhand, play_frequency, self_assessed_level, preferred_categories, preferred_times, completion_score, allow_invites, preferred_court_id, users(city_id, cities(name, province)), tennis_courts(name, city_id, cities(name, province))"
-            )
-            .eq("is_profile_public", true)
+            .from("public_players")
+            .select("*")
             .order("display_name", { ascending: true })
             .limit(100),
-          supabase
-            .from("player_ratings")
-            .select("user_id, current_rating, peak_rating, matches_played, wins, losses")
-            .limit(500),
         ]);
 
         if (citiesResult.data) setCities(citiesResult.data as City[]);
 
-        const profiles = (profilesResult.data ?? []) as unknown as ProfileRow[];
-        const ratings = (ratingsResult.data ?? []) as unknown as RatingRow[];
-        const ratingByUser = new Map(ratings.map((r) => [r.user_id, r]));
+        const rawPlayers = (publicPlayersResult.data ?? []) as any[];
 
-        const formatted: FullPlayerProfile[] = profiles
+        const formatted: FullPlayerProfile[] = rawPlayers
           .filter((p) => p.user_id !== authUser?.id)
           .map((p) => {
-          const rating = ratingByUser.get(p.user_id);
-          const userRel = Array.isArray(p.users) ? p.users[0] : p.users;
-          const court = Array.isArray(p.tennis_courts) ? p.tennis_courts[0] : p.tennis_courts;
-          const userCity = userRel?.cities
-            ? Array.isArray(userRel.cities)
-              ? userRel.cities[0]
-              : userRel.cities
-            : null;
-          const courtCity = court?.cities
-            ? Array.isArray(court.cities)
-              ? court.cities[0]
-              : court.cities
-            : null;
-          const city = userCity ?? courtCity;
-          const cityId = userRel?.city_id ?? court?.city_id ?? null;
+            const matchesPlayed = p.matches_played ?? 0;
+            const wins = p.wins ?? 0;
+            const losses = p.losses ?? 0;
 
-          const matchesPlayed = rating?.matches_played ?? 0;
-          const wins = rating?.wins ?? 0;
-          const losses = rating?.losses ?? 0;
-
-          return {
-            userId: p.user_id,
-            email: null,
-            fullName: p.display_name || "Pemain Tenis",
-            displayName: p.display_name || "Pemain MATCHPOIN",
-            avatarUrl: null,
-            gender: null,
-            cityId,
-            cityName: city?.name || "Lokasi belum diisi",
-            province: city?.province || null,
-            bio: p.bio,
-            preferredHand: p.preferred_hand === "left" ? "left" : "right",
-            backhand: p.backhand === "one_handed" ? "one_handed" : "two_handed",
-            playFrequency:
-              p.play_frequency === "daily" ||
-              p.play_frequency === "biweekly" ||
-              p.play_frequency === "monthly" ||
-              p.play_frequency === "occasional"
-                ? p.play_frequency
-                : "weekly",
-            selfAssessedLevel:
-              p.self_assessed_level === "intermediate" || p.self_assessed_level === "advanced"
-                ? p.self_assessed_level
-                : "beginner",
-            playingSince: p.playing_since,
-            preferredCategories: p.preferred_categories ?? [],
-            preferredTimes: p.preferred_times ?? [],
-            currentRating: Number(rating?.current_rating ?? 1),
-            peakRating: Number(rating?.peak_rating ?? rating?.current_rating ?? 1),
-            isProvisional: matchesPlayed === 0,
-            matchesPlayed,
-            wins,
-            losses,
-            winRate: matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : 0,
-            completionScore: p.completion_score ?? 50,
-            isProfilePublic: true,
-            allowInvites: p.allow_invites ?? true,
-          };
-        });
+            return {
+              userId: p.user_id,
+              email: null, // STRICT PRIVACY: NEVER expose email to other players
+              fullName: p.full_name || p.display_name || "Pemain Tenis",
+              displayName: p.display_name || "Pemain MATCHPOIN",
+              avatarUrl: p.avatar_url || null,
+              gender: p.gender || null,
+              cityId: p.city_id || null,
+              cityName: p.city_name || "Lokasi belum diisi",
+              province: p.province || null,
+              bio: p.bio,
+              preferredHand: p.preferred_hand === "left" ? "left" : "right",
+              backhand: p.backhand === "one_handed" ? "one_handed" : "two_handed",
+              playFrequency:
+                p.play_frequency === "daily" ||
+                p.play_frequency === "biweekly" ||
+                p.play_frequency === "monthly" ||
+                p.play_frequency === "occasional"
+                  ? p.play_frequency
+                  : "weekly",
+              selfAssessedLevel:
+                p.self_assessed_level === "intermediate" || p.self_assessed_level === "advanced"
+                  ? p.self_assessed_level
+                  : "beginner",
+              playingSince: p.playing_since,
+              preferredCategories: p.preferred_categories ?? [],
+              preferredTimes: p.preferred_times ?? [],
+              currentRating: Number(p.current_rating ?? 1),
+              peakRating: Number(p.peak_rating ?? p.current_rating ?? 1),
+              isProvisional: matchesPlayed === 0,
+              matchesPlayed,
+              wins,
+              losses,
+              winRate: matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : 0,
+              completionScore: p.completion_score ?? 50,
+              isProfilePublic: true,
+              allowInvites: p.allow_invites ?? true,
+            };
+          });
 
         setPlayers(formatted);
       } catch (err) {

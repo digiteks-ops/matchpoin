@@ -30,6 +30,10 @@ type ProfileRow = {
   user_id: string;
   display_name: string | null;
   preferred_court_id: string | null;
+  users: {
+    city_id: string | null;
+    cities: { name: string; province: string } | { name: string; province: string }[] | null;
+  } | null;
   tennis_courts: {
     name: string;
     city_id: string;
@@ -59,17 +63,12 @@ export default function LeaderboardPage() {
     async function load() {
       try {
         const supabase = createClient();
-        const [profilesResult, ratingsResult, citiesResult] = await Promise.all([
-          supabase
-            .from("player_profiles")
-            .select("user_id, display_name, preferred_court_id, tennis_courts(name, city_id, cities(name, province))")
-            .eq("is_profile_public", true)
-            .limit(500),
-          supabase
-            .from("player_ratings")
-            .select("user_id, current_rating, peak_rating, matches_played, wins, losses")
-            .limit(1000),
+        const [citiesResult, publicPlayersResult] = await Promise.all([
           supabase.from("cities").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
+          supabase
+            .from("public_players")
+            .select("*")
+            .limit(500),
         ]);
 
         if (citiesResult.data) {
@@ -80,37 +79,24 @@ export default function LeaderboardPage() {
           setProvinceOptions(provinces);
         }
 
-        const ratingByUser = new Map<string, RatingRow>();
-        ((ratingsResult.data ?? []) as unknown as RatingRow[]).forEach((r) =>
-          ratingByUser.set(r.user_id, r)
-        );
-
-        const merged: LeaderboardRow[] = ((profilesResult.data ?? []) as unknown as ProfileRow[]).map(
-          (p) => {
-            const rating = ratingByUser.get(p.user_id);
-            const court = p.tennis_courts;
-            const city = court?.cities
-              ? Array.isArray(court.cities)
-                ? court.cities[0]
-                : court.cities
-              : null;
-            const matchesPlayed = rating?.matches_played ?? 0;
-            const wins = rating?.wins ?? 0;
-            return {
-              userId: p.user_id,
-              name: p.display_name || "Pemain MATCHPOIN",
-              rating: Number(rating?.current_rating ?? 1),
-              peakRating: Number(rating?.peak_rating ?? rating?.current_rating ?? 1),
-              matchesPlayed,
-              wins,
-              losses: rating?.losses ?? 0,
-              winRate: matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : 0,
-              cityName: city?.name || "Makassar",
-              cityId: court?.city_id ?? null,
-              isProvisional: matchesPlayed === 0,
-            };
-          }
-        );
+        const rawPlayers = (publicPlayersResult.data ?? []) as any[];
+        const merged: LeaderboardRow[] = rawPlayers.map((p) => {
+          const matchesPlayed = p.matches_played ?? 0;
+          const wins = p.wins ?? 0;
+          return {
+            userId: p.user_id,
+            name: p.full_name || p.display_name || "Pemain MATCHPOIN",
+            rating: Number(p.current_rating ?? 1),
+            peakRating: Number(p.peak_rating ?? p.current_rating ?? 1),
+            matchesPlayed,
+            wins,
+            losses: p.losses ?? 0,
+            winRate: matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : 0,
+            cityName: p.city_name || "Makassar",
+            cityId: p.city_id ?? null,
+            isProvisional: matchesPlayed === 0,
+          };
+        });
 
         merged.sort(
           (a, b) =>
@@ -132,11 +118,15 @@ export default function LeaderboardPage() {
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
+      if (province) {
+        const provinceCityIds = cities.filter((c) => c.province === province).map((c) => c.id);
+        if (r.cityId && !provinceCityIds.includes(r.cityId)) return false;
+      }
       if (selectedCity !== "all" && r.cityId !== selectedCity) return false;
       if (searchQuery.trim() && !r.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
       return true;
     });
-  }, [rows, searchQuery, selectedCity]);
+  }, [rows, searchQuery, selectedCity, province, cities]);
 
   const ranked = filtered.map((row, index) => ({ ...row, rank: index + 1 }));
   const podium = ranked.slice(0, 3);
@@ -341,7 +331,7 @@ export default function LeaderboardPage() {
         <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-start gap-3 text-xs text-slate-500">
           <TrendingUp className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
           <p>
-            Rating diperbarui hanya setelah hasil pertandingan dikonfirmasi oleh kedua pihak atau melewati batas sanggahan 48 jam.
+            Rating diperbarui hanya setelah hasil pertandingan dikonfirmasi oleh kedua pihak atau melewati batas sanggahan 24 jam.
           </p>
         </div>
       </div>

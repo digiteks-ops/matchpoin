@@ -52,6 +52,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, message: 'Pilihan wasit tidak valid.' }, { status: 400 });
   }
 
+  const isDoubles = payload.category.includes('doubles');
+  const matchType = payload.matchType ?? 'private';
+  if (isDoubles && matchType === 'private' && !payload.partnerUserId) {
+    return NextResponse.json({ success: false, message: 'Pilih partner untuk pertandingan ganda.' }, { status: 400 });
+  }
+  if (!isDoubles && payload.partnerUserId) {
+    return NextResponse.json({ success: false, message: 'Partner hanya untuk pertandingan ganda.' }, { status: 400 });
+  }
+  if (payload.partnerUserId && payload.partnerUserId === user.id) {
+    return NextResponse.json({ success: false, message: 'Partner tidak boleh sama dengan Host.' }, { status: 400 });
+  }
+
+  // Kuota monetisasi dinonaktifkan untuk fase pertumbuhan 100-500 pengguna pertama (Unlimited)
+
   try {
     const matchId = await createOpenMatch(user.id, payload);
     return NextResponse.json({ success: true, matchId, message: 'Pertandingan dibuat.' });

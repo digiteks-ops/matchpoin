@@ -110,33 +110,39 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
   const playersPerTeam = Math.ceil(requiredPlayers / 2);
   const isSinglesMatch = requiredPlayers === 2;
   const hostId = match.organizerId;
-  const hostParticipant =
-    match.participants.find((p) => p.userId === hostId || p.isOrganizer) ??
-    (match.organizerName ? ({ userId: hostId, fullName: match.organizerName, isOrganizer: true, team: 1 } as any) : undefined);
   const hostStoredTeam: 1 | 2 = 1;
   const side2Team: 1 | 2 = 2;
-  const team1Members = match.participants.filter(
-    (p) => p.userId === hostId || p.isOrganizer || (isSinglesMatch ? false : p.team === hostStoredTeam)
-  );
-  const team2Members = match.participants.filter((p) => !team1Members.some((m) => m.userId === p.userId));
-  // Fallback for legacy/misaligned data: in singles, if host side empty but there are confirmed players, assume first is host context
-  const safeTeam1Members = team1Members.length > 0 ? team1Members : isSinglesMatch && match.participants[0] ? [match.participants[0]] : team1Members;
-  const safeTeam2Members = team2Members.filter((p) => !safeTeam1Members.some((m) => m.userId === p.userId));
-  const finalTeam1 = safeTeam1Members;
-  const finalTeam2 = isSinglesMatch ? safeTeam2Members.slice(0, 1) : safeTeam2Members;
+
+  const sortTeamMembers = (members: typeof match.participants) =>
+    [...members].sort((a, b) => {
+      const aHost = a.userId === hostId || a.isOrganizer ? 0 : 1;
+      const bHost = b.userId === hostId || b.isOrganizer ? 0 : 1;
+      return aHost - bHost || a.fullName.localeCompare(b.fullName);
+    });
+  const team1Members = sortTeamMembers(match.participants.filter(
+    (participant) => participant.userId === hostId || participant.isOrganizer || (!isSinglesMatch && participant.team === hostStoredTeam)
+  ));
+  const team2Members = sortTeamMembers(match.participants.filter(
+    (participant) => !team1Members.some((member) => member.userId === participant.userId)
+  ));
+  const finalTeam1 = team1Members;
+  const finalTeam2 = isSinglesMatch ? team2Members.slice(0, 1) : team2Members;
   const team1Players = finalTeam1.length;
   const team2Players = finalTeam2.length;
-  const hostDisplayName = hostParticipant?.fullName || match.organizerName || "Host";
-  const team1Fallback = isSinglesMatch ? "Host" : "Tim A (Host)";
-  const team2Fallback = isSinglesMatch ? "Lawan" : "Tim B (Lawan)";
-  const team1Label = finalTeam1.map((p) => p.fullName).join(" & ") || team1Fallback;
-  const team2Label = finalTeam2.map((p) => p.fullName).join(" & ") || team2Fallback;
-  const side1Short = "Host";
-  const side2Short = "Lawan";
-  const side1DisplayScore = result ? (hostStoredTeam === 1 ? result.team1Score : result.team2Score) : 0;
-  const side2DisplayScore = result ? (hostStoredTeam === 1 ? result.team2Score : result.team1Score) : 0;
+  const hostFallback = "Host";
+  const oppFallback = "Lawan";
+  const team1Label = finalTeam1.map((participant) => participant.fullName).join(" & ") || hostFallback;
+  const team2Label = finalTeam2.map((participant) => participant.fullName).join(" & ") || oppFallback;
+  const hostSideScore = result ? (hostStoredTeam === 1 ? result.team1Score : result.team2Score) : 0;
+  const oppSideScore = result ? (hostStoredTeam === 1 ? result.team2Score : result.team1Score) : 0;
   const hostSideWon = result ? result.winnerTeam === hostStoredTeam : false;
   const winnerLabel = result ? (hostSideWon ? team1Label : team2Label) : "";
+  const raceTo = match.raceToScore || 8;
+  const switchAt = match.courtSwitchAt || 4;
+  const liveHostScore = showResultForm && team1Score !== "" ? Math.max(0, Number(team1Score) || 0) : hostSideScore;
+  const liveOppScore = showResultForm && team2Score !== "" ? Math.max(0, Number(team2Score) || 0) : oppSideScore;
+  const courtChangeReached = Math.max(liveHostScore, liveOppScore) >= switchAt && Math.min(liveHostScore, liveOppScore) < switchAt;
+  const matchHasStartedOrScoring = Boolean(result) || showResultForm || match.status === "in_progress" || match.status === "full";
 
   const submitterName = useMemo(() => {
     if (!result?.submittedBy) return "Pemain";
@@ -148,9 +154,9 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
   }, [match.participants, match.pendingRequests, result?.submittedBy]);
 
   const canSubmitResult =
-    viewer.isParticipant &&
+    viewer.isOrganizer &&
     match.status !== "cancelled" &&
-    (!result || (result.status === "pending" && result.submittedBy === viewer.id));
+    (!result || result.status === "pending");
   const canConfirm =
     Boolean(result) &&
     result?.status === "pending" &&
@@ -255,6 +261,14 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
       setError("Pertandingan tenis tidak boleh seri.");
       return;
     }
+    if (t1 > raceTo || t2 > raceTo) {
+      setError(`Skor tidak valid. Format pertandingan Race to ${raceTo} (maksimal ${raceTo} poin).`);
+      return;
+    }
+    if (Math.max(t1, t2) !== raceTo) {
+      setError(`Pertandingan berakhir saat salah satu pihak mencapai ${raceTo} poin.`);
+      return;
+    }
     if (photoUrls.length === 0) {
       setError("Foto bukti hasil pertandingan wajib diunggah sebelum mengirim hasil.");
       return;
@@ -268,7 +282,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
     if (team1Players < playersPerTeam || team2Players < playersPerTeam) {
       setError(
         isSinglesMatch
-          ? `Susunan pertandingan belum lengkap: masing-masing sisi harus berisi 1 pemain (Host: ${team1Players}/1, Lawan: ${team2Players}/1).`
+          ? `Susunan pertandingan belum lengkap: Host dan Lawan masing-masing harus 1 pemain (Host: ${team1Players}/1, Lawan: ${team2Players}/1).`
           : `Susunan tim belum lengkap: dibutuhkan ${playersPerTeam} pemain per tim (Host: ${team1Players}/${playersPerTeam}, Lawan: ${team2Players}/${playersPerTeam}).`
       );
       return;
@@ -290,7 +304,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
       const submitted = json.result as MatchResultView | undefined;
       if (submitted) setResult(submitted);
       setShowResultForm(false);
-      setNotice("Hasil terkirim. Lawan punya 48 jam untuk konfirmasi.");
+      setNotice("Hasil terkirim. Lawan punya 24 jam untuk konfirmasi atau sanggahan.");
       router.refresh();
     }
   };
@@ -399,7 +413,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
               </div>
               <div className="flex items-center gap-2">
                 <Trophy className="w-4 h-4 text-slate-400" />
-                <span>Host: <strong className="text-slate-800">{match.organizerName}</strong></span>
+                <span>Penyelenggara (Host): <strong className="text-slate-800">{match.organizerName}</strong></span>
               </div>
             </div>
 
@@ -413,7 +427,8 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
               <Badge variant="secondary">{match.umpireOption === "dengan_wasit" ? "Dengan Wasit" : "Tanpa Wasit"}</Badge>
               {match.umpireName && <Badge variant="secondary">Wasit: {match.umpireName}</Badge>}
               <Badge variant="secondary">Rating {match.minRating.toFixed(2)} – {match.maxRating.toFixed(2)}</Badge>
-              {match.courtSwapped && <Badge variant="secondary">Lapangan sudah ditukar</Badge>}
+              <Badge variant="secondary">Race to {raceTo}</Badge>
+              <Badge variant="secondary">Court change di {switchAt} poin</Badge>
               {match.status !== "cancelled" && (
                 <Badge variant={isFull ? "secondary" : "outline"} className={isFull ? "" : "border-emerald-200 text-emerald-700"}>
                   {isFull ? "Slot penuh" : `${match.availableSlots} slot tersedia`}
@@ -426,39 +441,64 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <Card className="border-slate-200">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Peserta</CardTitle>
-                <CardDescription className="text-xs">
-                  {match.participants.length} pemain terkonfirmasi
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {match.participants.length === 0 ? (
-                  <p className="text-xs text-slate-400">Belum ada peserta.</p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {match.participants.map((p) => (
-                      <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50/60">
-                        <div className="w-9 h-9 rounded-full bg-matchpoin-navy text-white flex items-center justify-center text-xs font-bold">
-                          {p.fullName.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-slate-800 truncate">{p.fullName}</p>
-                          <p className="text-[10px] text-slate-400">
-                            {(() => {
-                              const isHost = p.userId === hostId || p.isOrganizer;
-                              const onHostSide = p.team === hostStoredTeam;
-                              if (isSinglesMatch) {
-                                return isHost ? "Host" : "Lawan";
-                              }
-                              return `${isHost ? "Host" : "Pemain"} · ${onHostSide ? "Tim Host" : "Tim Lawan"}`;
-                            })()} · Rating {p.rating.toFixed(2)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+              <CardHeader className="gap-1 p-5 pb-3 sm:p-6 sm:pb-3">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <CardTitle className="text-lg">Susunan pemain</CardTitle>
+                    <CardDescription className="mt-1 text-xs">
+                      {match.participants.length} dari {requiredPlayers} pemain terkonfirmasi
+                    </CardDescription>
                   </div>
-                )}
+                  {!isSinglesMatch && (
+                    <span className="w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">
+                      {team1Players} vs {team2Players}
+                    </span>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="grid gap-3 p-5 pt-0 sm:p-6 sm:pt-0">
+                {[1, 2].map((teamNumber) => {
+                  const team = teamNumber as 1 | 2;
+                  const members = team === 1 ? finalTeam1 : finalTeam2;
+                  const isEmpty = members.length === 0;
+                  return (
+                    <div key={team} className={`rounded-2xl border p-3 sm:p-4 ${team === 1 ? "border-matchpoin-navy/15 bg-matchpoin-navy/[0.03]" : "border-matchpoin-tennis/30 bg-matchpoin-tennis/10"}`}>
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold ${team === 1 ? "bg-matchpoin-navy text-white" : "bg-matchpoin-tennis text-matchpoin-navy"}`}>
+                            {team === 1 ? "A" : "B"}
+                          </span>
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">{team === 1 ? "Team A · Host Side" : "Team B · Opponent Side"}</p>
+                            <p className="text-[11px] text-slate-500">{members.length}/{playersPerTeam} pemain</p>
+                          </div>
+                        </div>
+                        {members.length === playersPerTeam && <span className="text-[11px] font-semibold text-emerald-700">Lengkap</span>}
+                      </div>
+                      {isEmpty ? (
+                        <div className="rounded-xl border border-dashed border-slate-200 bg-white/60 px-3 py-4 text-center text-xs text-slate-400">
+                          Belum ada pemain di tim ini.
+                        </div>
+                      ) : (
+                        <div className={`grid gap-2 ${isSinglesMatch ? "sm:grid-cols-1" : "sm:grid-cols-2"}`}>
+                          {members.map((participant) => (
+                            <div key={participant.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-100 bg-white p-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">
+                                {participant.fullName.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-semibold text-slate-800">{participant.fullName}</p>
+                                <p className="mt-0.5 text-[10px] text-slate-400">
+                                  {participant.userId === hostId || participant.isOrganizer ? "Host / Organizer" : team === 1 ? "Host's Partner" : isSinglesMatch ? "Lawan" : "Opponent Side"} · Rating {participant.rating.toFixed(2)}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </CardContent>
             </Card>
 
@@ -545,14 +585,15 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
             <Card className="border-slate-200">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Aturan Pertandingan</CardTitle>
-                <CardDescription className="text-xs">Informasi aturan yang berlaku untuk pertandingan ini. Pastikan dipahami sebelum kirim/verifikasi skor.</CardDescription>
+                <CardDescription className="text-xs">Aturan berlaku untuk pertandingan ini. Skor mengikuti sistem Race to {raceTo}.</CardDescription>
               </CardHeader>
-              <CardContent>
-                <ol className="list-decimal list-inside space-y-2 text-xs text-slate-700">
-                  <li><span className="font-semibold">Sistem Skor:</span> Menggunakan sistem tenis standar <strong>15 – 30 – 40 – Game</strong>.</li>
-                  <li><span className="font-semibold text-amber-700">No Deuce:</span> Jika skor mencapai <strong>40–40</strong>, poin berikutnya langsung menentukan pemenang game (<strong className="text-amber-700">Sudden Death / Deciding Point</strong>).</li>
-                  <li><span className="font-semibold">Ringkasan:</span> <strong>No Deuce | 15 – 30 – 40 Game</strong></li>
-                </ol>
+              <CardContent className="space-y-3">
+                <ul className="list-disc list-inside space-y-1.5 text-xs text-slate-700">
+                  <li><span className="font-semibold">Game Scoring:</span> 15 – 30 – 40 – Game.</li>
+                  <li><span className="font-semibold">No Deuce:</span> Tidak ada advantage/deuce. Jika skor 40–40, poin berikutnya menentukan pemenang game.</li>
+                  <li><span className="font-semibold">Match Format:</span> Race to {raceTo} points. Pertandingan berakhir saat salah satu pihak mencapai {raceTo} poin.</li>
+                  <li><span className="font-semibold">Court Change:</span> Pemain harus bertukar sisi lapangan saat salah satu pihak mencapai {switchAt} poin (catatan aturan, bukan notifikasi live).</li>
+                </ul>
               </CardContent>
             </Card>
 
@@ -582,7 +623,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                   )}
                 </div>
                 <CardDescription className="text-xs">
-                  {isSinglesMatch ? `${team1Label} vs ${team2Label}` : `${team1Label} vs ${team2Label}`}
+                  Host: {team1Label} vs Lawan: {team2Label}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -602,13 +643,13 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                       <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
                         <p className="text-[10px] uppercase font-bold text-slate-400 truncate px-1" title={team1Label}>Host</p>
                         <p className="text-xs font-semibold text-slate-800 truncate px-1">{team1Label}</p>
-                        <p className="text-3xl font-extrabold font-heading text-matchpoin-navy">{side1DisplayScore}</p>
+                        <p className="text-3xl font-extrabold font-heading text-matchpoin-navy">{hostSideScore}</p>
                       </div>
                       <div className="text-xs font-bold text-slate-400">VS</div>
                       <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
                         <p className="text-[10px] uppercase font-bold text-slate-400 truncate px-1" title={team2Label}>Lawan</p>
                         <p className="text-xs font-semibold text-slate-800 truncate px-1">{team2Label}</p>
-                        <p className="text-3xl font-extrabold font-heading text-matchpoin-navy">{side2DisplayScore}</p>
+                        <p className="text-3xl font-extrabold font-heading text-matchpoin-navy">{oppSideScore}</p>
                       </div>
                     </div>
 
@@ -624,7 +665,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                       </p>
                       {result.status === "pending" && (
                         <p className="text-amber-700">
-                          Batas sanggahan: {remainingTime(result.disputeDeadline)} (divalidasi waktu server).
+                          Batas konfirmasi/sanggahan: {remainingTime(result.disputeDeadline)} (24 jam, divalidasi waktu server).
                         </p>
                       )}
                       {result.status === "under_review" && result.disputeReason && (
@@ -703,7 +744,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                       </form>
                     )}
 
-                    {canSubmitResult && result.status === "pending" && result.submittedBy === viewer.id && !showResultForm && (
+                    {canSubmitResult && result.status === "pending" && !showResultForm && (
                       <Button variant="outline" size="sm" onClick={() => setShowResultForm(true)}>
                         Ubah skor sebelum dikonfirmasi
                       </Button>
@@ -723,7 +764,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                         Peserta terkonfirmasi: {match.participants.length}/{requiredPlayers} pemain
                       </p>
                       <div className={team1Players >= playersPerTeam && team2Players >= playersPerTeam ? "text-emerald-700" : "text-red-600"}>
-                        <p className="font-semibold text-slate-700">Susunan Lawan:</p>
+                        <p className="font-semibold text-slate-700">Peserta Pertandingan:</p>
                         {isSinglesMatch ? (
                           <div className="space-y-0.5">
                             <p>Host: {team1Label || "Belum terisi"}</p>
@@ -750,11 +791,12 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                             {finalTeam1.map((m) => <li key={m.userId}>{m.fullName}{m.userId === hostId || m.isOrganizer ? " (Host)" : ""}</li>)}
                           </ul>
                         )}
-                        <Label htmlFor="team1Score">Skor {isSinglesMatch ? team1Label : "Tim Host"}</Label>
+                        <Label htmlFor="team1Score">Skor Host</Label>
                         <Input
                           id="team1Score"
                           type="number"
                           min={0}
+                          max={raceTo}
                           value={team1Score}
                           onChange={(e) => setTeam1Score(e.target.value)}
                           required
@@ -769,11 +811,12 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                             {finalTeam2.map((m) => <li key={m.userId}>{m.fullName}</li>)}
                           </ul>
                         )}
-                        <Label htmlFor="team2Score">Skor {isSinglesMatch ? team2Label : "Tim Lawan"}</Label>
+                        <Label htmlFor="team2Score">Skor Lawan</Label>
                         <Input
                           id="team2Score"
                           type="number"
                           min={0}
+                          max={raceTo}
                           value={team2Score}
                           onChange={(e) => setTeam2Score(e.target.value)}
                           required
@@ -868,7 +911,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
 
                 {viewer.id && viewer.isPending && (
                   <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">
-                    Permohonan Anda sedang menunggu persetujuan penyelenggara.
+                    Permohonan Anda sedang menunggu persetujuan Host.
                   </div>
                 )}
 
@@ -940,10 +983,12 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                 Alur Verifikasi
               </p>
               <ol className="list-decimal list-inside space-y-1">
-                <li>Pemenang mengirim skor.</li>
-                <li>Lawan punya 48 jam untuk konfirmasi atau sanggah.</li>
-                <li>Jika tidak ada sanggahan, skor otomatis dikonfirmasi.</li>
-                <li>Rating diperbarui setelah konfirmasi.</li>
+                <li>Semua peserta terkonfirmasi (singles 2, doubles 4).</li>
+                <li>Host (penyelenggara) input skor resmi (Race to {raceTo}).</li>
+                <li>Upload foto bukti wajib.</li>
+                <li>Pastikan skor sesuai, lalu submit untuk verifikasi.</li>
+                <li>Lawan punya 24 jam untuk konfirmasi/sanggah.</li>
+                <li>Hasil tercatat & rating diperbarui setelah terverifikasi/otomatis.</li>
               </ol>
             </div>
           </div>

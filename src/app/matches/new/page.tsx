@@ -11,6 +11,9 @@ export default async function NewMatchPage({
   searchParams: { invite?: string };
 }) {
   const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const inviteUserId = typeof searchParams.invite === "string" ? searchParams.invite : undefined;
 
   const { data: cities } = await supabase
@@ -65,6 +68,7 @@ export default async function NewMatchPage({
           cities={options}
           inviteUserId={inviteUserId}
           inviteName={inviteName}
+          currentUserId={user?.id ?? ""}
         />
       </div>
     </div>

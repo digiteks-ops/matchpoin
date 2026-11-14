@@ -64,7 +64,7 @@ export interface ApplyRatingResponse {
   results: RatingChangeSummary[];
 }
 
-const DISPUTE_WINDOW_HOURS = 48;
+const DISPUTE_WINDOW_HOURS = 24;
 
 function metadataObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -188,15 +188,23 @@ async function assertParticipant(matchId: string, userId: string) {
   return supabase;
 }
 
+async function assertHost(matchId: string, userId: string) {
+  const { supabase, match } = await getMatchContext(matchId);
+  if (match.organizer_id !== userId) {
+    throw new Error("Hanya Host (penyelenggara) yang dapat mengirim hasil resmi pertandingan.");
+  }
+  return supabase;
+}
+
 /**
- * Submits a match result. The opponent then has 48 hours (server time) to dispute it.
- * Ratings are never applied at submission time.
+ * Submits a match result. The opponent then has 24 hours (server time) to dispute it.
+ * Ratings are never applied at submission time. Only the Host may submit the official result.
  */
 export async function submitMatchResult(
   userId: string,
   input: SubmitMatchResultInput
 ): Promise<MatchResultView> {
-  const supabase = await assertParticipant(input.matchId, userId);
+  const supabase = await assertHost(input.matchId, userId);
 
   if (!Number.isInteger(input.team1Score) || !Number.isInteger(input.team2Score)) {
     throw new Error("Skor harus berupa bilangan bulat.");
@@ -217,11 +225,19 @@ export async function submitMatchResult(
     throw new Error("Pemenang tidak sesuai dengan skor yang dimasukkan.");
   }
 
-  const { category, team1, team2 } = await getMatchContext(input.matchId);
+  const { category, team1, team2, meta } = await getMatchContext(input.matchId);
   const format = formatCategory(category);
   const playersPerTeam = format === "singles" ? 1 : 2;
   const requiredPlayers = playersPerTeam * 2;
   const confirmedPlayers = team1.length + team2.length;
+
+  const raceTo = Math.max(1, Number((meta as any).race_to ?? 8) || 8);
+  if (input.team1Score > raceTo || input.team2Score > raceTo) {
+    throw new Error(`Skor tidak valid. Format pertandingan Race to ${raceTo}.`);
+  }
+  if (Math.max(input.team1Score, input.team2Score) !== raceTo) {
+    throw new Error(`Pertandingan berakhir saat salah satu pihak mencapai ${raceTo} poin.`);
+  }
 
   if (confirmedPlayers < requiredPlayers) {
     throw new Error(
@@ -429,7 +445,7 @@ const meta = metadataObject(result.metadata);
 }
 
 /**
- * Auto-confirms a pending result once the 48-hour server-side window has elapsed.
+ * Auto-confirms a pending result once the 24-hour server-side window has elapsed.
  * Call this when loading match details.
  */
 export async function syncMatchResultStatus(matchId: string): Promise<void> {

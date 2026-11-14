@@ -43,31 +43,40 @@ export default function PublicPlayerProfilePage() {
         } = await supabase.auth.getUser();
         setCurrentUser(authUser);
 
-        const { data: profileData, error } = await supabase
-          .from("player_profiles")
-          .select(
-            "*, users(city_id, cities(name, province)), tennis_courts(name, city_id, cities(name, province))"
-          )
+        const { data: publicPlayer, error } = await supabase
+          .from("public_players")
+          .select("*")
           .eq("user_id", playerId)
           .maybeSingle();
 
-        if (error || !profileData) {
+        if (error || !publicPlayer) {
           setNotFound(true);
           return;
         }
 
-        setProfile(profileData as unknown as PlayerProfile);
+        setProfile({
+          id: publicPlayer.user_id,
+          user_id: publicPlayer.user_id,
+          display_name: publicPlayer.display_name,
+          bio: publicPlayer.bio,
+          playing_since: publicPlayer.playing_since,
+          preferred_hand: publicPlayer.preferred_hand,
+          backhand: publicPlayer.backhand,
+          preferred_court_id: null,
+          play_frequency: publicPlayer.play_frequency,
+          preferred_categories: publicPlayer.preferred_categories,
+          preferred_times: publicPlayer.preferred_times,
+          self_assessed_level: publicPlayer.self_assessed_level,
+          completion_score: publicPlayer.completion_score,
+          allow_invites: publicPlayer.allow_invites,
+          is_profile_public: true,
+          profile_visibility: "public",
+          created_at: new Date().toISOString(),
+          updated_at: publicPlayer.updated_at || new Date().toISOString(),
+        } as any);
 
-        const userRel = (profileData as unknown as { users?: { cities?: { name: string; province: string } | { name: string; province: string }[] | null } | null }).users;
-        const courtRel = (profileData as unknown as { tennis_courts?: { cities?: { name: string; province: string } | { name: string; province: string }[] | null } | null }).tennis_courts;
-        const pickCity = (rel: { cities?: { name: string; province: string } | { name: string; province: string }[] | null } | null | undefined) => {
-          const c = rel?.cities;
-          if (!c) return null;
-          return Array.isArray(c) ? c[0] : c;
-        };
-        const city = pickCity(userRel) ?? pickCity(courtRel);
-        if (city?.name) {
-          setLocationLabel([city.name, city.province].filter(Boolean).join(", "));
+        if (publicPlayer.city_name) {
+          setLocationLabel([publicPlayer.city_name, publicPlayer.province].filter(Boolean).join(", "));
         } else {
           setLocationLabel("");
         }
