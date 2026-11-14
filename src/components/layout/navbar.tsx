@@ -15,6 +15,7 @@ import {
   Users,
   Settings,
   ChevronDown,
+  Trophy,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 
@@ -65,6 +66,7 @@ const navLinks = [
   { href: "/", label: "Beranda" },
   { href: "/players", label: "Cari Pemain", icon: Users },
   { href: "/matches", label: "Pertandingan", icon: LayoutDashboard },
+  { href: "/tournaments", label: "Turnamen", icon: Trophy },
   { href: "/leaderboard", label: "Leaderboard", icon: LayoutDashboard },
 ];
 
