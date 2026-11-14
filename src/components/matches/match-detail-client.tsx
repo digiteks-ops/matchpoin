@@ -131,8 +131,8 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
   const team2Fallback = isSinglesMatch ? "Lawan" : "Tim B (Lawan)";
   const team1Label = finalTeam1.map((p) => p.fullName).join(" & ") || team1Fallback;
   const team2Label = finalTeam2.map((p) => p.fullName).join(" & ") || team2Fallback;
-  const side1Short = isSinglesMatch ? "Sisi 1 (Host)" : "Tim A (Host)";
-  const side2Short = isSinglesMatch ? "Sisi 2 (Lawan)" : "Tim B (Lawan)";
+  const side1Short = "Host";
+  const side2Short = "Lawan";
   const side1DisplayScore = result ? (hostStoredTeam === 1 ? result.team1Score : result.team2Score) : 0;
   const side2DisplayScore = result ? (hostStoredTeam === 1 ? result.team2Score : result.team1Score) : 0;
   const hostSideWon = result ? result.winnerTeam === hostStoredTeam : false;
@@ -268,8 +268,8 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
     if (team1Players < playersPerTeam || team2Players < playersPerTeam) {
       setError(
         isSinglesMatch
-          ? `Susunan pertandingan belum lengkap: masing-masing sisi harus berisi 1 pemain (${side1Short}: ${team1Players}/1, ${side2Short}: ${team2Players}/1).`
-          : `Susunan tim belum lengkap: dibutuhkan ${playersPerTeam} pemain per tim (${side1Short}: ${team1Players}/${playersPerTeam}, ${side2Short}: ${team2Players}/${playersPerTeam}).`
+          ? `Susunan pertandingan belum lengkap: masing-masing sisi harus berisi 1 pemain (Host: ${team1Players}/1, Lawan: ${team2Players}/1).`
+          : `Susunan tim belum lengkap: dibutuhkan ${playersPerTeam} pemain per tim (Host: ${team1Players}/${playersPerTeam}, Lawan: ${team2Players}/${playersPerTeam}).`
       );
       return;
     }
@@ -399,7 +399,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
               </div>
               <div className="flex items-center gap-2">
                 <Trophy className="w-4 h-4 text-slate-400" />
-                <span>Host (Sisi 1): <strong className="text-slate-800">{match.organizerName}</strong></span>
+                <span>Host: <strong className="text-slate-800">{match.organizerName}</strong></span>
               </div>
             </div>
 
@@ -449,9 +449,9 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                               const isHost = p.userId === hostId || p.isOrganizer;
                               const onHostSide = p.team === hostStoredTeam;
                               if (isSinglesMatch) {
-                                return `${isHost ? "Host (Sisi 1)" : onHostSide ? "Sisi 1" : "Lawan (Sisi 2)"}`;
+                                return isHost ? "Host" : "Lawan";
                               }
-                              return `${isHost ? "Host" : "Pemain"} · ${onHostSide ? "Tim A (Sisi Host)" : "Tim B (Sisi Lawan)"}`;
+                              return `${isHost ? "Host" : "Pemain"} · ${onHostSide ? "Tim Host" : "Tim Lawan"}`;
                             })()} · Rating {p.rating.toFixed(2)}
                           </p>
                         </div>
@@ -582,7 +582,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                   )}
                 </div>
                 <CardDescription className="text-xs">
-                  {isSinglesMatch ? `${team1Label} vs ${team2Label}` : `${side1Short}: ${team1Label} vs ${side2Short}: ${team2Label}`}
+                  {isSinglesMatch ? `${team1Label} vs ${team2Label}` : `${team1Label} vs ${team2Label}`}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -600,13 +600,13 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                   <div className="space-y-4">
                     <div className="grid grid-cols-3 items-center gap-3 text-center">
                       <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                        <p className="text-[10px] uppercase font-bold text-slate-400 truncate px-1" title={team1Label}>{side1Short}</p>
+                        <p className="text-[10px] uppercase font-bold text-slate-400 truncate px-1" title={team1Label}>Host</p>
                         <p className="text-xs font-semibold text-slate-800 truncate px-1">{team1Label}</p>
                         <p className="text-3xl font-extrabold font-heading text-matchpoin-navy">{side1DisplayScore}</p>
                       </div>
                       <div className="text-xs font-bold text-slate-400">VS</div>
                       <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                        <p className="text-[10px] uppercase font-bold text-slate-400 truncate px-1" title={team2Label}>{side2Short}</p>
+                        <p className="text-[10px] uppercase font-bold text-slate-400 truncate px-1" title={team2Label}>Lawan</p>
                         <p className="text-xs font-semibold text-slate-800 truncate px-1">{team2Label}</p>
                         <p className="text-3xl font-extrabold font-heading text-matchpoin-navy">{side2DisplayScore}</p>
                       </div>
@@ -731,8 +731,8 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                           </div>
                         ) : (
                           <div className="space-y-0.5">
-                            <p>Host (Sisi 1): {team1Label || "Belum terisi"} ({team1Players}/{playersPerTeam})</p>
-                            <p>Lawan (Sisi 2): {team2Players > 0 ? team2Label : "Belum terisi"} ({team2Players}/{playersPerTeam})</p>
+                            <p>Host: {team1Label || "Belum terisi"} ({team1Players}/{playersPerTeam})</p>
+                            <p>Lawan: {team2Players > 0 ? team2Label : "Belum terisi"} ({team2Players}/{playersPerTeam})</p>
                           </div>
                         )}
                       </div>
@@ -743,14 +743,14 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="space-y-2 p-3 rounded-lg border border-slate-200 bg-white">
-                        <p className="text-[10px] uppercase font-bold text-slate-500">{isSinglesMatch ? "Sisi 1 – Host" : "Tim A – Sisi Host"}</p>
+                        <p className="text-[10px] uppercase font-bold text-slate-500">Host</p>
                         <p className="text-xs font-semibold text-slate-800">{team1Label}</p>
                         {!isSinglesMatch && finalTeam1.length > 0 && (
                           <ul className="text-[11px] text-slate-600 list-disc list-inside">
                             {finalTeam1.map((m) => <li key={m.userId}>{m.fullName}{m.userId === hostId || m.isOrganizer ? " (Host)" : ""}</li>)}
                           </ul>
                         )}
-                        <Label htmlFor="team1Score">Skor {isSinglesMatch ? team1Label : "Tim A"}</Label>
+                        <Label htmlFor="team1Score">Skor {isSinglesMatch ? team1Label : "Tim Host"}</Label>
                         <Input
                           id="team1Score"
                           type="number"
@@ -762,14 +762,14 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                         />
                       </div>
                       <div className="space-y-2 p-3 rounded-lg border border-slate-200 bg-white">
-                        <p className="text-[10px] uppercase font-bold text-slate-500">{isSinglesMatch ? "Sisi 2 – Lawan" : "Tim B – Sisi Lawan"}</p>
+                        <p className="text-[10px] uppercase font-bold text-slate-500">Lawan</p>
                         <p className="text-xs font-semibold text-slate-800">{team2Label}</p>
                         {!isSinglesMatch && finalTeam2.length > 0 && (
                           <ul className="text-[11px] text-slate-600 list-disc list-inside">
                             {finalTeam2.map((m) => <li key={m.userId}>{m.fullName}</li>)}
                           </ul>
                         )}
-                        <Label htmlFor="team2Score">Skor {isSinglesMatch ? team2Label : "Tim B"}</Label>
+                        <Label htmlFor="team2Score">Skor {isSinglesMatch ? team2Label : "Tim Lawan"}</Label>
                         <Input
                           id="team2Score"
                           type="number"

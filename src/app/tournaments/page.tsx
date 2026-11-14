@@ -14,8 +14,10 @@ interface TournamentRow {
   name: string;
   category: string;
   season: string;
-  start_date: string;
-  end_date: string;
+  registration_start: string;
+  registration_end: string;
+  event_start_date: string;
+  event_end_date: string;
   status: "upcoming" | "active" | "finished";
   max_players: number;
 }
@@ -38,6 +40,16 @@ const CATEGORIES = [
 function categoryLabel(id: string): string {
   const c = CATEGORIES.find((x) => x.id === id);
   return c ? c.label : id;
+}
+
+function isRegistrationOpen(regStart: string, regEnd: string): boolean {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(regStart);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(regEnd);
+  end.setHours(0, 0, 0, 0);
+  return today >= start && today <= end;
 }
 
 export default function TournamentsPage() {
@@ -67,10 +79,9 @@ export default function TournamentsPage() {
     try {
       const supabase = createClient();
       const { data: rows } = await supabase
-        .from("leagues")
-        .select("id, name, category, season, start_date, end_date, status, max_players")
-        .in("status", ["upcoming", "active"])
-        .order("start_date", { ascending: true });
+        .from("tournaments")
+        .select("id, name, category, season, registration_start, registration_end, event_start_date, event_end_date, status, max_players")
+        .order("registration_start", { ascending: true });
 
       setTournaments((rows ?? []) as unknown as TournamentRow[]);
     } catch (err) {
@@ -89,16 +100,16 @@ export default function TournamentsPage() {
     try {
       const supabase = createClient();
       const { count } = await supabase
-        .from("league_participants")
+        .from("tournament_participants")
         .select("id", { count: "exact", head: true })
-        .eq("league_id", t.id);
+        .eq("tournament_id", t.id);
       setParticipantsCount(count ?? 0);
 
       if (currentUser) {
         const { data: existing } = await supabase
-          .from("league_participants")
+          .from("tournament_participants")
           .select("id")
-          .eq("league_id", t.id)
+          .eq("tournament_id", t.id)
           .eq("user_id", currentUser.id)
           .maybeSingle();
         setAlreadyRegistered(Boolean(existing));
@@ -107,9 +118,9 @@ export default function TournamentsPage() {
       }
 
       const { data: partRows } = await supabase
-        .from("league_participants")
+        .from("tournament_participants")
         .select("user_id, joined_at")
-        .eq("league_id", t.id)
+        .eq("tournament_id", t.id)
         .order("joined_at", { ascending: true });
 
       const userIds = Array.from(new Set((partRows ?? []).map((p: any) => p.user_id as string)));
@@ -142,7 +153,14 @@ export default function TournamentsPage() {
     setRegLoading(true);
     try {
       const t = selectedTournament;
-      if (t.status !== "active" && t.status !== "upcoming") {
+
+      // Check registration window
+      if (!isRegistrationOpen(t.registration_start, t.registration_end)) {
+        setRegError("Pendaftaran turnamen ini sudah ditutup di luar jadwal pendaftaran.");
+        return;
+      }
+
+      if (t.status !== "upcoming" && t.status !== "active") {
         setRegError("Pendaftaran untuk turnamen ini sudah ditutup.");
         return;
       }
@@ -157,8 +175,8 @@ export default function TournamentsPage() {
 
       const supabase = createClient();
       const { error } = await supabase
-        .from("league_participants")
-        .insert({ league_id: t.id, user_id: currentUser.id });
+        .from("tournament_participants")
+        .insert({ tournament_id: t.id, user_id: currentUser.id });
 
       if (error) {
         if (error.code === "23505") {
@@ -178,9 +196,18 @@ export default function TournamentsPage() {
     }
   }
 
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
   const filtered = useMemo(() => {
-    return tournaments.filter((t) => t.status === "upcoming" || t.status === "active");
-  }, [tournaments]);
+    return tournaments.filter((t) => {
+      const regStart = new Date(t.registration_start);
+      regStart.setHours(0, 0, 0, 0);
+      const regEnd = new Date(t.registration_end);
+      regEnd.setHours(0, 0, 0, 0);
+      return now >= regStart && now <= regEnd;
+    });
+  }, [tournaments, now]);
 
   const statusLabel = (s: string) => {
     if (s === "upcoming") return "Akan Datang";
@@ -213,7 +240,7 @@ export default function TournamentsPage() {
             </div>
             <h1 className="text-3xl font-extrabold font-heading text-slate-900 tracking-tight">Daftar Turnamen</h1>
             <p className="text-slate-600 text-xs sm:text-sm max-w-xl leading-relaxed">
-              Ikuti turnamen liga MATCHPOIN Season 1. Daftar per kategori dan bantu timmu meraih kemenangan.
+              Pendaftaran turnamen terbuka dari 13 November hingga 31 Desember 2026. Daftar per kategori dan bantu timmu meraih kemenangan.
             </p>
           </div>
           {!currentUser ? (
@@ -261,7 +288,7 @@ export default function TournamentsPage() {
                 <div><span className="text-slate-500 text-[10px] uppercase">Musim:</span> <strong className="text-slate-800">{selectedTournament.season}</strong></div>
                 <div><span className="text-slate-500 text-[10px] uppercase">Status:</span> <Badge variant={statusVariant(selectedTournament.status)} className="text-[10px]">{statusLabel(selectedTournament.status)}</Badge></div>
                 <div><span className="text-slate-500 text-[10px] uppercase">Kuota:</span> <strong className="text-slate-800">{participantsCount}/{selectedTournament.max_players}</strong></div>
-                <div><span className="text-slate-500 text-[10px] uppercase">Tanggal:</span> <strong className="text-slate-800">{new Date(selectedTournament.start_date).toLocaleDateString("id-ID")}</strong></div>
+                <div><span className="text-slate-500 text-[10px] uppercase">Pendaftaran:</span> <strong className="text-slate-800">{new Date(selectedTournament.registration_start).toLocaleDateString("id-ID")} – {new Date(selectedTournament.registration_end).toLocaleDateString("id-ID")}</strong></div>
               </div>
 
               {!currentUser && (
@@ -282,7 +309,7 @@ export default function TournamentsPage() {
                     regLoading ||
                     alreadyRegistered ||
                     participantsCount >= selectedTournament.max_players ||
-                    (selectedTournament.status !== "active" && selectedTournament.status !== "upcoming")
+                    !isRegistrationOpen(selectedTournament.registration_start, selectedTournament.registration_end)
                   }
                 >
                   {regLoading ? (
@@ -307,7 +334,7 @@ export default function TournamentsPage() {
             </div>
           ) : (
             filtered.map((t) => {
-              const isRegOpen = t.status === "active" || t.status === "upcoming";
+              const regOpenNow = isRegistrationOpen(t.registration_start, t.registration_end);
               const isFull = participantsCount >= t.max_players;
               const isMine = alreadyRegistered && selectedTournament?.id === t.id;
               return (
@@ -326,7 +353,7 @@ export default function TournamentsPage() {
                   <CardContent className="space-y-3">
                     <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
                       <Calendar className="w-3 h-3" />
-                      <span>{new Date(t.start_date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
+                      <span>{new Date(t.event_start_date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
                       <MapPin className="w-3 h-3" />
@@ -348,7 +375,7 @@ export default function TournamentsPage() {
                         <Button variant="outline" size="sm" className="w-full text-xs text-emerald-700 border-emerald-200 bg-emerald-50 disabled">
                           Sudah Terdaftar
                         </Button>
-                      ) : !isRegOpen ? (
+                      ) : !regOpenNow ? (
                         <Button variant="secondary" size="sm" className="w-full text-xs disabled">
                           Pendaftaran Ditutup
                         </Button>
@@ -372,8 +399,7 @@ export default function TournamentsPage() {
         <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-start gap-3 text-xs text-slate-500">
           <Trophy className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
           <p>
-            Setiap pemain hanya dapat terdaftar 1x per kategori turnamen. Pendaftaran otomatis ditutup ketika
-            kuota terpenuhi atau batas waktu pendaftaran telah lewat.
+            Pendaftaran turnamen terbuka dari 13 November hingga 31 Desember 2026. Setiap pemain hanya dapat terdaftar 1x per kategori turnamen. Pendaftaran otomatis ditutup setelah batas waktu pendaftaran lewat.
           </p>
         </div>
       </div>
