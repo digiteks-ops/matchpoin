@@ -37,28 +37,18 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/matches" className="hover:text-matchpoin-tennis transition-colors">
-                  Pertandingan Terbuka
-                </Link>
-              </li>
-              <li>
                 <Link href="/leaderboard" className="hover:text-matchpoin-tennis transition-colors">
                   Leaderboard
                 </Link>
               </li>
               <li>
                 <Link href="/league" className="hover:text-matchpoin-tennis transition-colors">
-                  Liga Q1 2027
+                  Season 1 League
                 </Link>
               </li>
               <li>
                 <Link href="/login" className="hover:text-matchpoin-tennis transition-colors">
                   Masuk Akun
-                </Link>
-              </li>
-              <li>
-                <Link href="/register" className="hover:text-matchpoin-tennis transition-colors">
-                  Daftar Pemain Baru
                 </Link>
               </li>
             </ul>

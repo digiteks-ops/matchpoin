@@ -276,6 +276,19 @@ CREATE POLICY "users can update their own profile"
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 
+-- Public read access for player discovery (leaderboard, player directory)
+DROP POLICY IF EXISTS "Public can read public player profiles" ON public.player_profiles;
+CREATE POLICY "Public can read public player profiles"
+  ON public.player_profiles
+  FOR SELECT
+  USING (is_profile_public = true);
+
+DROP POLICY IF EXISTS "Public can read users for player discovery" ON public.users;
+CREATE POLICY "Public can read users for player discovery"
+  ON public.users
+  FOR SELECT
+  USING (true);
+
 -- ---------------------------------------------------------------------------
 -- 3. Atomic rating application (SECURITY DEFINER)
 -- ---------------------------------------------------------------------------

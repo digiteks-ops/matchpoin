@@ -310,6 +310,7 @@ export interface FullPlayerProfile {
   gender: Gender | null;
   cityId: string | null;
   cityName: string;
+  province: string | null;
   bio: string | null;
   preferredHand: PreferredHand;
   backhand: BackhandStyle;

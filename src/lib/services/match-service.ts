@@ -65,6 +65,11 @@ type MatchMetadata = {
   min_rating?: number;
   max_rating?: number;
   level?: string;
+  court_name?: string | null;
+  court_province?: string | null;
+  court_city?: string | null;
+  court_address?: string | null;
+  manual_court?: boolean;
   [key: string]: unknown;
 };
 
@@ -185,14 +190,31 @@ export async function createOpenMatch(
     throw new Error("Tanggal pertandingan tidak boleh di masa lalu.");
   }
 
-  const { data: court } = await supabase
-    .from("tennis_courts")
-    .select("id, status")
-    .eq("id", input.courtId)
-    .maybeSingle();
+  const manualCourtName = (input.courtName ?? "").trim();
+  const manualProvince = (input.province ?? "").trim();
+  const manualCity = (input.cityName ?? "").trim();
+  let resolvedCourtId: string | null = input.courtId ?? null;
 
-  if (!court) throw new Error("Lapangan tidak ditemukan.");
-  if (court.status !== "available") throw new Error("Lapangan sedang tidak tersedia.");
+  if (resolvedCourtId) {
+    const { data: court } = await supabase
+      .from("tennis_courts")
+      .select("id, status")
+      .eq("id", resolvedCourtId)
+      .maybeSingle();
+
+    if (!court) throw new Error("Lapangan tidak ditemukan.");
+    if (court.status !== "available") throw new Error("Lapangan sedang tidak tersedia.");
+  } else {
+    if (manualCourtName.length < 2) {
+      throw new Error("Nama lapangan minimal 2 karakter.");
+    }
+    if (!manualProvince) {
+      throw new Error("Provinsi lapangan wajib dipilih.");
+    }
+    if (!manualCity) {
+      throw new Error("Kota/Kabupaten lapangan wajib dipilih.");
+    }
+  }
 
   const metadata: MatchMetadata = {
     category: input.category,
@@ -205,6 +227,13 @@ export async function createOpenMatch(
     race_to: input.raceToScore ?? 8,
     court_switch_at: input.courtSwitchAt ?? 4,
     court_swapped: false,
+    manual_court: !resolvedCourtId,
+    court_name: manualCourtName || null,
+    court_province: manualProvince || null,
+    court_city: manualCity || null,
+    court_address: manualCourtName
+      ? [manualCourtName, manualCity, manualProvince].filter(Boolean).join(", ")
+      : null,
   };
 
   const { data: matchData, error: matchError } = await supabase
@@ -212,7 +241,7 @@ export async function createOpenMatch(
     .insert({
       title,
       description: input.description?.trim() || null,
-      court_id: input.courtId,
+      court_id: resolvedCourtId,
       organizer_id: userId,
       match_date: input.matchDate,
       start_time: startTime,
@@ -227,7 +256,7 @@ export async function createOpenMatch(
     .single();
 
   if (matchError || !matchData) {
-    logError("match.create", matchError, { userId, courtId: input.courtId });
+    logError("match.create", matchError, { userId, courtId: resolvedCourtId, courtName: manualCourtName || null });
     // 23503 = organizer has no public.users row (onboarding not completed).
     if (matchError?.code === "23503") {
       throw new Error("Profil pemain belum siap. Muat ulang halaman lalu coba lagi.");
@@ -522,9 +551,11 @@ async function hydrateMatches(matches: MatchRow[]): Promise<OpenMatchDetail[]> {
     .select("id, match_id, user_id, is_organizer, team, metadata, joined_at, confirmed_at")
     .in("match_id", matchIds);
 
-  const profileMap = await getProfilesForUsers(
-    (participants ?? []).map((p) => p.user_id)
-  );
+  const profileIds = [
+    ...(participants ?? []).map((p) => p.user_id),
+    ...matches.map((m) => m.organizer_id),
+  ];
+  const profileMap = await getProfilesForUsers(profileIds);
 
   return matches.map((m) => buildMatchDetail(m, participants ?? [], profileMap));
 }
@@ -622,7 +653,11 @@ export async function getMatchDetail(matchId: string): Promise<OpenMatchDetail |
     .select("id, match_id, user_id, is_organizer, team, metadata, joined_at, confirmed_at")
     .eq("match_id", matchId);
 
-  const profileMap = await getProfilesForUsers((participants ?? []).map((p) => p.user_id));
+  const profileIds = [
+    ...(participants ?? []).map((p) => p.user_id),
+    match.organizer_id,
+  ];
+  const profileMap = await getProfilesForUsers(profileIds);
 
   return buildMatchDetail(match, participants ?? [], profileMap);
 }
@@ -631,7 +666,7 @@ type MatchRow = {
   id: string;
   title: string;
   description: string | null;
-  court_id: string;
+  court_id: string | null;
   organizer_id: string;
   match_date: string;
   start_time: string;
@@ -667,36 +702,62 @@ function buildMatchDetail(
   const court = Array.isArray(match.tennis_courts) ? match.tennis_courts[0] : match.tennis_courts;
   const maxPlayers = logicalMaxPlayers(category);
 
-  const toInfo = (p: ParticipantRow): MatchParticipantInfo => {
-    const profile = profileMap.get(p.user_id);
-    const participantMeta = asParticipantMetadata(p.metadata);
-    return {
-      id: p.id,
-      userId: p.user_id,
-      fullName: profile?.full_name || "Pemain MATCHPOIN",
-      avatarUrl: profile?.avatar_url ?? null,
-      gender: profile?.gender ?? null,
-      rating: profile?.rating ?? 1,
-      isOrganizer: Boolean(p.is_organizer),
-      status:
-        participantMeta.status === "pending"
-          ? "pending"
-          : participantMeta.status === "rejected"
-          ? "rejected"
-          : participantMeta.status === "invited"
-          ? "invited"
-          : "confirmed",
-      team: p.team === 2 ? 2 : 1,
-    };
-  };
-
-  const all = participants
+  const rawAll = participants
     .filter((p) => p.is_organizer || isActiveParticipantStatus(asParticipantMetadata(p.metadata).status))
-    .map(toInfo);
+    .map((p) => {
+      const profile = profileMap.get(p.user_id);
+      const participantMeta = asParticipantMetadata(p.metadata);
+      const isOrganizer = Boolean(p.is_organizer) || p.user_id === match.organizer_id;
+      return {
+        id: p.id,
+        userId: p.user_id,
+        fullName: profile?.full_name || "Pemain",
+        avatarUrl: profile?.avatar_url ?? null,
+        gender: profile?.gender ?? null,
+        rating: profile?.rating ?? 1,
+        isOrganizer,
+        status:
+          participantMeta.status === "pending"
+            ? "pending"
+            : participantMeta.status === "rejected"
+            ? "rejected"
+            : participantMeta.status === "invited"
+            ? "invited"
+            : "confirmed",
+        team: (isOrganizer ? 1 : p.team === 2 ? 2 : p.team === 1 ? 1 : 2) as 1 | 2,
+      } satisfies MatchParticipantInfo;
+    });
+
+  // Singles: host is always side 1, the other confirmed player is always side 2.
+  const all = rawAll.map((p) => {
+    if (maxPlayers <= 2 && p.status === "confirmed" && !p.isOrganizer && p.userId !== match.organizer_id) {
+      return { ...p, team: 2 as 1 | 2 };
+    }
+    if (p.isOrganizer || p.userId === match.organizer_id) {
+      return { ...p, isOrganizer: true, team: 1 as 1 | 2 };
+    }
+    return p;
+  });
+
   const confirmed = all.filter((p) => p.status === "confirmed");
   const pending = all.filter((p) => p.status === "pending");
   const invited = all.filter((p) => p.status === "invited");
-  const organizer = all.find((p) => p.isOrganizer);
+  const organizerParticipant = all.find((p) => p.isOrganizer) ?? confirmed.find((p) => p.userId === match.organizer_id);
+  const organizerProfile = profileMap.get(match.organizer_id);
+  const organizerName =
+    (organizerParticipant?.fullName && organizerParticipant.fullName !== "Pemain"
+      ? organizerParticipant.fullName
+      : organizerProfile?.full_name && organizerProfile.full_name !== "Pemain MATCHPOIN"
+      ? organizerProfile.full_name
+      : null) || "Penyelenggara";
+
+  // Host/organizer must always be Side 1 (Team A). Normalize display order for clarity.
+  const sideSorted = [...confirmed].sort((a, b) => {
+    const aSide = a.userId === match.organizer_id || a.isOrganizer ? 1 : a.team;
+    const bSide = b.userId === match.organizer_id || b.isOrganizer ? 1 : b.team;
+    if (aSide !== bSide) return aSide - bSide;
+    return a.fullName.localeCompare(b.fullName);
+  });
 
   // Counts are derived from confirmed participant rows so that a player who
   // accepts their own invite is reflected immediately.
@@ -711,10 +772,20 @@ function buildMatchDetail(
     title: match.title,
     description: match.description,
     courtId: match.court_id,
-    courtName: court?.name ?? "Lapangan tidak diketahui",
-    courtAddress: court?.address ?? "",
+    courtName:
+      court?.name ||
+      (typeof meta.court_name === "string" && meta.court_name.trim()) ||
+      "Lapangan tidak diketahui",
+    courtAddress:
+      court?.address ||
+      (typeof meta.court_address === "string" && meta.court_address.trim()) ||
+      [typeof meta.court_city === "string" ? meta.court_city : null, typeof meta.court_province === "string" ? meta.court_province : null]
+        .filter(Boolean)
+        .join(", "),
+    province: typeof meta.court_province === "string" ? meta.court_province : null,
+    cityName: typeof meta.court_city === "string" ? meta.court_city : null,
     organizerId: match.organizer_id,
-    organizerName: organizer?.fullName ?? "Pemain MATCHPOIN",
+    organizerName,
     matchDate: match.match_date,
     startTime: match.start_time,
     durationMinutes: match.duration_minutes ?? 90,
@@ -731,7 +802,7 @@ function buildMatchDetail(
     raceToScore: Number(meta.race_to ?? 8),
     courtSwitchAt: Number(meta.court_switch_at ?? 4),
     courtSwapped: Boolean(meta.court_swapped),
-    participants: confirmed,
+    participants: sideSorted,
     pendingRequests: pending,
     invitedPlayers: invited,
     createdAt: match.created_at,

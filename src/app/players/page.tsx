@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlayerCard } from "@/components/players/player-card";
@@ -9,7 +10,7 @@ import { PlayerCardSkeleton } from "@/components/players/player-card-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GuestModal } from "@/components/ui/guest-modal";
 import { createClient } from "@/lib/supabase/client";
-import { Users, Search, MapPin, UserPlus, X } from "lucide-react";
+import { Users, Search, MapPin, UserPlus, X, Loader2 } from "lucide-react";
 import type { FullPlayerProfile, City } from "@/types/database.types";
 import type { User } from "@supabase/supabase-js";
 
@@ -27,6 +28,10 @@ type ProfileRow = {
   completion_score: number | null;
   allow_invites: boolean | null;
   preferred_court_id: string | null;
+  users: {
+    city_id: string | null;
+    cities: { name: string; province: string } | { name: string; province: string }[] | null;
+  } | { city_id: string | null; cities: { name: string; province: string } | null }[] | null;
   tennis_courts: {
     name: string;
     city_id: string;
@@ -44,18 +49,23 @@ type RatingRow = {
 };
 
 export default function PlayersDirectoryPage() {
+  const router = useRouter();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [players, setPlayers] = useState<FullPlayerProfile[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedProvince, setSelectedProvince] = useState<string>("all");
   const [selectedCityId, setSelectedCityId] = useState<string>("all");
   const [selectedLevel, setSelectedLevel] = useState<string>("all");
   const [selectedFormat, setSelectedFormat] = useState<string>("all");
 
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [selectedPlayerForInvite, setSelectedPlayerForInvite] = useState<FullPlayerProfile | null>(null);
+  const [invitingPlayerId, setInvitingPlayerId] = useState<string | null>(null);
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -72,7 +82,7 @@ export default function PlayersDirectoryPage() {
           supabase
             .from("player_profiles")
             .select(
-              "user_id, display_name, bio, playing_since, preferred_hand, backhand, play_frequency, self_assessed_level, preferred_categories, preferred_times, completion_score, allow_invites, preferred_court_id, tennis_courts(name, city_id, cities(name, province))"
+              "user_id, display_name, bio, playing_since, preferred_hand, backhand, play_frequency, self_assessed_level, preferred_categories, preferred_times, completion_score, allow_invites, preferred_court_id, users(city_id, cities(name, province)), tennis_courts(name, city_id, cities(name, province))"
             )
             .eq("is_profile_public", true)
             .order("display_name", { ascending: true })
@@ -89,14 +99,24 @@ export default function PlayersDirectoryPage() {
         const ratings = (ratingsResult.data ?? []) as unknown as RatingRow[];
         const ratingByUser = new Map(ratings.map((r) => [r.user_id, r]));
 
-        const formatted: FullPlayerProfile[] = profiles.map((p) => {
+        const formatted: FullPlayerProfile[] = profiles
+          .filter((p) => p.user_id !== authUser?.id)
+          .map((p) => {
           const rating = ratingByUser.get(p.user_id);
+          const userRel = Array.isArray(p.users) ? p.users[0] : p.users;
           const court = Array.isArray(p.tennis_courts) ? p.tennis_courts[0] : p.tennis_courts;
-          const city = court?.cities
+          const userCity = userRel?.cities
+            ? Array.isArray(userRel.cities)
+              ? userRel.cities[0]
+              : userRel.cities
+            : null;
+          const courtCity = court?.cities
             ? Array.isArray(court.cities)
               ? court.cities[0]
               : court.cities
             : null;
+          const city = userCity ?? courtCity;
+          const cityId = userRel?.city_id ?? court?.city_id ?? null;
 
           const matchesPlayed = rating?.matches_played ?? 0;
           const wins = rating?.wins ?? 0;
@@ -109,8 +129,9 @@ export default function PlayersDirectoryPage() {
             displayName: p.display_name || "Pemain MATCHPOIN",
             avatarUrl: null,
             gender: null,
-            cityId: court?.city_id ?? null,
-            cityName: city?.name || "Makassar",
+            cityId,
+            cityName: city?.name || "Lokasi belum diisi",
+            province: city?.province || null,
             bio: p.bio,
             preferredHand: p.preferred_hand === "left" ? "left" : "right",
             backhand: p.backhand === "one_handed" ? "one_handed" : "two_handed",
@@ -152,13 +173,37 @@ export default function PlayersDirectoryPage() {
     loadData();
   }, []);
 
+  const provinces = useMemo(() => {
+    const set = new Set<string>();
+    cities.forEach((c) => {
+      if (c.province) set.add(c.province);
+    });
+    players.forEach((p) => {
+      if (p.province) set.add(p.province);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [cities, players]);
+
+  const filteredCities = useMemo(() => {
+    if (selectedProvince === "all") return cities;
+    return cities.filter((c) => c.province === selectedProvince);
+  }, [cities, selectedProvince]);
+
+  useEffect(() => {
+    if (selectedCityId === "all") return;
+    if (!filteredCities.some((c) => c.id === selectedCityId)) {
+      setSelectedCityId("all");
+    }
+  }, [filteredCities, selectedCityId]);
+
   const handleInvitePlayer = (player: FullPlayerProfile) => {
     if (!currentUser) {
       setSelectedPlayerForInvite(player);
       setIsGuestModalOpen(true);
       return;
     }
-    window.location.href = `/matches/new?invite=${player.userId}`;
+    setInvitingPlayerId(player.userId);
+    router.push(`/matches/new?invite=${player.userId}`);
   };
 
   const filteredPlayers = useMemo(() => {
@@ -171,6 +216,7 @@ export default function PlayersDirectoryPage() {
         if (!matchesName && !matchesBio) return false;
       }
 
+      if (selectedProvince !== "all" && p.province !== selectedProvince) return false;
       if (selectedCityId !== "all" && p.cityId !== selectedCityId) return false;
 
       if (selectedLevel !== "all" && p.selfAssessedLevel !== selectedLevel) return false;
@@ -192,10 +238,11 @@ export default function PlayersDirectoryPage() {
 
       return true;
     });
-  }, [players, searchQuery, selectedCityId, selectedLevel, selectedFormat]);
+  }, [players, searchQuery, selectedProvince, selectedCityId, selectedLevel, selectedFormat]);
 
   const clearFilters = () => {
     setSearchQuery("");
+    setSelectedProvince("all");
     setSelectedCityId("all");
     setSelectedLevel("all");
     setSelectedFormat("all");
@@ -203,6 +250,7 @@ export default function PlayersDirectoryPage() {
 
   const hasActiveFilters =
     searchQuery.trim() !== "" ||
+    selectedProvince !== "all" ||
     selectedCityId !== "all" ||
     selectedLevel !== "all" ||
     selectedFormat !== "all";
@@ -214,7 +262,7 @@ export default function PlayersDirectoryPage() {
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-matchpoin-navy bg-white border border-slate-200 px-3 py-1 rounded-full">
               <MapPin className="w-3.5 h-3.5 text-matchpoin-tennis" />
-              <span>Direktori Pemain • Makassar & Sekitarnya</span>
+              <span>Direktori Pemain</span>
             </div>
             <h1 className="text-3xl font-extrabold font-heading text-slate-900 tracking-tight">
               Cari Lawan Bermain
@@ -225,16 +273,16 @@ export default function PlayersDirectoryPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Link href="/leaderboard">
-              <Button variant="outline" className="gap-2">
-                <Users className="w-4 h-4" />
+            <Link href="/leaderboard" onClick={() => setLeaderboardLoading(true)}>
+              <Button variant="outline" className="gap-2" disabled={leaderboardLoading}>
+                {leaderboardLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
                 Leaderboard
               </Button>
             </Link>
             {!currentUser ? (
-              <Link href="/register">
-                <Button variant="tennis" className="text-matchpoin-navy font-bold gap-2">
-                  <UserPlus className="w-4 h-4" />
+              <Link href="/register" onClick={() => setRegisterLoading(true)}>
+                <Button variant="tennis" className="text-matchpoin-navy font-bold gap-2" disabled={registerLoading}>
+                  {registerLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
                   Daftar Pemain
                 </Button>
               </Link>
@@ -249,8 +297,8 @@ export default function PlayersDirectoryPage() {
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm space-y-3">
-          <div className="flex flex-col md:flex-row gap-3">
-            <div className="relative flex-1">
+          <div className="flex flex-col md:flex-row md:flex-wrap gap-3">
+            <div className="relative flex-1 min-w-[220px]">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <Input
                 type="search"
@@ -271,13 +319,30 @@ export default function PlayersDirectoryPage() {
             </div>
 
             <select
+              value={selectedProvince}
+              onChange={(e) => {
+                setSelectedProvince(e.target.value);
+                setSelectedCityId("all");
+              }}
+              className="h-10 w-full md:w-48 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+              aria-label="Filter provinsi"
+            >
+              <option value="all">Semua Provinsi</option>
+              {provinces.map((prov) => (
+                <option key={prov} value={prov}>
+                  {prov}
+                </option>
+              ))}
+            </select>
+
+            <select
               value={selectedCityId}
               onChange={(e) => setSelectedCityId(e.target.value)}
-              className="h-10 w-full md:w-48 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
-              aria-label="Filter kota"
+              className="h-10 w-full md:w-52 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+              aria-label="Filter kota/kabupaten"
             >
-              <option value="all">Semua Kota</option>
-              {cities.map((c) => (
+              <option value="all">Semua Kota/Kabupaten</option>
+              {filteredCities.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
@@ -330,7 +395,12 @@ export default function PlayersDirectoryPage() {
         ) : filteredPlayers.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredPlayers.map((player) => (
-              <PlayerCard key={player.userId} player={player} onInvite={handleInvitePlayer} />
+              <PlayerCard
+                key={player.userId}
+                player={player}
+                onInvite={handleInvitePlayer}
+                isInviting={invitingPlayerId === player.userId}
+              />
             ))}
           </div>
         ) : (

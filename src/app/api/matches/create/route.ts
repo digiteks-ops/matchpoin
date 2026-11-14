@@ -28,15 +28,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, message: 'Permintaan tidak valid.' }, { status: 400 });
   }
 
+  const hasCourt = Boolean(payload.courtId || (payload.courtName && payload.courtName.trim()));
   if (
     !payload.title ||
-    !payload.courtId ||
+    !hasCourt ||
     !payload.matchDate ||
     !payload.startTime ||
     !payload.category ||
     !payload.umpireOption
   ) {
     return NextResponse.json({ success: false, message: 'Lengkapi field wajib.' }, { status: 400 });
+  }
+
+  if (!payload.courtId && payload.courtName && payload.courtName.trim().length < 2) {
+    return NextResponse.json({ success: false, message: 'Nama lapangan minimal 2 karakter.' }, { status: 400 });
   }
 
   if (!CATEGORIES.includes(payload.category)) {
@@ -51,7 +56,7 @@ export async function POST(request: Request) {
     const matchId = await createOpenMatch(user.id, payload);
     return NextResponse.json({ success: true, matchId, message: 'Pertandingan dibuat.' });
   } catch (err) {
-    logError('match.create.route', err, { userId: user.id, courtId: payload.courtId });
+    logError('match.create.route', err, { userId: user.id, courtId: payload.courtId ?? null, courtName: payload.courtName ?? null });
     return NextResponse.json(
       { success: false, message: err instanceof Error ? err.message : ERROR_CREATE_MATCH },
       { status: 400 }

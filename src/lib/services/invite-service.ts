@@ -309,10 +309,11 @@ export async function respondToInvite(
 
   if (match.status === "cancelled") throw new Error("Pertandingan telah dibatalkan.");
   if (match.status === "completed") throw new Error("Pertandingan telah selesai.");
+  if (match.status !== "open") throw new Error("Pendaftaran pertandingan ini sudah ditutup.");
 
   const { data: roster, error: rosterError } = await supabase
     .from("match_participants")
-    .select("id, is_organizer, metadata")
+    .select("id, is_organizer, metadata, team")
     .eq("match_id", row.match_id);
 
   if (rosterError) {
@@ -320,20 +321,34 @@ export async function respondToInvite(
     throw rosterError;
   }
 
-  const confirmedCount = (roster ?? []).filter(
+  const teamOf = (value: unknown) => (value === 2 ? 2 : 1);
+  const confirmedRoster = (roster ?? []).filter(
     (entry) => entry.is_organizer || meta(entry.metadata).status === "confirmed"
-  ).length;
+  );
+  const confirmedCount = confirmedRoster.length;
 
   if (confirmedCount + 1 > maxPlayers) {
     throw new Error("Slot pertandingan sudah penuh.");
   }
+
+  const playersPerTeam = Math.ceil(maxPlayers / 2);
+  const team1Count = confirmedRoster.filter((entry) => teamOf(entry.team) === 1).length;
+  const team2Count = confirmedRoster.filter((entry) => teamOf(entry.team) === 2).length;
+  const team: 1 | 2 =
+    maxPlayers <= 2
+      ? 2
+      : team1Count < playersPerTeam && team1Count <= team2Count
+      ? 1
+      : team1Count >= playersPerTeam
+      ? 2
+      : 1;
 
   const { error: updateError } = await supabase
     .from("match_participants")
     .update({
       metadata: { ...meta(row.metadata), status: "confirmed" },
       confirmed_at: new Date().toISOString(),
-      team: row.team ?? 2,
+      team,
     })
     .eq("id", participantRowId)
     .eq("user_id", userId);
@@ -341,6 +356,20 @@ export async function respondToInvite(
   if (updateError) {
     logError("invite.accept", updateError, { participantRowId, userId });
     throw updateError;
+  }
+
+  const newStatus = confirmedCount + 1 >= maxPlayers ? "full" : "open";
+  const { error: matchUpdateError } = await supabase
+    .from("matches")
+    .update({
+      current_players: confirmedCount + 1,
+      status: newStatus,
+    })
+    .eq("id", row.match_id);
+
+  if (matchUpdateError) {
+    logError("invite.accept.resync", matchUpdateError, { participantRowId, userId });
+    throw matchUpdateError;
   }
 }
 

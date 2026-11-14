@@ -150,7 +150,12 @@ export default function LeaderboardPage() {
               <Trophy className="w-3.5 h-3.5 text-matchpoin-tennis" />
               <span>Peringkat Pemain</span>
             </div>
-            <h1 className="text-3xl font-extrabold font-heading text-slate-900 tracking-tight">Leaderboard MATCHPOIN</h1>
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-3xl font-extrabold font-heading text-slate-900 tracking-tight">Leaderboard MATCHPOIN</h1>
+              <Badge variant="outline" className="text-xs font-bold uppercase text-matchpoin-tennis border-matchpoin-tennis/20 bg-matchpoin-tennis/5">
+                Season 1 League
+              </Badge>
+            </div>
             <p className="text-slate-600 text-xs sm:text-sm max-w-xl leading-relaxed">
               Peringkat berdasarkan MATCHPOIN Rating dari pertandingan yang telah dikonfirmasi.
             </p>

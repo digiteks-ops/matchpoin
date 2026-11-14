@@ -5,15 +5,16 @@ import Link from "next/link";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MapPin, Trophy, Calendar, UserCheck } from "lucide-react";
+import { MapPin, Loader2 } from "lucide-react";
 import type { FullPlayerProfile } from "@/types/database.types";
 
 interface PlayerCardProps {
   player: FullPlayerProfile;
   onInvite?: (player: FullPlayerProfile) => void;
+  isInviting?: boolean;
 }
 
-export function PlayerCard({ player, onInvite }: PlayerCardProps) {
+export function PlayerCard({ player, onInvite, isInviting = false }: PlayerCardProps) {
   const getRatingBadgeColor = (rating: number) => {
     if (rating >= 8.5) return "bg-rose-100 text-rose-800 border-rose-300";
     if (rating >= 6.5) return "bg-purple-100 text-purple-800 border-purple-300";
@@ -71,7 +72,7 @@ export function PlayerCard({ player, onInvite }: PlayerCardProps) {
               </Link>
               <div className="flex items-center gap-1.5 text-xs text-slate-500">
                 <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <span>{player.cityName || "Makassar"}</span>
+                <span>{[player.cityName, player.province].filter(Boolean).join(", ") || "Makassar"}</span>
               </div>
             </div>
           </div>
@@ -149,8 +150,9 @@ export function PlayerCard({ player, onInvite }: PlayerCardProps) {
           size="sm"
           className="w-full text-xs text-matchpoin-navy font-bold"
           onClick={() => onInvite?.(player)}
+          disabled={isInviting}
         >
-          Undang Tanding
+          {isInviting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Undang Tanding"}
         </Button>
       </div>
     </Card>

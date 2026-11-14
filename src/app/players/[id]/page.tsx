@@ -28,7 +28,7 @@ export default function PublicPlayerProfilePage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [rating, setRating] = useState<PlayerRating | null>(null);
-  const [cityName, setCityName] = useState("Makassar");
+  const [locationLabel, setLocationLabel] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -46,7 +46,7 @@ export default function PublicPlayerProfilePage() {
         const { data: profileData, error } = await supabase
           .from("player_profiles")
           .select(
-            "*, tennis_courts(name, city_id, cities(name, province))"
+            "*, users(city_id, cities(name, province)), tennis_courts(name, city_id, cities(name, province))"
           )
           .eq("user_id", playerId)
           .maybeSingle();
@@ -57,13 +57,20 @@ export default function PublicPlayerProfilePage() {
         }
 
         setProfile(profileData as unknown as PlayerProfile);
-        const court = (profileData as unknown as { tennis_courts?: { cities?: { name: string } | { name: string }[] } | null }).tennis_courts;
-        const city = court?.cities
-          ? Array.isArray(court.cities)
-            ? court.cities[0]
-            : court.cities
-          : null;
-        if (city?.name) setCityName(city.name);
+
+        const userRel = (profileData as unknown as { users?: { cities?: { name: string; province: string } | { name: string; province: string }[] | null } | null }).users;
+        const courtRel = (profileData as unknown as { tennis_courts?: { cities?: { name: string; province: string } | { name: string; province: string }[] | null } | null }).tennis_courts;
+        const pickCity = (rel: { cities?: { name: string; province: string } | { name: string; province: string }[] | null } | null | undefined) => {
+          const c = rel?.cities;
+          if (!c) return null;
+          return Array.isArray(c) ? c[0] : c;
+        };
+        const city = pickCity(userRel) ?? pickCity(courtRel);
+        if (city?.name) {
+          setLocationLabel([city.name, city.province].filter(Boolean).join(", "));
+        } else {
+          setLocationLabel("");
+        }
 
         const { data: ratingData } = await supabase
           .from("player_ratings")
@@ -172,7 +179,7 @@ export default function PublicPlayerProfilePage() {
               </div>
               <p className="text-xs sm:text-sm text-slate-500 flex items-center gap-1.5">
                 <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
-                <span>{cityName}, Sulawesi Selatan</span>
+                <span>{locationLabel || "Lokasi belum diisi"}</span>
               </p>
               <div className="flex items-center gap-2 pt-1 text-xs text-slate-500">
                 <span>Dominan: <strong>{handLabel}</strong></span>

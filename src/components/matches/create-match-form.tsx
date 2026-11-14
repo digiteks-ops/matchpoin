@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,27 +13,25 @@ import { ERROR_CREATE_MATCH, ERROR_NETWORK, isOffline, logError } from "@/lib/er
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { toPlatformIsoString } from "@/lib/utils";
 
-export interface CourtOption {
+export interface CityOption {
   id: string;
   name: string;
-  address: string;
-  cityName: string;
   province: string;
 }
 
 interface CreateMatchFormProps {
-  courts: CourtOption[];
+  cities: CityOption[];
   inviteUserId?: string;
   inviteName?: string;
 }
 
-export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatchFormProps) {
+export function CreateMatchForm({ cities, inviteUserId, inviteName }: CreateMatchFormProps) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<MatchCategory>("mens_singles");
-  const [courtId, setCourtId] = useState(courts[0]?.id ?? "");
   const [province, setProvince] = useState<string>("");
-  const [provinceOptions, setProvinceOptions] = useState<string[]>([]);
+  const [cityName, setCityName] = useState<string>("");
+  const [courtName, setCourtName] = useState<string>("");
   const [matchDate, setMatchDate] = useState("");
   const [startTime, setStartTime] = useState("16:00");
   const [durationMinutes, setDurationMinutes] = useState(90);
@@ -45,23 +43,41 @@ export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatc
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // Aturan liga fix: Race to 8, tukar lapangan di poin 4 (1x)
+  // Aturan pertandingan (skoring fix)
   const RACE_TO_SCORE = 8;
   const COURT_SWITCH_AT = 4;
 
+  const provinceOptions = useMemo(
+    () => Array.from(new Set(cities.map((c) => c.province).filter(Boolean))).sort(),
+    [cities]
+  );
+
   useEffect(() => {
-    const provinces = Array.from(new Set(courts.map((c) => c.province).filter(Boolean))).sort();
-    setProvinceOptions(provinces);
-    if (!province && provinces.length > 0) {
-      setProvince(provinces[0]);
-      const firstInProvince = courts.find((c) => c.province === provinces[0]);
-      if (firstInProvince) setCourtId(firstInProvince.id);
+    if (!province && provinceOptions.length > 0) {
+      setProvince(provinceOptions[0]);
     }
-  }, [courts, province]);
+  }, [province, provinceOptions]);
+
+  const cityOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          cities
+            .filter((c) => !province || c.province === province)
+            .map((c) => c.name)
+            .filter(Boolean)
+        )
+      ).sort(),
+    [cities, province]
+  );
+
+  useEffect(() => {
+    if (cityName && !cityOptions.includes(cityName)) {
+      setCityName("");
+    }
+  }, [cityName, cityOptions]);
 
   const today = new Date().toISOString().slice(0, 10);
-
-  const filteredCourts = courts.filter((c) => !province || c.province === province);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -72,8 +88,16 @@ export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatc
       setError("Judul pertandingan wajib diisi.");
       return;
     }
-    if (!courtId) {
-      setError("Pilih lapangan terlebih dahulu.");
+    if (!province) {
+      setError("Pilih provinsi lokasi pertandingan.");
+      return;
+    }
+    if (!cityName) {
+      setError("Pilih kota/kabupaten lokasi pertandingan.");
+      return;
+    }
+    if (!courtName.trim()) {
+      setError("Nama lapangan wajib diisi.");
       return;
     }
     if (!matchDate || !startTime) {
@@ -103,7 +127,9 @@ export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatc
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim() || undefined,
-          courtId,
+          province,
+          cityName,
+          courtName: courtName.trim(),
           matchDate,
           startTime,
           durationMinutes,
@@ -245,48 +271,58 @@ export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatc
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="province">Provinsi</Label>
-            <select
-              id="province"
-              value={province}
-              onChange={(e) => {
-                const val = e.target.value;
-                setProvince(val);
-                const firstInProvince = courts.find((c) => c.province === val);
-                if (firstInProvince) setCourtId(firstInProvince.id);
-              }}
-              disabled={isSubmitting}
-              className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
-            >
-              <option value="">Pilih Provinsi...</option>
-              {provinceOptions.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="province">Provinsi</Label>
+              <select
+                id="province"
+                value={province}
+                onChange={(e) => {
+                  setProvince(e.target.value);
+                  setCityName("");
+                }}
+                disabled={isSubmitting}
+                className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+              >
+                <option value="">Pilih Provinsi...</option>
+                {provinceOptions.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cityName">Kota / Kabupaten</Label>
+              <select
+                id="cityName"
+                value={cityName}
+                onChange={(e) => setCityName(e.target.value)}
+                disabled={isSubmitting || !province}
+                className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+              >
+                <option value="">Pilih Kota/Kabupaten...</option>
+                {cityOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="court">Lapangan</Label>
-            <select
-              id="court"
-              value={courtId}
-              onChange={(e) => setCourtId(e.target.value)}
-              disabled={isSubmitting || !province || filteredCourts.length === 0}
-              className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
-            >
-              <option value="">Pilih Kota / Lapangan...</option>
-              {filteredCourts.map((court) => (
-                <option key={court.id} value={court.id}>
-                  {court.name} — {court.cityName}
-                </option>
-              ))}
-            </select>
-            {province && filteredCourts.length === 0 && (
-              <p className="text-[11px] text-amber-700">Belum ada lapangan di provinsi ini.</p>
-            )}
+            <Label htmlFor="courtName">Lapangan</Label>
+            <Input
+              id="courtName"
+              value={courtName}
+              onChange={(e) => setCourtName(e.target.value)}
+              placeholder="Ketik nama lapangan secara manual"
+              required
+              disabled={isSubmitting}
+              maxLength={120}
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -381,32 +417,25 @@ export function CreateMatchForm({ courts, inviteUserId, inviteName }: CreateMatc
           </div>
 
           <div className="space-y-2 pt-3 border-t border-slate-200">
-            <Label>Aturan Pertandingan (Liga)</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2">
-                  <Trophy className="w-3.5 h-3.5 text-matchpoin-tennis" />
-                  <span>Race to {RACE_TO_SCORE}</span>
-                </div>
-                <p className="text-[10px] text-slate-500">Pemain pertama mencapai {RACE_TO_SCORE} poin menang.</p>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2">
-                  <RotateCcw className="w-3.5 h-3.5 text-matchpoin-navy" />
-                  <span>Tukar lapangan di poin {COURT_SWITCH_AT}</span>
-                </div>
-                <p className="text-[10px] text-slate-500">Saat seseorang mencapai {COURT_SWITCH_AT} poin, sisi lapangan ditukar (1x).</p>
-              </div>
+            <Label>Aturan Pertandingan</Label>
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-3">
+              <Trophy className="w-3.5 h-3.5 text-matchpoin-tennis shrink-0" />
+              <span>No Deuce | 15 – 30 – 40 Game</span>
             </div>
             <p className="text-[10px] text-slate-500">
-              Aturan ini tidak dapat diubah dan berlaku untuk semua pertandingan liga MATCHPOIN Q1 2027.
+              Aturan skor ini berlaku untuk pertandingan dan tidak dapat diubah.
             </p>
           </div>
 
           <LoadingOverlay isBusy={isSubmitting} message="Membuat pertandingan..." />
 
           <div className="pt-2 flex justify-end">
-            <Button type="submit" variant="tennis" disabled={isSubmitting || filteredCourts.length === 0 || !courtId} className="text-matchpoin-navy font-bold gap-2">
+            <Button
+              type="submit"
+              variant="tennis"
+              disabled={isSubmitting || !province || !cityName || !courtName.trim()}
+              className="text-matchpoin-navy font-bold gap-2"
+            >
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />

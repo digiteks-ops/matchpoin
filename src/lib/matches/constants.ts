@@ -12,7 +12,10 @@ export type MatchStatus = "open" | "full" | "in_progress" | "completed" | "cance
 export interface CreateOpenMatchInput {
   title: string;
   description?: string;
-  courtId: string;
+  courtId?: string | null;
+  courtName?: string;
+  province?: string;
+  cityName?: string;
   matchDate: string; // YYYY-MM-DD
   startTime: string; // HH:mm:ss
   durationMinutes?: number;
@@ -43,9 +46,11 @@ export interface OpenMatchDetail {
   id: string;
   title: string;
   description: string | null;
-  courtId: string;
+  courtId: string | null;
   courtName: string;
   courtAddress: string;
+  province?: string | null;
+  cityName?: string | null;
   organizerId: string;
   organizerName: string;
   matchDate: string;
