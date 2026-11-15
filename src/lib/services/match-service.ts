@@ -11,6 +11,7 @@ import {
   type MatchCategory,
   type MatchParticipantInfo,
   type MatchStatus,
+  type MatchType,
   type OpenMatchDetail,
   type UmpirePreference,
 } from "@/lib/matches/constants";
@@ -225,68 +226,73 @@ export async function createOpenMatch(
   }
 
   const isDoublesCategory = input.category.includes("doubles");
-  const matchType = input.matchType ?? "private";
+  // Doubles are open by default: the host creates the match and leaves the
+  // partner and opponent slots for other players to fill. Only an explicitly
+  // private (targeted) doubles match requires all four players up front.
+  const matchType: MatchType =
+    input.matchType ?? (isDoublesCategory ? "open" : "private");
   const partnerUserId = (input.partnerUserId ?? "").trim() || null;
   const opponentUserId = (input.opponentUserId ?? "").trim() || null;
   const opponentPartnerUserId = (input.opponentPartnerUserId ?? "").trim() || null;
-  if (isDoublesCategory) {
+
+  if (!isDoublesCategory && (partnerUserId || opponentUserId || opponentPartnerUserId)) {
+    throw new Error("Partner dan lawan hanya berlaku untuk pertandingan ganda.");
+  }
+
+  if (isDoublesCategory && matchType === "private") {
     if (!partnerUserId) {
-      throw new Error("Pilih partner Anda untuk pertandingan ganda.");
+      throw new Error("Pilih partner Anda untuk pertandingan ganda privat.");
     }
     if (partnerUserId === userId) {
       throw new Error("Anda tidak dapat memilih diri sendiri sebagai partner.");
     }
-    // Open doubles: opponent positions are optional and filled by joiners.
-    // Private doubles: all 4 positions must be selected up front.
-    if (matchType === "private") {
-      if (!opponentUserId) {
-        throw new Error("Pilih lawan untuk tim lawan (Team B).");
-      }
-      if (!opponentPartnerUserId) {
-        throw new Error("Pilih partner lawan untuk tim lawan (Team B).");
-      }
-      if (opponentUserId === userId) {
-        throw new Error("Lawan tidak boleh sama dengan Host.");
-      }
-      if (opponentPartnerUserId === userId) {
-        throw new Error("Partner lawan tidak boleh sama dengan Host.");
-      }
-      if (opponentUserId === partnerUserId) {
-        throw new Error("Lawan dan partner Host tidak boleh sama.");
-      }
-      if (opponentPartnerUserId === partnerUserId) {
-        throw new Error("Partner lawan dan partner Host tidak boleh sama.");
-      }
-      if (opponentPartnerUserId === opponentUserId) {
-        throw new Error("Lawan dan partner lawan tidak boleh sama.");
-      }
-      const { data: opponentProfile } = await supabase
-        .from("player_profiles")
-        .select("user_id")
-        .eq("user_id", opponentUserId)
-        .maybeSingle();
-      if (!opponentProfile) {
-        throw new Error("Lawan yang dipilih tidak ditemukan.");
-      }
-      const { data: opponentPartnerProfile } = await supabase
-        .from("player_profiles")
-        .select("user_id")
-        .eq("user_id", opponentPartnerUserId)
-        .maybeSingle();
-      if (!opponentPartnerProfile) {
-        throw new Error("Partner lawan yang dipilih tidak ditemukan.");
-      }
+    if (!opponentUserId) {
+      throw new Error("Pilih lawan untuk tim lawan (Team B).");
     }
-    const { data: partnerProfile } = await supabase
+    if (!opponentPartnerUserId) {
+      throw new Error("Pilih partner lawan untuk tim lawan (Team B).");
+    }
+    if (opponentUserId === userId) {
+      throw new Error("Lawan tidak boleh sama dengan Host.");
+    }
+    if (opponentPartnerUserId === userId) {
+      throw new Error("Partner lawan tidak boleh sama dengan Host.");
+    }
+    if (opponentUserId === partnerUserId) {
+      throw new Error("Lawan dan partner Host tidak boleh sama.");
+    }
+    if (opponentPartnerUserId === partnerUserId) {
+      throw new Error("Partner lawan dan partner Host tidak boleh sama.");
+    }
+    if (opponentPartnerUserId === opponentUserId) {
+      throw new Error("Lawan dan partner lawan tidak boleh sama.");
+    }
+  }
+
+  if (
+    isDoublesCategory &&
+    matchType === "open" &&
+    (partnerUserId || opponentUserId || opponentPartnerUserId)
+  ) {
+    throw new Error("Pertandingan ganda terbuka tidak dapat menentukan pemain secara manual.");
+  }
+
+  // Every referenced player must have a player profile.
+  const referencedPlayers = [partnerUserId, opponentUserId, opponentPartnerUserId].filter(
+    (id): id is string => Boolean(id)
+  );
+  if (referencedPlayers.length > 0) {
+    const { data: foundProfiles } = await supabase
       .from("player_profiles")
       .select("user_id")
-      .eq("user_id", partnerUserId)
-      .maybeSingle();
-    if (!partnerProfile) {
-      throw new Error("Partner yang dipilih tidak ditemukan.");
+      .in("user_id", referencedPlayers);
+
+    const found = new Set((foundProfiles ?? []).map((p) => p.user_id));
+    for (const id of referencedPlayers) {
+      if (!found.has(id)) {
+        throw new Error("Pemain yang dipilih tidak ditemukan.");
+      }
     }
-  } else if (partnerUserId) {
-    throw new Error("Partner hanya diperlukan untuk pertandingan ganda.");
   }
 
   const metadata: MatchMetadata = {
@@ -417,7 +423,13 @@ export async function createOpenMatch(
 }
 
 /**
- * Submits a request to join an Open Match.
+ * Joins an Open Match.
+ *
+ * Capacity, duplicate and concurrency checks all live in the `join_match`
+ * database function, which takes a row lock on the match before inserting.
+ * The client-side code deliberately does not re-implement them: two players
+ * tapping Join at the same instant must be serialised by the database, and a
+ * fourth doubles player must never be able to squeeze in.
  */
 export async function requestJoinOpenMatch(
   matchId: string,
@@ -425,86 +437,35 @@ export async function requestJoinOpenMatch(
 ): Promise<void> {
   const supabase = createClient();
 
-  const { data: match } = await supabase
-    .from("matches")
-    .select("id, organizer_id, status, metadata, max_players")
-    .eq("id", matchId)
-    .maybeSingle();
-
-  if (!match) throw new Error("Pertandingan tidak ditemukan.");
-  if (match.organizer_id === userId) throw new Error("Anda adalah penyelenggara pertandingan ini.");
-  if (match.status === "cancelled") throw new Error("Pertandingan ini telah dibatalkan.");
-  if (match.status === "completed") throw new Error("Pertandingan ini telah selesai.");
-  if (match.status !== "open") throw new Error("Pendaftaran pertandingan ini sudah ditutup.");
-
-  const category = normalizeCategory(asMetadata(match.metadata).category ?? "mens_singles");
-  const isDoublesCategory = category.includes("doubles");
-  const matchType = asMetadata(match.metadata).match_type as MatchType ?? "private";
-  const playersPerTeam = Math.ceil(logicalMaxPlayers(category) / 2);
-
-  // Count confirmed players per team for doubles open matches.
-  const { data: roster } = await supabase
-    .from("match_participants")
-    .select("id, user_id, team, metadata")
-    .eq("match_id", matchId);
-
-  const confirmedByTeam: Record<1 | 2, string[]> = { 1: [], 2: [] };
-  (roster ?? []).forEach((p: any) => {
-    const status = asParticipantMetadata(p.metadata).status;
-    const team = (p.team === 2 ? 2 : 1) as 1 | 2;
-    if (status === "confirmed" || status === "invited") {
-      confirmedByTeam[team].push(p.user_id);
-    }
-  });
-
-  // Prevent duplicate participation.
-  const alreadyInTeam1 = confirmedByTeam[1].includes(userId);
-  const alreadyInTeam2 = confirmedByTeam[2].includes(userId);
-  if (alreadyInTeam1 || alreadyInTeam2) {
-    const existing = (roster ?? []).find((p: any) => p.user_id === userId);
-    if (existing) {
-      const status = asParticipantMetadata(existing.metadata).status;
-      if (status === "pending") {
-        throw new Error("Anda sudah mengajukan permohonan bergabung pada pertandingan ini.");
-      }
-      throw new Error("Anda sudah terdaftar pada pertandingan ini.");
-    }
-    throw new Error("Anda sudah terdaftar pada pertandingan ini.");
-  }
-
-  // Determine which team the joiner should be assigned to.
-  // For doubles open matches: fill Team B (challengers) first, then Team A partner slot.
-  let assignedTeam: 1 | 2 = 2;
-  if (isDoublesCategory && matchType === "open") {
-    const teamBOpen = confirmedByTeam[2].length < playersPerTeam;
-    const teamAOpen = confirmedByTeam[1].length < playersPerTeam;
-    if (!teamBOpen && !teamAOpen) {
-      throw new Error("Slot pertandingan sudah penuh.");
-    }
-    assignedTeam = teamBOpen ? 2 : 1;
-  } else {
-    // Singles or private doubles: check total capacity.
-    const totalConfirmed = confirmedByTeam[1].length + confirmedByTeam[2].length;
-    if (totalConfirmed >= logicalMaxPlayers(category)) throw new Error("Slot pertandingan sudah penuh.");
-    assignedTeam = isDoublesCategory ? 2 : 2;
-  }
-
-  // Double-check capacity for the assigned team (race condition guard).
-  if (confirmedByTeam[assignedTeam].length >= playersPerTeam) {
-    throw new Error("Slot pertandingan sudah penuh.");
-  }
-
-  const { error } = await supabase.from("match_participants").insert({
-    match_id: matchId,
-    user_id: userId,
-    is_organizer: false,
-    team: assignedTeam,
-    metadata: { status: "pending" },
-  });
+  const { data, error } = await supabase.rpc("join_match", { p_match_id: matchId });
 
   if (error) {
     logError("match.join", error, { matchId, userId });
-    throw new Error(toUserMessage(error, "Gagal mengajukan permohonan."));
+    throw new Error(toUserMessage(error, "Gagal bergabung dengan pertandingan."));
+  }
+
+  const result = (data ?? {}) as { success?: boolean; message?: string };
+  if (!result.success) {
+    throw new Error(result.message || "Gagal bergabung dengan pertandingan.");
+  }
+}
+
+/**
+ * Withdraws from a match the caller did not organise.
+ */
+export async function leaveMatch(matchId: string, userId: string): Promise<void> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc("leave_match", { p_match_id: matchId });
+
+  if (error) {
+    logError("match.leave", error, { matchId, userId });
+    throw new Error(toUserMessage(error, "Gagal keluar dari pertandingan."));
+  }
+
+  const result = (data ?? {}) as { success?: boolean; message?: string };
+  if (!result.success) {
+    throw new Error(result.message || "Gagal keluar dari pertandingan.");
   }
 }
 

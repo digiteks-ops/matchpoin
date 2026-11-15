@@ -53,15 +53,37 @@ export async function POST(request: Request) {
   }
 
   const isDoubles = payload.category.includes('doubles');
-  const matchType = payload.matchType ?? 'private';
-  if (isDoubles && matchType === 'private' && !payload.partnerUserId) {
-    return NextResponse.json({ success: false, message: 'Pilih partner untuk pertandingan ganda.' }, { status: 400 });
+  // Doubles default to an open match: the host leaves the partner and opponent
+  // slots empty for other players to fill.
+  const matchType = payload.matchType ?? (isDoubles ? 'open' : 'private');
+
+  if (matchType !== 'open' && matchType !== 'private') {
+    return NextResponse.json({ success: false, message: 'Tipe pertandingan tidak valid.' }, { status: 400 });
   }
+
+  if (!isDoubles && matchType !== 'private') {
+    return NextResponse.json({ success: false, message: 'Tipe pertandingan tidak valid.' }, { status: 400 });
+  }
+
   if (!isDoubles && payload.partnerUserId) {
     return NextResponse.json({ success: false, message: 'Partner hanya untuk pertandingan ganda.' }, { status: 400 });
   }
+
   if (payload.partnerUserId && payload.partnerUserId === user.id) {
     return NextResponse.json({ success: false, message: 'Partner tidak boleh sama dengan Host.' }, { status: 400 });
+  }
+
+  if (isDoubles && matchType === 'private') {
+    if (!payload.partnerUserId) {
+      return NextResponse.json({ success: false, message: 'Pilih partner untuk pertandingan ganda privat.' }, { status: 400 });
+    }
+    if (!payload.opponentUserId || !payload.opponentPartnerUserId) {
+      return NextResponse.json({ success: false, message: 'Ganda privat wajib melengkapi 2 pemain lawan.' }, { status: 400 });
+    }
+  }
+
+  if (isDoubles && matchType === 'open' && (payload.opponentUserId || payload.opponentPartnerUserId)) {
+    return NextResponse.json({ success: false, message: 'Slot lawan terbuka tidak dapat dipilih.' }, { status: 400 });
   }
 
   // Kuota monetisasi dinonaktifkan untuk fase pertumbuhan 100-500 pengguna pertama (Unlimited)

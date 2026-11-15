@@ -15,7 +15,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   try {
     await requestJoinOpenMatch(params.id, user.id);
-    return NextResponse.json({ success: true, message: 'Permohonan bergabung terkirim.' });
+    return NextResponse.json({ success: true, message: 'Anda berhasil bergabung dengan pertandingan.' });
   } catch (err: any) {
     console.error('Join request error:', err);
     return NextResponse.json({ success: false, message: err.message || 'Gagal mengajukan permohonan.' }, { status: 400 });

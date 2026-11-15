@@ -1,120 +1,77 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { logError } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * League registration.
+ *
+ * All rules live in the `register_for_league` database function: quota is
+ * counted in distinct entries (a doubles team costs one slot, not two), the
+ * tournament must be open, a player may only hold one entry per category, and
+ * a mixed-doubles pairing must be one man plus one woman. The route only
+ * forwards the caller's choice and translates the returned reason into an
+ * Indonesian message.
+ */
 export async function POST(request: Request) {
   const supabase = createClient();
+
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser();
 
   if (authError || !user) {
-    return NextResponse.json({ success: false, message: "Harap masuk untuk mendaftar liga." }, { status: 401 });
+    return NextResponse.json(
+      { success: false, message: "Harap masuk untuk mendaftar liga." },
+      { status: 401 }
+    );
   }
 
-  let body: { tournamentId?: string; partnerUserId?: string };
+  let body: { tournamentId?: string; partnerUserId?: string | null };
   try {
-    body = await request.json();
+    body = (await request.json()) as typeof body;
   } catch {
     return NextResponse.json({ success: false, message: "Data tidak valid." }, { status: 400 });
   }
 
-  const { tournamentId, partnerUserId } = body;
+  const tournamentId = (body.tournamentId ?? "").trim();
   if (!tournamentId) {
-    return NextResponse.json({ success: false, message: "ID Turnamen wajib diisi." }, { status: 400 });
+    return NextResponse.json({ success: false, message: "ID Liga wajib diisi." }, { status: 400 });
   }
 
-  // 1. Fetch tournament
-  const { data: tournament, error: tourError } = await supabase
-    .from("leagues")
-    .select("id, name, max_players, status, category")
-    .eq("id", tournamentId)
-    .single();
+  const partnerUserId = body.partnerUserId?.trim() || null;
 
-  if (tourError || !tournament) {
-    return NextResponse.json({ success: false, message: "Turnamen / Liga tidak ditemukan." }, { status: 404 });
-  }
-
-  const cat = (tournament as any).category || "mens_singles";
-  const isDoubles = cat.includes("doubles");
-
-  // 3. Doubles validation
-  if (isDoubles) {
-    if (!partnerUserId) {
-      return NextResponse.json({ success: false, message: "Kategori ganda wajib memilih partner." }, { status: 400 });
-    }
-    if (partnerUserId === user.id) {
-      return NextResponse.json({ success: false, message: "Partner tidak boleh sama dengan diri sendiri." }, { status: 400 });
-    }
-
-    // Cek partner exists
-    const { data: partnerUser } = await supabase
-      .from("users")
-      .select("id, full_name")
-      .eq("id", partnerUserId)
-      .maybeSingle();
-
-    if (!partnerUser) {
-      return NextResponse.json({ success: false, message: "Partner tidak ditemukan." }, { status: 404 });
-    }
-  }
-
-  // 4. Cek kuota
-  const { count: currentCount } = await supabase
-    .from("league_participants")
-    .select("id", { count: "exact", head: true })
-    .eq("league_id", tournamentId);
-
-  if ((currentCount ?? 0) >= (tournament.max_players || 12)) {
-    return NextResponse.json({ success: false, message: "Kuota pendaftaran untuk kategori ini sudah penuh." }, { status: 400 });
-  }
-
-  // 5. Cek apakah user sudah terdaftar di kategori ini
-  const { data: existingReg } = await supabase
-    .from("league_participants")
-    .select("id, user_id, partner_user_id")
-    .eq("league_id", tournamentId);
-
-  const alreadyRegistered = (existingReg ?? []).some((r: any) => {
-    return r.user_id === user.id || r.partner_user_id === user.id;
-  });
-
-  if (alreadyRegistered) {
-    return NextResponse.json({ success: false, message: "Anda sudah terdaftar di kategori ini." }, { status: 400 });
-  }
-
-  if (isDoubles && partnerUserId) {
-    const partnerAlready = (existingReg ?? []).some((r: any) => {
-      return r.user_id === partnerUserId || r.partner_user_id === partnerUserId;
+  try {
+    const { data, error } = await supabase.rpc("register_for_league", {
+      p_tournament_id: tournamentId,
+      p_partner_user_id: partnerUserId,
     });
-    if (partnerAlready) {
-      return NextResponse.json({ success: false, message: "Partner yang Anda pilih sudah terdaftar di tim lain pada kategori ini." }, { status: 400 });
+
+    if (error) {
+      logError("league.register", error, { tournamentId, userId: user.id });
+      return NextResponse.json(
+        { success: false, message: "Gagal menyimpan pendaftaran. Coba lagi." },
+        { status: 400 }
+      );
     }
+
+    const result = (data ?? {}) as { success?: boolean; message?: string };
+    if (!result.success) {
+      return NextResponse.json(
+        { success: false, message: result.message || "Pendaftaran gagal." },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: result.message || "Pendaftaran berhasil.",
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Gagal menyimpan pendaftaran.";
+    logError("league.register.route", err, { tournamentId, userId: user.id });
+    return NextResponse.json({ success: false, message }, { status: 400 });
   }
-
-  // 6. Simpan pendaftaran ke league_participants
-  const insertPayload: any = {
-    league_id: tournamentId,
-    user_id: user.id,
-    joined_at: new Date().toISOString(),
-  };
-
-  if (isDoubles && partnerUserId) {
-    insertPayload.partner_user_id = partnerUserId;
-  }
-
-  const { error: insertError } = await supabase
-    .from("league_participants")
-    .insert(insertPayload);
-
-  if (insertError) {
-    return NextResponse.json({ success: false, message: insertError.message || "Gagal menyimpan pendaftaran." }, { status: 500 });
-  }
-
-  return NextResponse.json({
-    success: true,
-    message: isDoubles ? "Tim Anda berhasil didaftarkan ke MATCHPOIN League!" : "Anda berhasil terdaftar ke MATCHPOIN League!",
-  });
 }

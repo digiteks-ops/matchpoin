@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -10,7 +10,7 @@ import { Clock, Trophy, Users, CheckCircle2, AlertCircle, Loader2, MapPin, ListC
 import type { User } from "@supabase/supabase-js";
 
 interface StandingRow {
-  userId: string;
+  entryId: string;
   name: string;
   avatarUrl: string | null;
   province: string | null;
@@ -23,6 +23,7 @@ interface StandingRow {
   gamesAgainst: number;
   gameDiff: number;
   rank: number;
+  needsTiebreak: boolean;
 }
 
 interface ParticipantRow {
@@ -41,8 +42,8 @@ interface LeagueRow {
   season: string;
   start_date: string;
   end_date: string;
-  status: "upcoming" | "active" | "finished";
-  max_players: number;
+  status: string;
+  max_participants: number;
 }
 
 const CATEGORIES = [
@@ -145,11 +146,13 @@ export default function LeaguePage() {
     try {
       const supabase = createClient();
 
+      // `tournaments` is the league container on this project; `leagues` was
+      // never created, so the previous query always came back empty.
       const { data: leagueRow } = await supabase
-        .from("leagues")
-        .select("id, name, category, season, start_date, end_date, status, max_players")
+        .from("tournaments")
+        .select("id, name, category, season, start_date, end_date, status, max_participants, is_league")
         .eq("category", category)
-        .in("status", ["upcoming", "active"])
+        .eq("is_league", true)
         .order("start_date", { ascending: true })
         .limit(1)
         .maybeSingle();
@@ -164,23 +167,30 @@ export default function LeaguePage() {
       }
 
       const { data: partRows } = await supabase
-        .from("league_participants")
-        .select("user_id, joined_at")
-        .eq("league_id", lg.id)
+        .from("tournament_participants")
+        .select("entry_id, user_id, joined_at")
+        .eq("tournament_id", lg.id)
         .order("joined_at", { ascending: true });
 
-      const userIds = Array.from(new Set((partRows ?? []).map((p: any) => p.user_id as string)));
+      const entries = (partRows ?? []) as {
+        entry_id: string;
+        user_id: string;
+        joined_at: string | null;
+      }[];
+
+      const userIds = Array.from(new Set(entries.map((e) => e.user_id)));
       const joinedMap = new Map<string, string | null>();
-      (partRows ?? []).forEach((p: any) => joinedMap.set(p.user_id, p.joined_at ?? null));
+      entries.forEach((e) => joinedMap.set(e.user_id, e.joined_at ?? null));
 
       let participantList: ParticipantRow[] = [];
+      const profileMap = new Map<string, any>();
+
       if (userIds.length > 0) {
         const { data: profiles } = await supabase
           .from("player_profiles")
           .select("user_id, display_name, users(city_id, cities(name, province))")
           .in("user_id", userIds);
 
-        const profileMap = new Map<string, any>();
         (profiles ?? []).forEach((p: any) => profileMap.set(p.user_id, p));
 
         participantList = userIds.map((uid) => {
@@ -203,85 +213,78 @@ export default function LeaguePage() {
         return;
       }
 
-      const participantSet = new Set(userIds);
-      const { data: results } = await supabase
-        .from("match_results")
-        .select("match_id, team1_score, team2_score, winner_team")
-        .eq("status", "confirmed");
+      const entryUsers = new Map<string, string[]>();
+      entries.forEach((e) => {
+        const list = entryUsers.get(e.entry_id) ?? [];
+        list.push(e.user_id);
+        entryUsers.set(e.entry_id, list);
+      });
 
-      const matchIds = Array.from(new Set((results ?? []).map((r: any) => r.match_id as string)));
-      if (matchIds.length === 0) {
-        setStandings(participantList.map((p, i) => ({
-          ...p, points: 0, wins: 0, losses: 0, matchesPlayed: 0, gamesFor: 0, gamesAgainst: 0, gameDiff: 0, rank: i + 1,
-        })));
+      const labelFor = (entryId: string): string => {
+        const names = (entryUsers.get(entryId) ?? [])
+          .map((uid) => profileMap.get(uid)?.display_name)
+          .filter(Boolean);
+        return names.length > 0 ? names.join(" & ") : "Peserta";
+      };
+
+      // Standings are computed by `recompute_league_standings` in the database
+      // (3 points per win, ranked by points -> game diff -> games won). The page
+      // only reads them; duplicating the ranking here is what previously let the
+      // client and the server disagree.
+      const { data: standingRows } = await supabase
+        .from("league_standings")
+        .select("entry_id, position, played, won, lost, games_won, games_lost, game_diff, points, needs_tiebreak")
+        .eq("tournament_id", lg.id)
+        .order("position", { ascending: true, nullsFirst: false });
+
+      const base = (
+        entryId: string,
+        position: number,
+        s?: {
+          played: number;
+          won: number;
+          lost: number;
+          games_won: number;
+          games_lost: number;
+          game_diff: number;
+          points: number;
+          needs_tiebreak: boolean;
+        }
+      ): StandingRow => {
+        const first = profileMap.get(entryUsers.get(entryId)?.[0] ?? "");
+        const city = pickCity(first?.users ?? null);
+        return {
+          entryId,
+          name: labelFor(entryId),
+          avatarUrl: null,
+          province: city?.province ?? null,
+          cityName: city?.name ?? null,
+          points: s?.points ?? 0,
+          wins: s?.won ?? 0,
+          losses: s?.lost ?? 0,
+          matchesPlayed: s?.played ?? 0,
+          gamesFor: s?.games_won ?? 0,
+          gamesAgainst: s?.games_lost ?? 0,
+          gameDiff: s?.game_diff ?? 0,
+          rank: position,
+          needsTiebreak: s?.needs_tiebreak ?? false,
+        };
+      };
+
+      const standingList: StandingRow[] = (standingRows ?? []).map((r: any, i) =>
+        base(r.entry_id, r.position ?? i + 1, r)
+      );
+
+      if (standingList.length === 0) {
+        // Before the first result is verified the table is empty: show every
+        // registered entry with zeroes instead of an empty panel.
+        setStandings(
+          Array.from(entryUsers.keys()).map((entryId, i) => base(entryId, i + 1))
+        );
         return;
       }
 
-      const [{ data: matchRows }, { data: mpRows }] = await Promise.all([
-        supabase.from("matches").select("id, metadata").in("id", matchIds),
-        supabase.from("match_participants").select("match_id, user_id, team").in("match_id", matchIds),
-      ]);
-
-      const categoryMatchIds = new Set<string>();
-      (matchRows ?? []).forEach((m: any) => {
-        const meta = m.metadata && typeof m.metadata === "object" ? m.metadata : {};
-        const c = (meta as any).category ?? "mens_singles";
-        if (c === category) categoryMatchIds.add(m.id);
-      });
-
-      const teamsByMatch: Record<string, { t1: string[]; t2: string[] }> = {};
-      (mpRows ?? []).forEach((p: any) => {
-        if (!categoryMatchIds.has(p.match_id)) return;
-        if (!participantSet.has(p.user_id)) return;
-        if (!teamsByMatch[p.match_id]) teamsByMatch[p.match_id] = { t1: [], t2: [] };
-        if (p.team === 1) teamsByMatch[p.match_id].t1.push(p.user_id);
-        if (p.team === 2) teamsByMatch[p.match_id].t2.push(p.user_id);
-      });
-
-      const stats = new Map<string, { points: number; wins: number; losses: number; mp: number; gf: number; ga: number }>();
-      userIds.forEach((uid) => stats.set(uid, { points: 0, wins: 0, losses: 0, mp: 0, gf: 0, ga: 0 }));
-
-      (results ?? []).forEach((r: any) => {
-        if (!categoryMatchIds.has(r.match_id)) return;
-        const teams = teamsByMatch[r.match_id];
-        if (!teams) return;
-        const t1s = r.team1_score ?? 0;
-        const t2s = r.team2_score ?? 0;
-        const t1Won = r.winner_team === 1;
-        const t2Won = r.winner_team === 2;
-        teams.t1.forEach((uid) => {
-          const s = stats.get(uid); if (!s) return;
-          s.mp += 1; s.gf += t1s; s.ga += t2s;
-          if (t1Won) { s.wins += 1; s.points += 3; } else if (t2Won) { s.losses += 1; }
-        });
-        teams.t2.forEach((uid) => {
-          const s = stats.get(uid); if (!s) return;
-          s.mp += 1; s.gf += t2s; s.ga += t1s;
-          if (t2Won) { s.wins += 1; s.points += 3; } else if (t1Won) { s.losses += 1; }
-        });
-      });
-
-      const rows: StandingRow[] = participantList.map((p) => {
-        const s = stats.get(p.userId)!;
-        return {
-          userId: p.userId,
-          name: p.name,
-          avatarUrl: p.avatarUrl,
-          province: p.province,
-          cityName: p.cityName,
-          points: s.points,
-          wins: s.wins,
-          losses: s.losses,
-          matchesPlayed: s.mp,
-          gamesFor: s.gf,
-          gamesAgainst: s.ga,
-          gameDiff: s.gf - s.ga,
-          rank: 0,
-        };
-      });
-      rows.sort((a, b) => b.points - a.points || b.gameDiff - a.gameDiff || b.gamesFor - a.gamesFor || b.wins - a.wins || a.name.localeCompare(b.name));
-      rows.forEach((r, i) => (r.rank = i + 1));
-      setStandings(rows);
+      setStandings(standingList);
     } catch (err) {
       console.error("Error loading league:", err);
       setParticipants([]);
@@ -329,10 +332,10 @@ export default function LeaguePage() {
     try {
       const supabase = createClient();
       const { data: lg } = await supabase
-        .from("leagues")
-        .select("id, name, category, season, start_date, end_date, status, max_players")
+        .from("tournaments")
+        .select("id, name, category, season, start_date, end_date, status, max_participants, is_league")
         .eq("category", cat)
-        .in("status", ["upcoming", "active"])
+        .eq("is_league", true)
         .order("start_date", { ascending: true })
         .limit(1)
         .maybeSingle();
@@ -343,22 +346,17 @@ export default function LeaguePage() {
         setRegAlready(false);
         return;
       }
-      const { count } = await supabase
-        .from("league_participants")
-        .select("id", { count: "exact", head: true })
-        .eq("league_id", leagueRow.id);
-      setRegParticipantsCount(count ?? 0);
-      if (uid) {
-        const { data: existing } = await supabase
-          .from("league_participants")
-          .select("id")
-          .eq("league_id", leagueRow.id)
-          .eq("user_id", uid)
-          .maybeSingle();
-        setRegAlready(Boolean(existing));
-      } else {
-        setRegAlready(false);
-      }
+
+      // Quota counts entries, not rows: a doubles pair shares one entry_id.
+      const { data: partRows } = await supabase
+        .from("tournament_participants")
+        .select("entry_id, user_id")
+        .eq("tournament_id", leagueRow.id);
+
+      const entries = (partRows ?? []) as { entry_id: string; user_id: string }[];
+      setRegParticipantsCount(new Set(entries.map((e) => e.entry_id)).size);
+
+      setRegAlready(Boolean(uid) && entries.some((e) => e.user_id === uid));
     } finally {
       setRegLoading(false);
     }
@@ -378,11 +376,11 @@ export default function LeaguePage() {
         setRegError(isRegistrationClosed() ? "Pendaftaran telah ditutup (batas 31 Desember 2026)." : "Pendaftaran dibuka mulai 15 November 2026.");
         return;
       }
-      if (regLeague.status !== "active" && regLeague.status !== "upcoming") {
+      if (regLeague.status !== "registration_open") {
         setRegError("Pendaftaran kategori ini tidak tersedia.");
         return;
       }
-      if (regParticipantsCount >= regLeague.max_players) {
+      if (regParticipantsCount >= regLeague.max_participants) {
         setRegError("Kuota kategori ini sudah penuh.");
         return;
       }
@@ -390,13 +388,20 @@ export default function LeaguePage() {
         setRegError("Anda sudah terdaftar di kategori liga ini.");
         return;
       }
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("league_participants")
-        .insert({ league_id: regLeague.id, user_id: currentUser.id });
-      if (error) {
-        if (error.code === "23505") setRegError("Anda sudah terdaftar di kategori liga ini.");
-        else setRegError(error.message || "Pendaftaran gagal. Coba lagi.");
+
+      // All rules (open window, one entry per player, quota, gender for mixed
+      // doubles) are enforced by register_for_league() in the database.
+      const res = await fetch("/api/tournaments/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tournamentId: regLeague.id }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        message?: string;
+      };
+      if (!res.ok || !data.success) {
+        setRegError(data.message || "Pendaftaran gagal. Coba lagi.");
         return;
       }
       setRegSuccess(true);
@@ -442,7 +447,7 @@ export default function LeaguePage() {
   const regCatMeta = CATEGORIES.find((c) => c.id === regCategory) ?? CATEGORIES[0];
   const regPeriodOpen = isRegistrationPeriodOpen();
   const regClosed = isRegistrationClosed();
-  const regOpenOk = regLeague && regPeriodOpen && (regLeague.status === "active" || regLeague.status === "upcoming") && regParticipantsCount < regLeague.max_players;
+  const regOpenOk = regLeague && regPeriodOpen && regLeague.status === "registration_open" && regParticipantsCount < regLeague.max_participants;
 
   return (
     <div className="flex-1 bg-slate-50 py-8 md:py-12">
@@ -501,7 +506,7 @@ export default function LeaguePage() {
                   <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
                     <div className="font-semibold text-slate-800">{regCatMeta.label} — {regLeague?.season ?? "-"}</div>
                     <div>Status Pendaftaran: <Badge variant={regOpenOk ? "outline" : "secondary"} className="text-[10px]">{regPeriodOpen ? "OPEN" : regClosed ? "CLOSED" : "Belum Dibuka"}</Badge></div>
-                    <div>Kuota: {regParticipantsCount}/{regLeague?.max_players ?? 12} peserta · {regOpenOk ? "Dapat mendaftar" : "Tidak dapat mendaftar (periode/kuota/status)"}</div>
+                    <div>Kuota: {regParticipantsCount}/{regLeague?.max_participants ?? 12} peserta · {regOpenOk ? "Dapat mendaftar" : "Tidak dapat mendaftar (periode/kuota/status)"}</div>
                     {regAlready && <div className="text-emerald-700 font-semibold">Anda sudah terdaftar di kategori ini.</div>}
                     {!regLeague && <div className="text-amber-700">Data liga kategori ini belum tersedia.</div>}
                   </div>
@@ -524,7 +529,7 @@ export default function LeaguePage() {
                     <div><span className="text-slate-500">Liga:</span> <strong>{regLeague?.name} {regLeague?.season}</strong></div>
                     <div><span className="text-slate-500">Nama:</span> <strong>{regProfile?.name ?? "-"}</strong></div>
                     <div><span className="text-slate-500">Lokasi:</span> <strong>{[regProfile?.city, regProfile?.province].filter(Boolean).join(", ") || "Belum diisi di profil"}</strong></div>
-                    <div><span className="text-slate-500">Kuota saat ini:</span> <strong>{regParticipantsCount}/{regLeague?.max_players ?? 12}</strong></div>
+                    <div><span className="text-slate-500">Kuota saat ini:</span> <strong>{regParticipantsCount}/{regLeague?.max_participants ?? 12}</strong></div>
                   </div>
                   <p className="text-slate-500">Pastikan data profil benar. Satu pemain hanya dapat terdaftar 1x per kategori liga.</p>
                   <div className="flex justify-between gap-2">
@@ -564,7 +569,7 @@ export default function LeaguePage() {
           <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div className="space-y-1">
               <div className="font-bold text-slate-800">{selectedCategoryMeta.label} · {league?.season ?? "-"}</div>
-              <div className="text-slate-500">Status liga: <strong className="capitalize">{league?.status ?? "tidak tersedia"}</strong> · Peserta terdaftar: <strong>{participants.length}</strong>/{league?.max_players ?? 12}</div>
+              <div className="text-slate-500">Status liga: <strong className="capitalize">{league?.status ?? "tidak tersedia"}</strong> · Peserta terdaftar: <strong>{participants.length}</strong>/{league?.max_participants ?? 12}</div>
               <div className="text-slate-500">Periode liga: {league?.start_date ?? "-"} s/d {league?.end_date ?? "-"}</div>
               <div className="text-slate-500">Periode pendaftaran: 15 Nov 2026 – 31 Des 2026 (WITA)</div>
             </div>
@@ -631,7 +636,7 @@ export default function LeaguePage() {
                 ) : (
                   <div className="divide-y divide-slate-100">
                     {filteredStandings.map((s) => (
-                      <div key={s.userId} className="px-4 py-3 grid grid-cols-12 gap-2 items-center text-xs">
+                      <div key={s.entryId} className="px-4 py-3 grid grid-cols-12 gap-2 items-center text-xs">
                         <div className="col-span-1 font-bold text-slate-500">{s.rank}</div>
                         <div className="col-span-6 min-w-0">
                           <div className="font-semibold text-slate-800 truncate">{s.name}</div>

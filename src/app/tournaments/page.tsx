@@ -67,9 +67,11 @@ export default function TournamentsPage() {
     setIsLoading(true);
     try {
       const supabase = createClient();
+      // `tournaments` is the league container; `league_participants` was never
+      // created on this project, so the old query always returned empty.
       const { data: rows, error } = await supabase
-        .from("leagues")
-        .select("id, name, max_players, start_date, end_date, status")
+        .from("tournaments")
+        .select("id, name, category, season, start_date, end_date, status, max_participants, is_league")
         .order("start_date", { ascending: true });
 
       if (error || !rows) {
@@ -77,16 +79,18 @@ export default function TournamentsPage() {
         return;
       }
 
-      const list: TournamentRow[] = rows.map((r: any) => ({
-        id: r.id,
-        name: r.name,
-        category: r.category || "mens_singles",
-        season: r.season || "Q1 2027",
-        start_date: r.start_date,
-        end_date: r.end_date,
-        status: r.status,
-        max_participants: r.max_players || 12,
-      }));
+      const list: TournamentRow[] = rows
+        .filter((r: any) => r.is_league !== false)
+        .map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          category: r.category || "mens_singles",
+          season: r.season || "Q1 2027",
+          start_date: r.start_date,
+          end_date: r.end_date,
+          status: r.status,
+          max_participants: r.max_participants || 12,
+        }));
 
       setTournaments(list);
 
@@ -94,24 +98,31 @@ export default function TournamentsPage() {
       if (ids.length === 0) return;
 
       const { data: partRows } = await supabase
-        .from("league_participants")
-        .select("league_id, user_id")
-        .in("league_id", ids);
+        .from("tournament_participants")
+        .select("tournament_id, user_id, entry_id")
+        .in("tournament_id", ids);
 
       const countMap: Record<string, number> = {};
       const regMap: Record<string, boolean> = {};
+      // One competition entry == one quota slot: a doubles team is two rows
+      // sharing an entry_id and must only consume a single slot.
+      const entrySets: Record<string, Set<string>> = {};
       ids.forEach((id) => {
         countMap[id] = 0;
         regMap[id] = false;
+        entrySets[id] = new Set<string>();
       });
 
       (partRows ?? []).forEach((p: any) => {
-        countMap[p.league_id] = (countMap[p.league_id] || 0) + 1;
-        if (currentUser) {
-          if (p.user_id === currentUser.id) {
-            regMap[p.league_id] = true;
-          }
+        const bucket = entrySets[p.tournament_id];
+        if (bucket) bucket.add(p.entry_id ?? p.user_id);
+        if (currentUser && p.user_id === currentUser.id) {
+          regMap[p.tournament_id] = true;
         }
+      });
+
+      Object.keys(entrySets).forEach((id) => {
+        countMap[id] = entrySets[id].size;
       });
 
       setCounts(countMap);
@@ -136,9 +147,9 @@ export default function TournamentsPage() {
 
       // Load existing participants
       const { data: parts } = await supabase
-        .from("league_participants")
+        .from("tournament_participants")
         .select("user_id")
-        .eq("league_id", t.id);
+        .eq("tournament_id", t.id);
 
       const uids = (parts ?? []).map((p: any) => p.user_id);
       if (uids.length > 0) {

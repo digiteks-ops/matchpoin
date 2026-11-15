@@ -44,7 +44,7 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
   const [partnerUserId, setPartnerUserId] = useState("");
   const [opponentUserId, setOpponentUserId] = useState(inviteUserId ?? "");
   const [opponentPartnerUserId, setOpponentPartnerUserId] = useState("");
-  const [matchType, setMatchType] = useState<MatchType>("private");
+  const [matchType, setMatchType] = useState<MatchType>("open");
   const [partners, setPartners] = useState<{ user_id: string; display_name: string }[]>([]);
   const [opponents, setOpponents] = useState<{ user_id: string; display_name: string }[]>([]);
   const [partnersLoading, setPartnersLoading] = useState(false);
@@ -194,7 +194,7 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
       setError("Tanggal dan jam mulai wajib diisi.");
       return;
     }
-    if (isDoubles && !partnerUserId) {
+    if (isDoubles && matchType === "private" && !partnerUserId) {
       setError("Pilih partner untuk Team A.");
       return;
     }
@@ -245,7 +245,7 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
           reclubLink: reclubLink.trim() || undefined,
           raceToScore: RACE_TO_SCORE,
           courtSwitchAt: COURT_SWITCH_AT,
-          partnerUserId: isDoubles ? partnerUserId : undefined,
+          partnerUserId: isDoubles && matchType === "private" ? partnerUserId : undefined,
           opponentUserId: isDoubles && matchType === "private" ? opponentUserId : undefined,
           opponentPartnerUserId: isDoubles && matchType === "private" ? opponentPartnerUserId : undefined,
           matchType: isDoubles ? matchType : undefined,
@@ -433,10 +433,10 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
               <div className="space-y-3">
                 <Label htmlFor="matchType" className="text-xs font-semibold text-slate-700">Tipe Partai Ganda</Label>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {[
-                    { id: "private", label: "Privat", desc: "Pilih lawan sendiri" },
-                    { id: "open", label: "Terbuka", desc: "Siapa pun dapat bergabung" },
-                  ].map((t) => (
+                  {([
+                    { id: "open", label: "Terbuka", desc: "Slot lawan terbuka untuk siapa pun" },
+                    { id: "private", label: "Privat", desc: "Tentukan sendiri 4 pemain" },
+                  ] as { id: MatchType; label: string; desc: string }[]).map((t) => (
                     <button
                       key={t.id}
                       type="button"
@@ -457,6 +457,7 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
                 </div>
               </div>
 
+              {matchType === "private" ? (
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-stretch">
                 <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-3">
@@ -548,14 +549,57 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
                   </>
                 )}
               </div>
+              ) : (
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">4 slot · 2 vs 2</p>
+                      <p className="text-[11px] text-slate-500">
+                        Slot 1 sudah Anda tempati. Tiga slot lain dibuka untuk pemain lain.
+                      </p>
+                    </div>
+                    <span className="text-[11px] font-semibold text-matchpoin-navy">1/4 terisi</span>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {[
+                      { slot: 1, team: "A", label: "Host / Organizer", value: "Anda", filled: true },
+                      { slot: 2, team: "A", label: "Partner Host", value: "Terbuka", filled: false },
+                      { slot: 3, team: "B", label: "Challenger", value: "Terbuka", filled: false },
+                      { slot: 4, team: "B", label: "Partner Challenger", value: "Terbuka", filled: false },
+                    ].map((s) => (
+                      <div
+                        key={s.slot}
+                        className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${
+                          s.filled ? "border-emerald-200 bg-emerald-50/70" : "border-dashed border-slate-300 bg-slate-50"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-bold ${
+                            s.filled ? "bg-matchpoin-navy text-white" : "bg-white text-slate-400 ring-1 ring-slate-200"
+                          }`}
+                        >
+                          {s.slot}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-semibold text-slate-800">
+                            {s.value}
+                            <span className="ml-1 font-normal text-slate-400">· Team {s.team}</span>
+                          </p>
+                          <p className="truncate text-[10px] text-slate-500">{s.label}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3 text-[11px] text-slate-500">
-                <span className={`inline-flex items-center gap-1 ${partnerUserId ? "text-emerald-700" : "text-slate-400"}`}>
-                  <Check className="h-3 w-3" /> Partner Host
-                </span>
-                <span className="text-slate-300">·</span>
                 {matchType === "private" ? (
                   <>
+                    <span className={`inline-flex items-center gap-1 ${partnerUserId ? "text-emerald-700" : "text-slate-400"}`}>
+                      <Check className="h-3 w-3" /> Partner Host
+                    </span>
+                    <span className="text-slate-300">·</span>
                     <span className={`inline-flex items-center gap-1 ${opponentUserId ? "text-emerald-700" : "text-slate-400"}`}>
                       <Check className="h-3 w-3" /> Lawan utama
                     </span>
@@ -563,13 +607,20 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
                     <span className={`inline-flex items-center gap-1 ${opponentPartnerUserId ? "text-emerald-700" : "text-slate-400"}`}>
                       <Check className="h-3 w-3" /> Partner lawan
                     </span>
+                    <span className="ml-auto">Pemain yang sudah dipilih tidak muncul di dropdown lain.</span>
                   </>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-slate-400">
-                    Lawan utama: terbuka
+                  <>
+                    <span className="inline-flex items-center gap-1 text-emerald-700">
+                      <Check className="h-3 w-3" /> Host
+                    </span>
+                    <span className="text-slate-300">·</span>
+                    <span className="inline-flex items-center gap-1 text-slate-400">
+                      <Check className="h-3 w-3" /> 3 slot terbuka
+                    </span>
+                    <span className="ml-auto">Pemain lain dapat bergabung lewat halaman pertandingan.</span>
                   </>
                 )}
-                <span className="ml-auto">Pemain yang sudah dipilih tidak muncul di dropdown lain.</span>
               </div>
             </div>
           )}
@@ -750,15 +801,17 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
 
           <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[11px] leading-relaxed text-slate-500">
-              {isDoubles && requiredDoublesPlayers < 3
-                ? `Lengkapi ${3 - requiredDoublesPlayers} pemain lagi untuk membuat match ganda.`
-                : "Semua data utama sudah siap. Periksa kembali sebelum menyimpan."}
+              {isDoubles && matchType === "private" && requiredDoublesPlayers < 3
+                ? `Lengkapi ${3 - requiredDoublesPlayers} pemain lagi untuk membuat match ganda privat.`
+                : isDoubles && matchType === "open"
+                  ? "Match ganda terbuka: 3 slot akan dibuka untuk pemain lain."
+                  : "Semua data utama sudah siap. Periksa kembali sebelum menyimpan."}
             </p>
             <div className="flex justify-end">
               <Button
                 type="submit"
                 variant="tennis"
-                disabled={isSubmitting || !province || !cityName || !courtName.trim() || (isDoubles && (!partnerUserId || (matchType === "private" && (!opponentUserId || !opponentPartnerUserId))))}
+                disabled={isSubmitting || !province || !cityName || !courtName.trim() || (isDoubles && matchType === "private" && (!partnerUserId || !opponentUserId || !opponentPartnerUserId))}
                 className="w-full text-matchpoin-navy font-bold gap-2 sm:w-auto"
               >
                 {isSubmitting ? (
