@@ -20,7 +20,6 @@ export default async function NewMatchPage({
     .from("cities")
     .select("id, name, province")
     .eq("is_active", true)
-    .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
 
   let inviteName: string | undefined;

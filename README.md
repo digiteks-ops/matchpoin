@@ -116,6 +116,37 @@ cp .env.example .env.local
 npm run dev
 ```
 
+### MySQL migration foundation
+
+The application still uses Supabase. The MySQL connection and migration scripts
+are groundwork only; they do not switch application reads/writes or modify the
+Supabase database. Configure the server-only `DATABASE_URL` in `.env.local`
+before running either command:
+
+```bash
+npm run db:check
+npm run db:migrate
+```
+
+`db:check` verifies connectivity and MySQL 8.0+. `db:migrate` creates the
+additive `matchpoin_schema_migrations` history table and applies reviewed SQL
+files placed in `mysql/migrations/`. No application schema migrations are
+included yet. MySQL DDL can implicitly commit, so a failed migration may be
+partially applied and must be inspected before retrying. Do not point these
+commands at production without an approved backup and migration plan.
+
+Before any data migration, configure `SUPABASE_DB_URL` (direct PostgreSQL
+connection URL) and an access-controlled `MATCHPOIN_BACKUP_DIR` outside the
+repository, then run `npm run db:backup:supabase`. This requires PostgreSQL
+client tools (`pg_dump` and `pg_restore`) on `PATH`; the command verifies the
+custom dump archive before saving it. It does not back up Supabase Storage
+object bytes or prove that a restore succeeds; both require separate
+verification before cutover.
+
+See [docs/mysql-migration-plan.md](./docs/mysql-migration-plan.md) for the
+proposed schema mapping, auth/storage decisions, verification, and rollback
+approach.
+
 ### Supabase
 1. Create a project.
 2. Apply the live schema. The repo's `00001`–`00003` migrations are stale and **must not be run**.
