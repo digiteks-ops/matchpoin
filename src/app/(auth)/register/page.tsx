@@ -29,8 +29,12 @@ export default function RegisterPage() {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (password.length < 6) {
-      setErrorMessage("Kata sandi minimal harus terdiri dari 6 karakter.");
+    if (password.length === 0) {
+      setErrorMessage("Kata sandi tidak boleh kosong.");
+      return;
+    }
+    if (new TextEncoder().encode(password).length > 72) {
+      setErrorMessage("Kata sandi melebihi batas 72 byte (UTF-8).");
       return;
     }
 
@@ -167,7 +171,7 @@ export default function RegisterPage() {
                 <Label htmlFor="password">Kata Sandi</Label>
                 <PasswordInput
                   id="password"
-                  placeholder="Minimal 6 karakter"
+                  placeholder="Masukkan kata sandi"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required

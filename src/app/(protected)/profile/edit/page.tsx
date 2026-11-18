@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -58,84 +59,84 @@ export default function EditProfilePage() {
   const [province, setProvince] = useState<string>("");
   const [provinceOptions, setProvinceOptions] = useState<string[]>([]);
 
-  useEffect(() => {
-    async function loadProfile() {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user: authUser },
-        } = await supabase.auth.getUser();
+const loadProfile = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
 
-        if (!authUser) {
-          router.push("/login?redirectTo=/profile/edit");
-          return;
-        }
-
-        setUserId(authUser.id);
-
-        // Fetch cities
-        const { data: citiesData } = await supabase
-          .from("cities")
-          .select("*")
-          .eq("is_active", true)
-          .order("sort_order", { ascending: true });
-
-        if (citiesData) {
-          setCities(citiesData as City[]);
-          const provinces = Array.from(
-            new Set((citiesData as City[]).map((c) => c.province).filter(Boolean))
-          ).sort();
-          setProvinceOptions(provinces);
-
-          // Pre-select province when a city is already saved
-          if (cityId) {
-            const selectedCity = (citiesData as City[]).find((c) => c.id === cityId);
-            if (selectedCity) setProvince(selectedCity.province);
-          }
-        }
-
-        // Fetch user record
-        const { data: userData } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", authUser.id)
-          .maybeSingle();
-
-        if (userData) {
-          setFullName(userData.full_name || "");
-          setPhone(userData.phone || "");
-          setAvatarUrl(userData.avatar_url || null);
-          setGender(userData.gender || "");
-          setCityId(userData.city_id || "");
-        }
-
-        // Fetch profile record
-        const { data: profileData } = await supabase
-          .from("player_profiles")
-          .select("*")
-          .eq("user_id", authUser.id)
-          .maybeSingle();
-
-        if (profileData) {
-          setBio(profileData.bio || "");
-          setPlayingSince(profileData.playing_since || "");
-          setPreferredHand(profileData.preferred_hand || "right");
-          setBackhand(profileData.backhand || "two_handed");
-          setPlayFrequency(profileData.play_frequency || "weekly");
-          setSelfAssessedLevel(profileData.self_assessed_level || "beginner");
-          setProfileVisibility(profileData.profile_visibility || "public");
-          setPreferredCategories(profileData.preferred_categories || []);
-          setPreferredTimes(profileData.preferred_times || []);
-        }
-      } catch (err: any) {
-        setErrorMessage(err?.message || "Gagal memuat profil.");
-      } finally {
-        setIsLoading(false);
+      if (!authUser) {
+        router.push("/login?redirectTo=/profile/edit");
+        return;
       }
-    }
 
+      setUserId(authUser.id);
+
+      // Fetch cities
+      const { data: citiesData } = await supabase
+        .from("cities")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true });
+
+      if (citiesData) {
+        setCities(citiesData as City[]);
+        const provinces = Array.from(
+          new Set((citiesData as City[]).map((c) => c.province).filter(Boolean))
+        ).sort();
+        setProvinceOptions(provinces);
+
+        // Pre-select province when a city is already saved
+        if (cityId) {
+          const selectedCity = (citiesData as City[]).find((c) => c.id === cityId);
+          if (selectedCity) setProvince(selectedCity.province);
+        }
+      }
+
+      // Fetch user record
+      const { data: userData } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", authUser.id)
+        .maybeSingle();
+
+      if (userData) {
+        setFullName(userData.full_name || "");
+        setPhone(userData.phone || "");
+        setAvatarUrl(userData.avatar_url || null);
+        setGender(userData.gender || "");
+        setCityId(userData.city_id || "");
+      }
+
+      // Fetch profile record
+      const { data: profileData } = await supabase
+        .from("player_profiles")
+        .select("*")
+        .eq("user_id", authUser.id)
+        .maybeSingle();
+
+      if (profileData) {
+        setBio(profileData.bio || "");
+        setPlayingSince(profileData.playing_since || "");
+        setPreferredHand(profileData.preferred_hand || "right");
+        setBackhand(profileData.backhand || "two_handed");
+        setPlayFrequency(profileData.play_frequency || "weekly");
+        setSelfAssessedLevel(profileData.self_assessed_level || "beginner");
+        setProfileVisibility(profileData.profile_visibility || "public");
+        setPreferredCategories(profileData.preferred_categories || []);
+        setPreferredTimes(profileData.preferred_times || []);
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || "Gagal memuat profil.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [cityId, router]);
+
+    useEffect(() => {
     loadProfile();
-  }, [router]);
+  }, [loadProfile]);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -289,10 +290,12 @@ export default function EditProfilePage() {
               <div className="flex items-center gap-5">
                 <div className="relative">
                   {avatarUrl ? (
-                    <img
+                    <Image
                       src={avatarUrl}
                       alt={fullName}
-                      className="w-20 h-20 rounded-full object-cover border-2 border-slate-200 shadow-sm"
+                      width={80}
+                      height={80}
+                      className="rounded-full object-cover border-2 border-slate-200 shadow-sm"
                     />
                   ) : (
                     <div className="w-20 h-20 rounded-full bg-matchpoin-navy text-white flex items-center justify-center text-2xl font-bold font-heading">

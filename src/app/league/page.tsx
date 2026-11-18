@@ -33,6 +33,7 @@ interface ParticipantRow {
   province: string | null;
   cityName: string | null;
   joinedAt: string | null;
+  status: string;
 }
 
 interface LeagueRow {
@@ -166,21 +167,27 @@ export default function LeaguePage() {
         return;
       }
 
-      const { data: partRows } = await supabase
+const { data: partRows } = await supabase
         .from("tournament_participants")
-        .select("entry_id, user_id, joined_at")
+        .select("entry_id, user_id, joined_at, status")
         .eq("tournament_id", lg.id)
+        .neq("status", "rejected")
         .order("joined_at", { ascending: true });
 
       const entries = (partRows ?? []) as {
         entry_id: string;
         user_id: string;
         joined_at: string | null;
+        status: string;
       }[];
 
       const userIds = Array.from(new Set(entries.map((e) => e.user_id)));
       const joinedMap = new Map<string, string | null>();
-      entries.forEach((e) => joinedMap.set(e.user_id, e.joined_at ?? null));
+      const statusMap = new Map<string, string>();
+      entries.forEach((e) => {
+        joinedMap.set(e.user_id, e.joined_at ?? null);
+        statusMap.set(e.user_id, e.status);
+      });
 
       let participantList: ParticipantRow[] = [];
       const profileMap = new Map<string, any>();
@@ -203,6 +210,7 @@ export default function LeaguePage() {
             province: city?.province ?? null,
             cityName: city?.name ?? null,
             joinedAt: joinedMap.get(uid) ?? null,
+            status: statusMap.get(uid) ?? "confirmed",
           };
         });
       }
@@ -348,15 +356,17 @@ export default function LeaguePage() {
       }
 
       // Quota counts entries, not rows: a doubles pair shares one entry_id.
+      // Include both confirmed and pending entries for quota/check
       const { data: partRows } = await supabase
         .from("tournament_participants")
-        .select("entry_id, user_id")
+        .select("entry_id, user_id, status")
         .eq("tournament_id", leagueRow.id);
 
-      const entries = (partRows ?? []) as { entry_id: string; user_id: string }[];
-      setRegParticipantsCount(new Set(entries.map((e) => e.entry_id)).size);
+      const entries = (partRows ?? []) as { entry_id: string; user_id: string; status: string }[];
+      const activeEntries = entries.filter((e) => e.status !== 'rejected');
+      setRegParticipantsCount(new Set(activeEntries.map((e) => e.entry_id)).size);
 
-      setRegAlready(Boolean(uid) && entries.some((e) => e.user_id === uid));
+      setRegAlready(Boolean(uid) && activeEntries.some((e) => e.user_id === uid));
     } finally {
       setRegLoading(false);
     }
@@ -517,7 +527,7 @@ export default function LeaguePage() {
                       Lanjut Konfirmasi
                     </Button>
                   </div>
-                  {!currentUser && <p className="text-amber-700">Masuk akun untuk mendaftar liga. <Link href="/login?redirectTo=/league" className="underline font-semibold">Masuk</Link></p>}
+                  {!currentUser && <p className="text-amber-700">Masuk untuk mendaftar liga. <Link href="/auth/login?redirectTo=/league" className="underline font-semibold">Masuk</Link></p>}
                 </div>
               )}
 
@@ -541,11 +551,14 @@ export default function LeaguePage() {
                 </div>
               )}
 
-              {regStep === 3 && regSuccess && (
+{regStep === 3 && regSuccess && (
                 <div className="space-y-3 text-center py-2">
-                  <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
-                  <p className="font-semibold text-slate-800">Pendaftaran Berhasil</p>
-                  <p className="text-slate-600">Anda telah terdaftar di <strong>{regCatMeta.label}</strong> dan otomatis masuk ke daftar peserta & klasemen kategori ini.</p>
+                  <Clock className="w-10 h-10 text-amber-600 mx-auto" />
+                  <p className="font-semibold text-slate-800">Pendaftaran Diterima</p>
+                  <p className="text-slate-600">Pendaftaran Anda untuk <strong>{regCatMeta.label}</strong> telah diterima dan <strong>menunggu persetujuan Super Admin</strong>.</p>
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    Status: Menunggu Persetujuan. Anda akan mendapat notifikasi setelah Super Admin meninjau pendaftaran.
+                  </p>
                   <div className="flex justify-center gap-2">
                     <Button variant="outline" size="sm" onClick={() => { setCategory(regCategory); setRegOpen(false); }}>Lihat Klasemen Kategori</Button>
                     <Button variant="tennis" size="sm" className="text-matchpoin-navy font-bold" onClick={() => setRegOpen(false)}>Selesai</Button>
@@ -611,15 +624,34 @@ export default function LeaguePage() {
                   <p className="p-4 text-xs text-slate-500">Belum ada peserta terdaftar {provinceFilter !== "all" || cityFilter !== "all" ? "untuk filter lokasi ini." : "di kategori ini."}</p>
                 ) : (
                   <div className="divide-y divide-slate-100">
-                    {filteredParticipants.map((p) => (
-                      <div key={p.userId} className="px-4 py-3 flex items-center justify-between gap-3 text-xs">
-                        <div className="min-w-0">
-                          <div className="font-semibold text-slate-800 truncate">{p.name}</div>
-                          <div className="text-slate-500 flex items-center gap-1"><MapPin className="w-3 h-3" /> {[p.cityName, p.province].filter(Boolean).join(", ") || "Lokasi belum diisi"}</div>
+{filteredParticipants.map((p) => (
+                        <div key={p.userId} className="px-4 py-3 flex items-center justify-between gap-3 text-xs">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-800 truncate">{p.name}</div>
+                            <div className="text-slate-500 flex items-center gap-1"><MapPin className="w-3 h-3" /> {[p.cityName, p.province].filter(Boolean).join(", ") || "Lokasi belum diisi"}</div>
+                          </div>
+                          <Badge
+                            variant={
+                              p.status === "confirmed"
+                                ? "success"
+                                : p.status === "pending"
+                                ? "secondary"
+                                : p.status === "rejected"
+                                ? "destructive"
+                                : "outline"
+                            }
+                            className="text-[10px] shrink-0"
+                          >
+                            {p.status === "confirmed"
+                              ? "Diterima"
+                              : p.status === "pending"
+                              ? "Menunggu Persetujuan"
+                              : p.status === "rejected"
+                              ? "Ditolak"
+                              : p.status}
+                          </Badge>
                         </div>
-                        <Badge variant="outline" className="text-[10px] shrink-0">Terdaftar</Badge>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 )}
               </CardContent>

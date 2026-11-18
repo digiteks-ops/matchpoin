@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -59,11 +59,7 @@ export default function TournamentsPage() {
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
   }, []);
 
-  useEffect(() => {
-    loadTournaments();
-  }, [currentUser?.id]);
-
-  async function loadTournaments() {
+  const loadTournaments = useCallback(async () => {
     setIsLoading(true);
     try {
       const supabase = createClient();
@@ -132,7 +128,15 @@ export default function TournamentsPage() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [currentUser]);
+
+  useEffect(() => {
+    loadTournaments();
+  }, [loadTournaments]);
+
+  useEffect(() => {
+    loadTournaments();
+  }, [loadTournaments]);
 
   async function openRegistration(t: TournamentRow) {
     setSelectedTournament(t);
@@ -317,7 +321,7 @@ export default function TournamentsPage() {
                       variant="tennis"
                       size="sm"
                       className="text-matchpoin-navy font-bold"
-                      disabled={
+disabled={
                         regLoading ||
                         (selectedTournament.category.includes("doubles") && !partnerUserId)
                       }

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -51,10 +52,12 @@ export function PlayerCard({ player, onInvite, isInviting = false }: PlayerCardP
           <div className="flex items-center gap-3">
             <div className="relative">
               {player.avatarUrl ? (
-                <img
+                <Image
                   src={player.avatarUrl}
                   alt={player.displayName}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm"
+                  width={48}
+                  height={48}
+                  className="rounded-full object-cover border-2 border-white shadow-sm"
                 />
               ) : (
                 <div className="w-12 h-12 rounded-full bg-matchpoin-navy text-white flex items-center justify-center font-bold font-heading text-lg shadow-sm">
@@ -77,24 +80,25 @@ export function PlayerCard({ player, onInvite, isInviting = false }: PlayerCardP
             </div>
           </div>
 
-          {/* Rating Pill */}
-          <div className="flex flex-col items-end">
-            <div
-              className={`px-2.5 py-1 rounded-lg border text-xs font-black font-heading tracking-tight ${getRatingBadgeColor(
-                player.currentRating
-              )}`}
-            >
-              {player.currentRating.toFixed(2)}
-              {player.isProvisional && (
-                <span className="ml-1 text-[9px] font-normal text-amber-700">
-                  (P)
-                </span>
-              )}
+          {player.showRating === false ? (
+            <span className="text-[10px] text-slate-400 font-medium">Rating disembunyikan</span>
+          ) : (
+            <div className="flex flex-col items-end">
+              <div
+                className={`px-2.5 py-1 rounded-lg border text-xs font-black font-heading tracking-tight ${getRatingBadgeColor(
+                  player.currentRating
+                )}`}
+              >
+                {player.currentRating.toFixed(2)}
+                {player.isProvisional && (
+                  <span className="ml-1 text-[9px] font-normal text-amber-700">(P)</span>
+                )}
+              </div>
+              <span className="text-[10px] text-slate-400 font-medium mt-0.5">
+                {getRatingTier(player.currentRating)}
+              </span>
             </div>
-            <span className="text-[10px] text-slate-400 font-medium mt-0.5">
-              {getRatingTier(player.currentRating)}
-            </span>
-          </div>
+          )}
         </CardHeader>
 
         {/* Content Details */}
@@ -120,21 +124,22 @@ export function PlayerCard({ player, onInvite, isInviting = false }: PlayerCardP
             )}
           </div>
 
-          {/* Match Record Bar */}
-          <div className="grid grid-cols-3 gap-1 bg-slate-50 rounded-lg p-2 text-center text-xs border border-slate-100">
-            <div>
-              <span className="block text-[10px] text-slate-400 uppercase font-semibold">Tanding</span>
-              <span className="font-bold text-slate-800">{player.matchesPlayed}</span>
+          {player.showRating !== false && (
+            <div className="grid grid-cols-3 gap-1 bg-slate-50 rounded-lg p-2 text-center text-xs border border-slate-100">
+              <div>
+                <span className="block text-[10px] text-slate-400 uppercase font-semibold">Tanding</span>
+                <span className="font-bold text-slate-800">{player.matchesPlayed}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] text-slate-400 uppercase font-semibold">Menang</span>
+                <span className="font-bold text-emerald-600">{player.wins}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] text-slate-400 uppercase font-semibold">Win Rate</span>
+                <span className="font-bold text-slate-800">{player.winRate}%</span>
+              </div>
             </div>
-            <div>
-              <span className="block text-[10px] text-slate-400 uppercase font-semibold">Menang</span>
-              <span className="font-bold text-emerald-600">{player.wins}</span>
-            </div>
-            <div>
-              <span className="block text-[10px] text-slate-400 uppercase font-semibold">Win Rate</span>
-              <span className="font-bold text-slate-800">{player.winRate}%</span>
-            </div>
-          </div>
+          )}
         </CardContent>
       </div>
 

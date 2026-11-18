@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useState } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { compressImageToLimit, formatFileSize } from "@/lib/utils/image";
 import { Button } from "@/components/ui/button";
@@ -97,8 +98,13 @@ export function PhotoUpload({
       <div className="flex flex-wrap gap-2">
         {value.map((url) => (
           <div key={url} className="relative w-20 h-20 rounded-lg overflow-hidden border border-slate-200">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt="Foto pertandingan" className="w-full h-full object-cover" />
+            <Image
+              src={url}
+              alt="Foto pertandingan"
+              fill
+              className="object-cover"
+              sizes="80px"
+            />
             <button
               type="button"
               onClick={() => onChange(value.filter((u) => u !== url))}

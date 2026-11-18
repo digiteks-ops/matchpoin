@@ -36,7 +36,7 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
   const [courtName, setCourtName] = useState<string>("");
   const [matchDate, setMatchDate] = useState("");
   const [startTime, setStartTime] = useState("16:00");
-  const [durationMinutes, setDurationMinutes] = useState(90);
+  const [durationMinutes, setDurationMinutes] = useState(60);
   const [level, setLevel] = useState("all");
   const [umpireOption, setUmpireOption] = useState<UmpirePreference>("tanpa_wasit");
   const [description, setDescription] = useState("");
@@ -477,7 +477,7 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="partnerUserId" className="text-xs text-slate-600">Host's Partner</Label>
+                    <Label htmlFor="partnerUserId" className="text-xs text-slate-600">Partner Host</Label>
                     <select
                       id="partnerUserId"
                       value={partnerUserId}
@@ -530,7 +530,7 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="opponentPartnerUserId" className="text-xs text-slate-600">Opponent's Partner</Label>
+                        <Label htmlFor="opponentPartnerUserId" className="text-xs text-slate-600">Partner Lawan</Label>
                         <select
                           id="opponentPartnerUserId"
                           value={opponentPartnerUserId}
@@ -722,6 +722,23 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
                   />
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">menit</span>
                 </div>
+                {matchDate && startTime && (
+                  <p className="text-xs text-slate-500">
+                    Perkiraan selesai:{" "}
+                    <span className="font-medium text-slate-700">
+                      {(() => {
+                        const start = toPlatformIsoString(matchDate, startTime);
+                        if (!start) return "—";
+                        const end = new Date(new Date(start).getTime() + durationMinutes * 60 * 1000);
+                        return end.toLocaleTimeString("id-ID", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: false,
+                        });
+                      })()}
+                    </span>
+                  </p>
+                )}
               </div>
             </div>
           </div>

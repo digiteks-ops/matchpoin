@@ -329,4 +329,5 @@ export interface FullPlayerProfile {
   completionScore: number;
   isProfilePublic: boolean;
   allowInvites: boolean;
+  showRating?: boolean;
 }

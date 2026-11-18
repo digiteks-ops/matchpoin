@@ -13,6 +13,7 @@ import {
   TrendingUp,
   MapPin,
   Flame,
+  UserPlus,
 } from "lucide-react";
 
 export default function HomePage() {
@@ -77,7 +78,7 @@ export default function HomePage() {
             <div className="flex flex-wrap items-center gap-3 pt-4">
               <Link href="/register">
                 <Button variant="tennis" size="lg" className="gap-2 text-matchpoin-navy font-bold">
-                  Mulai Sekarang
+                  Daftar Gratis
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </Link>
@@ -204,7 +205,7 @@ export default function HomePage() {
             </div>
             <Link href="/register">
               <Button variant="outline" size="sm" className="whitespace-nowrap">
-                Mulai dari Sini
+                Daftar Gratis
               </Button>
             </Link>
           </div>
@@ -223,7 +224,7 @@ export default function HomePage() {
           <div className="pt-2 flex flex-wrap justify-center gap-3">
             <Link href="/register">
               <Button variant="tennis" size="lg">
-                Mulai Sekarang
+                Daftar Gratis
               </Button>
             </Link>
             <Link href="/players">
@@ -231,6 +232,52 @@ export default function HomePage() {
                 Cari Pemain
               </Button>
             </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* DAFTAR SEKARANG GRATIS - Prominent CTA */}
+      <section className="py-16 md:py-20 bg-slate-50 border-t border-slate-200 border-b border-slate-200">
+        <div className="container mx-auto px-4 sm:px-6 max-w-4xl">
+          <div className="bg-white rounded-2xl border border-slate-200/50 p-8 md:p-12 text-center space-y-6">
+            <div className="inline-flex items-center gap-2 rounded-full bg-matchpoin-tennis/10 px-4 py-1.5 text-sm font-semibold text-matchpoin-navy border border-matchpoin-tennis/20">
+              <Flame className="w-4 h-4 text-matchpoin-tennis" />
+              <span>Promosi Peluncuran</span>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-extrabold font-heading text-slate-900 leading-tight">
+              DAFTAR SEKARANG GRATIS
+            </h2>
+            <p className="text-lg md:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
+              Buat akun gratis dan mulai temukan teman bermain tenis.
+            </p>
+            <div className="flex flex-wrap justify-center gap-4 pt-4">
+              <Link href="/auth/register">
+                <Button variant="tennis" size="lg" className="gap-2 text-matchpoin-navy font-bold text-lg px-8 py-3">
+                  <UserPlus className="w-5 h-5" />
+                  DAFTAR SEKARANG GRATIS
+                </Button>
+              </Link>
+              <Link href="/players">
+                <Button variant="outline" size="lg" className="gap-2 text-slate-700 font-medium border-slate-300 hover:border-matchpoin-navy hover:text-matchpoin-navy px-8 py-3">
+                  <Users className="w-5 h-5" />
+                  Cari Pemain
+                </Button>
+              </Link>
+            </div>
+            <div className="flex items-center justify-center gap-4 text-xs text-slate-500">
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Tidak ada biaya pendaftaran</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Rating awal 1.00</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Users className="w-4 h-4 text-matchpoin-tennis" />
+                <span>Matchmaking seimbang</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>

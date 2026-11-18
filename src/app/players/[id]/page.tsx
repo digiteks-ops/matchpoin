@@ -9,6 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { GuestModal } from "@/components/ui/guest-modal";
 import { createClient } from "@/lib/supabase/client";
 import {
+  fetchMySqlPublicPlayer,
+  isMySqlPublicPlayerReads,
+} from "@/lib/mysql/public-player-client";
+import {
   ArrowLeft,
   MapPin,
   ShieldCheck,
@@ -17,8 +21,27 @@ import {
   AlertTriangle,
   Pencil,
 } from "lucide-react";
-import type { PlayerProfile, PlayerRating } from "@/types/database.types";
 import type { User } from "@supabase/supabase-js";
+
+interface PublicPlayerProfile {
+  display_name: string | null;
+  bio: string | null;
+  playing_since: string | null;
+  preferred_hand: string | null;
+  backhand: string | null;
+  play_frequency: string | null;
+  preferred_categories: string[];
+  preferred_times: string[];
+  self_assessed_level: string | null;
+  is_verified_player: boolean;
+}
+
+interface PublicPlayerRating {
+  current_rating: number | null;
+  matches_played: number | null;
+  wins: number | null;
+  losses: number | null;
+}
 
 export default function PublicPlayerProfilePage() {
   const params = useParams();
@@ -26,16 +49,54 @@ export default function PublicPlayerProfilePage() {
   const playerId = params.id as string;
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<PlayerProfile | null>(null);
-  const [rating, setRating] = useState<PlayerRating | null>(null);
+  const [profile, setProfile] = useState<PublicPlayerProfile | null>(null);
+  const [rating, setRating] = useState<PublicPlayerRating | null>(null);
+  const [showRating, setShowRating] = useState(true);
   const [locationLabel, setLocationLabel] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     async function loadData() {
       try {
+        if (isMySqlPublicPlayerReads()) {
+          setCurrentUser(null);
+          const publicPlayer = await fetchMySqlPublicPlayer(playerId);
+          if (!publicPlayer) {
+            setNotFound(true);
+            return;
+          }
+          setProfile({
+            display_name: publicPlayer.displayName,
+            bio: publicPlayer.bio,
+            playing_since: publicPlayer.playingSince,
+            preferred_hand: publicPlayer.preferredHand,
+            backhand: publicPlayer.backhand,
+            play_frequency: publicPlayer.playFrequency,
+            preferred_categories: publicPlayer.preferredCategories,
+            preferred_times: publicPlayer.preferredTimes,
+            self_assessed_level: publicPlayer.selfAssessedLevel,
+            is_verified_player: publicPlayer.isVerifiedPlayer,
+          });
+          setShowRating(publicPlayer.showRating);
+          setRating(
+            publicPlayer.showRating
+              ? {
+                  current_rating: publicPlayer.currentRating,
+                  matches_played: publicPlayer.matchesPlayed,
+                  wins: publicPlayer.wins,
+                  losses: publicPlayer.losses,
+                }
+              : null
+          );
+          setLocationLabel(
+            [publicPlayer.cityName, publicPlayer.province].filter(Boolean).join(", ")
+          );
+          return;
+        }
+
         const supabase = createClient();
 
         const {
@@ -55,25 +116,19 @@ export default function PublicPlayerProfilePage() {
         }
 
         setProfile({
-          id: publicPlayer.user_id,
-          user_id: publicPlayer.user_id,
           display_name: publicPlayer.display_name,
           bio: publicPlayer.bio,
           playing_since: publicPlayer.playing_since,
           preferred_hand: publicPlayer.preferred_hand,
           backhand: publicPlayer.backhand,
-          preferred_court_id: null,
           play_frequency: publicPlayer.play_frequency,
-          preferred_categories: publicPlayer.preferred_categories,
-          preferred_times: publicPlayer.preferred_times,
+          preferred_categories: publicPlayer.preferred_categories ?? [],
+          preferred_times: publicPlayer.preferred_times ?? [],
           self_assessed_level: publicPlayer.self_assessed_level,
-          completion_score: publicPlayer.completion_score,
-          allow_invites: publicPlayer.allow_invites,
-          is_profile_public: true,
-          profile_visibility: "public",
-          created_at: new Date().toISOString(),
-          updated_at: publicPlayer.updated_at || new Date().toISOString(),
-        } as any);
+          is_verified_player: publicPlayer.is_verified_player ?? false,
+        });
+        const ratingVisible = publicPlayer.show_rating !== false;
+        setShowRating(ratingVisible);
 
         if (publicPlayer.city_name) {
           setLocationLabel([publicPlayer.city_name, publicPlayer.province].filter(Boolean).join(", "));
@@ -81,16 +136,21 @@ export default function PublicPlayerProfilePage() {
           setLocationLabel("");
         }
 
-        const { data: ratingData } = await supabase
+        if (!ratingVisible) {
+          setRating(null);
+          return;
+        }
+
+        const { data: ratingData, error: ratingError } = await supabase
           .from("player_ratings")
-          .select("*")
+          .select("current_rating,matches_played,wins,losses")
           .eq("user_id", playerId)
           .maybeSingle();
-
-        if (ratingData) setRating(ratingData as PlayerRating);
+        if (ratingError) throw ratingError;
+        setRating(ratingData);
       } catch (err) {
         console.error("Error loading public player profile:", err);
-        setNotFound(true);
+        setLoadError("Gagal memuat profil pemain. Coba lagi.");
       } finally {
         setIsLoading(false);
       }
@@ -118,14 +178,16 @@ export default function PublicPlayerProfilePage() {
     );
   }
 
-  if (notFound || !profile) {
+  if (loadError || notFound || !profile) {
     return (
       <div className="flex-1 flex items-center justify-center p-6 bg-slate-50">
         <div className="max-w-md w-full bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-4 shadow-sm">
           <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto" />
-          <h2 className="text-xl font-bold font-heading text-slate-900">Profil Tidak Ditemukan</h2>
+          <h2 className="text-xl font-bold font-heading text-slate-900">
+            {loadError ? "Profil Tidak Tersedia" : "Profil Tidak Ditemukan"}
+          </h2>
           <p className="text-xs text-slate-500">
-            Profil pemain ini tidak tersedia atau telah diatur menjadi privat.
+            {loadError || "Profil pemain ini tidak tersedia atau telah diatur menjadi privat."}
           </p>
           <div className="pt-2">
             <Link href="/players">
@@ -222,50 +284,58 @@ export default function PublicPlayerProfilePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="space-y-6">
-            <Card className="border-slate-200">
-              <CardHeader className="pb-2">
-                <CardDescription className="text-xs uppercase font-bold text-slate-500">
-                  MATCHPOIN Rating
-                </CardDescription>
-                <div className="flex items-baseline justify-between mt-1">
-                  <div className="text-4xl font-extrabold font-heading text-matchpoin-navy">
-                    {currentRating.toFixed(2)}
+            {showRating ? (
+              <Card className="border-slate-200">
+                <CardHeader className="pb-2">
+                  <CardDescription className="text-xs uppercase font-bold text-slate-500">
+                    MATCHPOIN Rating
+                  </CardDescription>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <div className="text-4xl font-extrabold font-heading text-matchpoin-navy">
+                      {currentRating.toFixed(2)}
+                    </div>
+                    <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300 font-bold">
+                      {getRatingCategory(currentRating)}
+                    </Badge>
                   </div>
-                  <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300 font-bold">
-                    {getRatingCategory(currentRating)}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 pt-3">
-                <div className="text-xs text-slate-600 flex justify-between py-1 border-b border-slate-100">
-                  <span>Status Rating:</span>
-                  <span className="font-semibold text-slate-800">
-                    {rating?.matches_played && rating.matches_played > 0 ? "Resmi" : "Provisori"}
-                  </span>
-                </div>
-                <div className="text-xs text-slate-600 flex justify-between py-1 border-b border-slate-100">
-                  <span>Pertandingan:</span>
-                  <span className="font-bold text-slate-800">{rating?.matches_played ?? 0}</span>
-                </div>
-                <div className="text-xs text-slate-600 flex justify-between py-1 border-b border-slate-100">
-                  <span>Menang:</span>
-                  <span className="font-bold text-emerald-600">{rating?.wins ?? 0}</span>
-                </div>
-                <div className="text-xs text-slate-600 flex justify-between py-1">
-                  <span>Kalah:</span>
-                  <span className="font-bold text-rose-600">{rating?.losses ?? 0}</span>
-                </div>
-              </CardContent>
-            </Card>
+                </CardHeader>
+                <CardContent className="space-y-3 pt-3">
+                  <div className="text-xs text-slate-600 flex justify-between py-1 border-b border-slate-100">
+                    <span>Status Rating:</span>
+                    <span className="font-semibold text-slate-800">
+                      {rating?.matches_played && rating.matches_played > 0 ? "Resmi" : "Provisori"}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-600 flex justify-between py-1 border-b border-slate-100">
+                    <span>Pertandingan:</span>
+                    <span className="font-bold text-slate-800">{rating?.matches_played ?? 0}</span>
+                  </div>
+                  <div className="text-xs text-slate-600 flex justify-between py-1 border-b border-slate-100">
+                    <span>Menang:</span>
+                    <span className="font-bold text-emerald-600">{rating?.wins ?? 0}</span>
+                  </div>
+                  <div className="text-xs text-slate-600 flex justify-between py-1">
+                    <span>Kalah:</span>
+                    <span className="font-bold text-rose-600">{rating?.losses ?? 0}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border-slate-200">
+                <CardContent className="p-4 text-xs text-slate-500">
+                  Pemain memilih untuk menyembunyikan rating dan statistik.
+                </CardContent>
+              </Card>
+            )}
 
             <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2 text-xs">
               <div className="flex items-center gap-2 text-slate-800 font-bold">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
                 <span>Verifikasi MATCHPOIN</span>
               </div>
-              <p className="text-slate-500 leading-relaxed text-[11px]">
-                Rating dihitung dari hasil pertandingan yang dikonfirmasi kedua pihak.
-              </p>
+                <p className="text-slate-500 leading-relaxed text-[11px]">
+                  Rating publik dari hasil pertandingan terkonfirmasi.
+                </p>
             </div>
           </div>
 
@@ -338,7 +408,7 @@ export default function PublicPlayerProfilePage() {
         onClose={() => setIsGuestModalOpen(false)}
         title="Masuk untuk Mengirim Undangan"
         description={`Untuk mengundang ${displayName} bertanding, silakan masuk ke akun MATCHPOIN Anda.`}
-        actionText="Masuk Akun"
+        actionText="Masuk"
         redirectTo={`/players/${playerId}`}
       />
     </div>

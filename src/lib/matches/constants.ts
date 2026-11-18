@@ -43,6 +43,7 @@ export interface MatchParticipantInfo {
   avatarUrl: string | null;
   gender: string | null;
   rating: number;
+  showRating?: boolean;
   isOrganizer: boolean;
   status: "confirmed" | "pending" | "rejected" | "invited";
   team?: 1 | 2;
@@ -72,6 +73,7 @@ export interface OpenMatchDetail {
   currentPlayers: number;
   availableSlots: number;
   status: MatchStatus;
+  isPrivate?: boolean;
   participants: MatchParticipantInfo[];
   pendingRequests: MatchParticipantInfo[];
   invitedPlayers: MatchParticipantInfo[];

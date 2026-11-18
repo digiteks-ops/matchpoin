@@ -9,8 +9,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { createClient } from "@/lib/supabase/client";
+import {
+  fetchMySqlPublicPlayers,
+  isMySqlPublicPlayerReads,
+  type MySqlPlayerCity,
+} from "@/lib/mysql/public-player-client";
 import { Trophy, Search, MapPin, Medal, Crown, TrendingUp } from "lucide-react";
-import type { City } from "@/types/database.types";
 
 interface LeaderboardRow {
   userId: string;
@@ -26,34 +30,66 @@ interface LeaderboardRow {
   isProvisional: boolean;
 }
 
-type ProfileRow = {
+interface CityOption {
+  id: string;
+  name: string;
+  province: string;
+}
+
+interface SupabasePublicPlayer {
   user_id: string;
   display_name: string | null;
-  preferred_court_id: string | null;
-  users: {
-    city_id: string | null;
-    cities: { name: string; province: string } | { name: string; province: string }[] | null;
-  } | null;
-  tennis_courts: {
-    name: string;
-    city_id: string;
-    cities: { name: string; province: string } | { name: string; province: string }[] | null;
-  } | null;
-};
-
-type RatingRow = {
-  user_id: string;
-  current_rating: number | null;
-  peak_rating: number | null;
+  full_name: string | null;
+  current_rating: number | string | null;
+  peak_rating: number | string | null;
   matches_played: number | null;
   wins: number | null;
   losses: number | null;
-};
+  city_name: string | null;
+  city_id: string | null;
+  show_rating?: boolean | null;
+}
+
+interface LeaderboardPlayerData {
+  userId: string;
+  fullName: string;
+  displayName: string;
+  currentRating: number | null;
+  peakRating: number | null;
+  matchesPlayed: number | null;
+  wins: number | null;
+  losses: number | null;
+  cityName: string;
+  cityId: string | null;
+}
+
+function leaderboardRow(player: LeaderboardPlayerData): LeaderboardRow {
+  const matchesPlayed = player.matchesPlayed ?? 0;
+  const wins = player.wins ?? 0;
+  return {
+    userId: player.userId,
+    name: player.fullName || player.displayName || "Pemain MATCHPOIN",
+    rating: player.currentRating ?? 1,
+    peakRating: player.peakRating ?? player.currentRating ?? 1,
+    matchesPlayed,
+    wins,
+    losses: player.losses ?? 0,
+    winRate: matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : 0,
+    cityName: player.cityName || "Makassar",
+    cityId: player.cityId,
+    isProvisional: matchesPlayed === 0,
+  };
+}
+
+function provinceOptionsFrom(cities: CityOption[]): string[] {
+  return Array.from(new Set(cities.map((city) => city.province).filter(Boolean))).sort();
+}
 
 export default function LeaderboardPage() {
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
-  const [cities, setCities] = useState<City[]>([]);
+  const [cities, setCities] = useState<CityOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCity, setSelectedCity] = useState("all");
   const [province, setProvince] = useState<string>("");
@@ -62,6 +98,19 @@ export default function LeaderboardPage() {
   useEffect(() => {
     async function load() {
       try {
+        if (isMySqlPublicPlayerReads()) {
+          const result = await fetchMySqlPublicPlayers(500, "rating");
+          const cityOptions = result.cities.map(({ id, name, province }: MySqlPlayerCity) => ({
+            id,
+            name,
+            province,
+          }));
+          setCities(cityOptions);
+          setProvinceOptions(provinceOptionsFrom(cityOptions));
+          setRows(result.players.filter((player) => player.showRating).map(leaderboardRow));
+          return;
+        }
+
         const supabase = createClient();
         const [citiesResult, publicPlayersResult] = await Promise.all([
           supabase.from("cities").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
@@ -71,33 +120,34 @@ export default function LeaderboardPage() {
             .limit(500),
         ]);
 
-        if (citiesResult.data) {
-          setCities(citiesResult.data as City[]);
-          const provinces = Array.from(
-            new Set((citiesResult.data as City[]).map((c) => c.province).filter(Boolean))
-          ).sort();
-          setProvinceOptions(provinces);
-        }
+        if (citiesResult.error) throw citiesResult.error;
+        if (publicPlayersResult.error) throw publicPlayersResult.error;
 
-        const rawPlayers = (publicPlayersResult.data ?? []) as any[];
-        const merged: LeaderboardRow[] = rawPlayers.map((p) => {
-          const matchesPlayed = p.matches_played ?? 0;
-          const wins = p.wins ?? 0;
-          return {
-            userId: p.user_id,
-            name: p.full_name || p.display_name || "Pemain MATCHPOIN",
-            rating: Number(p.current_rating ?? 1),
-            peakRating: Number(p.peak_rating ?? p.current_rating ?? 1),
-            matchesPlayed,
-            wins,
-            losses: p.losses ?? 0,
-            winRate: matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : 0,
-            cityName: p.city_name || "Makassar",
-            cityId: p.city_id ?? null,
-            isProvisional: matchesPlayed === 0,
-          };
-        });
+        const cityOptions = (citiesResult.data ?? []).map((city) => ({
+          id: city.id,
+          name: city.name,
+          province: city.province,
+        }));
+        setCities(cityOptions);
+        setProvinceOptions(provinceOptionsFrom(cityOptions));
 
+        const publicPlayers = (publicPlayersResult.data ?? []) as unknown as SupabasePublicPlayer[];
+        const merged: LeaderboardRow[] = publicPlayers
+          .filter((player) => player.show_rating !== false)
+          .map((player) =>
+            leaderboardRow({
+              userId: player.user_id,
+              fullName: player.full_name || "",
+              displayName: player.display_name || "",
+              currentRating: player.current_rating === null ? null : Number(player.current_rating),
+              peakRating: player.peak_rating === null ? null : Number(player.peak_rating),
+              matchesPlayed: player.matches_played,
+              wins: player.wins,
+              losses: player.losses,
+              cityName: player.city_name || "Makassar",
+              cityId: player.city_id,
+            })
+          );
         merged.sort(
           (a, b) =>
             b.rating - a.rating ||
@@ -109,6 +159,7 @@ export default function LeaderboardPage() {
         setRows(merged);
       } catch (err) {
         console.error("Error loading leaderboard:", err);
+        setLoadError("Gagal memuat leaderboard. Coba lagi.");
       } finally {
         setIsLoading(false);
       }
@@ -216,6 +267,10 @@ export default function LeaderboardPage() {
               <div key={i} className="h-32 rounded-2xl bg-white border border-slate-200 animate-pulse" />
             ))}
           </div>
+        ) : loadError ? (
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {loadError}
+          </div>
         ) : podium.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {podium.map((p, index) => (
@@ -284,7 +339,7 @@ export default function LeaderboardPage() {
           />
         )}
 
-        {!isLoading && ranked.length > 0 && (
+        {!isLoading && !loadError && ranked.length > 0 && (
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
             <div className="hidden sm:grid grid-cols-12 gap-3 px-5 py-3 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200">
               <span className="col-span-1">#</span>

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -140,10 +141,12 @@ export default function ProfilePage() {
           <div className="flex items-center gap-4">
             <div className="relative">
               {user?.avatar_url ? (
-                <img
+                <Image
                   src={user.avatar_url}
                   alt={user.full_name || "Foto Profil"}
-                  className="w-20 h-20 rounded-full object-cover border-4 border-slate-100 shadow-sm"
+                  width={80}
+                  height={80}
+                  className="rounded-full object-cover border-4 border-slate-100 shadow-sm"
                 />
               ) : (
                 <div className="w-20 h-20 rounded-full bg-matchpoin-navy text-white flex items-center justify-center text-2xl font-bold font-heading shadow-sm">

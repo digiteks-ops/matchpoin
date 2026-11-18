@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -396,6 +397,11 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                 <Clock className="w-4 h-4 text-slate-400" />
                 <span>
                   {formatIndonesianTime(`1970-01-01T${match.startTime}+08:00`)} WIB · {match.durationMinutes} menit
+                  {(() => {
+                    const start = `1970-01-01T${match.startTime}+08:00`;
+                    const end = new Date(new Date(start).getTime() + match.durationMinutes * 60 * 1000);
+                    return ` · Selesai ~${end.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false })} WIB`;
+                  })()}
                 </span>
               </div>
               <div className="flex items-start gap-2 sm:col-span-2">
@@ -684,9 +690,14 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                         </p>
                         <div className="flex flex-wrap gap-2">
                           {result.photoUrls.map((url) => (
-                            <a key={url} href={url} target="_blank" rel="noreferrer" className="block">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={url} alt="Foto pertandingan" className="w-20 h-20 rounded-lg object-cover border border-slate-200" />
+                            <a key={url} href={url} target="_blank" rel="noreferrer" className="block relative w-20 h-20 rounded-lg overflow-hidden">
+                              <Image
+                                src={url}
+                                alt="Foto pertandingan"
+                                fill
+                                className="object-cover border border-slate-200"
+                                sizes="80px"
+                              />
                             </a>
                           ))}
                         </div>
@@ -885,9 +896,9 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                 {!viewer.id && (
                   <>
                     <p className="text-slate-500">Masuk untuk mengajukan slot atau mengirim hasil.</p>
-                    <Link href={`/login?redirectTo=/matches/${match.id}`}>
+                    <Link href={`/mysql/auth/login?redirectTo=/matches/${match.id}`}>
                       <Button variant="tennis" className="w-full text-matchpoin-navy font-bold">
-                        Masuk Akun
+                        Masuk
                       </Button>
                     </Link>
                   </>

@@ -10,50 +10,64 @@ import { PlayerCardSkeleton } from "@/components/players/player-card-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GuestModal } from "@/components/ui/guest-modal";
 import { createClient } from "@/lib/supabase/client";
+import {
+  fetchMySqlPublicPlayers,
+  isMySqlPublicPlayerReads,
+  type MySqlPublicPlayer,
+} from "@/lib/mysql/public-player-client";
 import { Users, Search, MapPin, UserPlus, X, Loader2 } from "lucide-react";
 import type { FullPlayerProfile, City } from "@/types/database.types";
 import type { User } from "@supabase/supabase-js";
 
-type ProfileRow = {
-  user_id: string;
-  display_name: string | null;
-  bio: string | null;
-  playing_since: string | null;
-  preferred_hand: string | null;
-  backhand: string | null;
-  play_frequency: string | null;
-  self_assessed_level: string | null;
-  preferred_categories: string[] | null;
-  preferred_times: string[] | null;
-  completion_score: number | null;
-  allow_invites: boolean | null;
-  preferred_court_id: string | null;
-  users: {
-    city_id: string | null;
-    cities: { name: string; province: string } | { name: string; province: string }[] | null;
-  } | { city_id: string | null; cities: { name: string; province: string } | null }[] | null;
-  tennis_courts: {
-    name: string;
-    city_id: string;
-    cities: { name: string; province: string } | { name: string; province: string }[] | null;
-  } | { name: string; city_id: string; cities: { name: string; province: string } | null }[] | null;
-};
+interface CityOption {
+  id: string;
+  name: string;
+  province: string;
+}
 
-type RatingRow = {
-  user_id: string;
-  current_rating: number | null;
-  peak_rating: number | null;
-  matches_played: number | null;
-  wins: number | null;
-  losses: number | null;
-};
+function mapMySqlPlayer(player: MySqlPublicPlayer): FullPlayerProfile {
+  const matchesPlayed = player.matchesPlayed ?? 0;
+  const wins = player.wins ?? 0;
+  const losses = player.losses ?? 0;
+  return {
+    userId: player.userId,
+    email: null,
+    fullName: player.fullName || player.displayName || "Pemain Tenis",
+    displayName: player.displayName || "Pemain MATCHPOIN",
+    avatarUrl: player.avatarUrl,
+    gender: player.gender,
+    cityId: player.cityId,
+    cityName: player.cityName || "Lokasi belum diisi",
+    province: player.province,
+    bio: player.bio,
+    preferredHand: player.preferredHand,
+    backhand: player.backhand,
+    playFrequency: player.playFrequency ?? "weekly",
+    selfAssessedLevel: player.selfAssessedLevel ?? "beginner",
+    playingSince: player.playingSince,
+    preferredCategories: player.preferredCategories,
+    preferredTimes: player.preferredTimes,
+    currentRating: player.currentRating ?? 1,
+    peakRating: player.peakRating ?? player.currentRating ?? 1,
+    isProvisional: matchesPlayed === 0,
+    matchesPlayed,
+    wins,
+    losses,
+    winRate: matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : 0,
+    completionScore: player.completionScore,
+    isProfilePublic: true,
+    allowInvites: player.allowInvites,
+    showRating: player.showRating,
+  };
+}
 
 export default function PlayersDirectoryPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [players, setPlayers] = useState<FullPlayerProfile[]>([]);
-  const [cities, setCities] = useState<City[]>([]);
+  const [cities, setCities] = useState<CityOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProvince, setSelectedProvince] = useState<string>("all");
@@ -70,6 +84,16 @@ export default function PlayersDirectoryPage() {
   useEffect(() => {
     async function loadData() {
       try {
+        if (isMySqlPublicPlayerReads()) {
+          setCurrentUser(null);
+          const result = await fetchMySqlPublicPlayers(100, "name");
+          setCities(
+            result.cities.map(({ id, name, province }) => ({ id, name, province }))
+          );
+          setPlayers(result.players.map(mapMySqlPlayer));
+          return;
+        }
+
         const supabase = createClient();
 
         const {
@@ -86,7 +110,17 @@ export default function PlayersDirectoryPage() {
             .limit(100),
         ]);
 
-        if (citiesResult.data) setCities(citiesResult.data as City[]);
+        if (citiesResult.error) throw citiesResult.error;
+        if (publicPlayersResult.error) throw publicPlayersResult.error;
+        if (citiesResult.data) {
+          setCities(
+            (citiesResult.data as City[]).map(({ id, name, province }) => ({
+              id,
+              name,
+              province,
+            }))
+          );
+        }
 
         const rawPlayers = (publicPlayersResult.data ?? []) as any[];
 
@@ -134,12 +168,14 @@ export default function PlayersDirectoryPage() {
               completionScore: p.completion_score ?? 50,
               isProfilePublic: true,
               allowInvites: p.allow_invites ?? true,
+              showRating: p.show_rating !== false,
             };
           });
 
         setPlayers(formatted);
       } catch (err) {
         console.error("Error loading players directory:", err);
+        setLoadError("Gagal memuat daftar pemain. Coba lagi.");
       } finally {
         setIsLoading(false);
       }
@@ -367,6 +403,10 @@ export default function PlayersDirectoryPage() {
               <PlayerCardSkeleton key={idx} />
             ))}
           </div>
+        ) : loadError ? (
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {loadError}
+          </div>
         ) : filteredPlayers.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredPlayers.map((player) => (
@@ -439,7 +479,7 @@ export default function PlayersDirectoryPage() {
             ? `Untuk mengundang ${selectedPlayerForInvite.displayName} bertanding, silakan masuk atau daftarkan akun MATCHPOIN.`
             : "Aktivitas mengirim undangan pertandingan memerlukan akun MATCHPOIN."
         }
-        actionText="Masuk Akun"
+        actionText="Masuk"
         redirectTo={`/players/${selectedPlayerForInvite?.userId || ""}`}
       />
     </div>

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Logo } from "./logo";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import {
   Menu,
   X,
@@ -16,14 +17,14 @@ import {
   Settings,
   ChevronDown,
   Trophy,
+  Bell,
 } from "lucide-react";
-import type { User } from "@supabase/supabase-js";
 
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<{ id: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [userDropdown, setUserDropdown] = useState(false);
 
@@ -31,7 +32,7 @@ export function Navbar() {
     try {
       const supabase = createClient();
       supabase.auth.getUser().then(({ data: { user } }) => {
-        setUser(user);
+        setUser(user ? { id: user.id } : null);
         setLoading(false);
       });
 
@@ -62,13 +63,15 @@ export function Navbar() {
     }
   };
 
-const navLinks = [
-  { href: "/", label: "Beranda" },
-  { href: "/players", label: "Cari Pemain", icon: Users },
-  { href: "/matches", label: "Pertandingan", icon: LayoutDashboard },
-  { href: "/tournaments", label: "Turnamen", icon: Trophy },
-  { href: "/leaderboard", label: "Leaderboard", icon: LayoutDashboard },
-];
+  const dashboardHref = "/mysql/dashboard";
+  const profileHref = "/mysql/profile";
+  const navLinks = [
+    { href: "/", label: "Beranda" },
+    { href: "/players", label: "Cari Pemain", icon: Users },
+    { href: "/matches", label: "Pertandingan", icon: LayoutDashboard },
+    { href: "/tournaments", label: "Turnamen", icon: Trophy },
+    { href: "/leaderboard", label: "Leaderboard", icon: LayoutDashboard },
+  ];
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
@@ -104,9 +107,9 @@ const navLinks = [
             <div className="h-9 w-24 animate-pulse rounded-md bg-slate-200" />
           ) : user ? (
             <div className="flex items-center gap-2">
-              <Link href="/dashboard">
+              <Link href={dashboardHref}>
                 <Button
-                  variant={pathname === "/dashboard" ? "secondary" : "ghost"}
+                  variant={pathname === dashboardHref ? "secondary" : "ghost"}
                   size="sm"
                   className="gap-2 text-slate-700"
                 >
@@ -115,9 +118,9 @@ const navLinks = [
                 </Button>
               </Link>
 
-              <Link href="/profile">
+              <Link href={profileHref}>
                 <Button
-                  variant={pathname.startsWith("/profile") ? "secondary" : "ghost"}
+                  variant={pathname.startsWith(profileHref) ? "secondary" : "ghost"}
                   size="sm"
                   className="gap-2 text-slate-700"
                 >
@@ -125,6 +128,8 @@ const navLinks = [
                   Profil
                 </Button>
               </Link>
+
+              <NotificationBell />
 
               <Button
                 variant="ghost"
@@ -138,14 +143,14 @@ const navLinks = [
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <Link href="/login">
+              <Link href="/auth/login">
                 <Button variant="ghost" size="sm" className="font-semibold text-slate-700">
                   Masuk
                 </Button>
               </Link>
-              <Link href="/register">
+              <Link href="/auth/register">
                 <Button variant="tennis" size="sm">
-                  Daftar Sekarang
+                  Daftar Gratis
                 </Button>
               </Link>
             </div>
@@ -188,16 +193,22 @@ const navLinks = [
           <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
             {user ? (
               <>
-                <Link href="/dashboard" onClick={() => setIsOpen(false)}>
+                <Link href={dashboardHref} onClick={() => setIsOpen(false)}>
                   <Button variant="outline" className="w-full justify-start gap-2 text-sm">
                     <LayoutDashboard className="w-4 h-4" />
                     Dashboard Pemain
                   </Button>
                 </Link>
-                <Link href="/profile" onClick={() => setIsOpen(false)}>
+                <Link href={profileHref} onClick={() => setIsOpen(false)}>
                   <Button variant="outline" className="w-full justify-start gap-2 text-sm">
                     <UserIcon className="w-4 h-4" />
                     Profil Pemain Saya
+                  </Button>
+                </Link>
+                <Link href="/mysql/notifications" onClick={() => setIsOpen(false)}>
+                  <Button variant="outline" className="w-full justify-start gap-2 text-sm">
+                    <Bell className="w-4 h-4" />
+                    Notifikasi
                   </Button>
                 </Link>
                 <Button
@@ -214,14 +225,14 @@ const navLinks = [
               </>
             ) : (
               <div className="grid grid-cols-2 gap-2">
-                <Link href="/login" onClick={() => setIsOpen(false)}>
+                <Link href="/auth/login" onClick={() => setIsOpen(false)}>
                   <Button variant="outline" className="w-full text-sm">
                     Masuk
                   </Button>
                 </Link>
-                <Link href="/register" onClick={() => setIsOpen(false)}>
+                <Link href="/auth/register" onClick={() => setIsOpen(false)}>
                   <Button variant="tennis" className="w-full text-sm font-bold">
-                    Daftar
+                    Daftar Gratis
                   </Button>
                 </Link>
               </div>

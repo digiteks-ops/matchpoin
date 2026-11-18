@@ -129,19 +129,29 @@ npm run db:migrate
 ```
 
 `db:check` verifies connectivity and MySQL 8.0+. `db:migrate` creates the
-additive `matchpoin_schema_migrations` history table and applies reviewed SQL
-files placed in `mysql/migrations/`. No application schema migrations are
-included yet. MySQL DDL can implicitly commit, so a failed migration may be
-partially applied and must be inspected before retrying. Do not point these
-commands at production without an approved backup and migration plan.
+`matchpoin_schema_migrations` history table and applies reviewed SQL files in
+`mysql/migrations/`. The initial fresh-start migrations create account, city,
+court, player-profile, rating, match, result, tournament, league, and related
+workflow tables, and seed reference cities. They do not import Supabase
+accounts or application data. MySQL DDL can implicitly commit, so a failed
+migration may be partially applied and must be inspected before retrying. Do
+not point these commands at production without an approved migration plan.
 
-Before any data migration, configure `SUPABASE_DB_URL` (direct PostgreSQL
-connection URL) and an access-controlled `MATCHPOIN_BACKUP_DIR` outside the
-repository, then run `npm run db:backup:supabase`. This requires PostgreSQL
-client tools (`pg_dump` and `pg_restore`) on `PATH`; the command verifies the
-custom dump archive before saving it. It does not back up Supabase Storage
-object bytes or prove that a restore succeeds; both require separate
-verification before cutover.
+Auth.js Credentials and MySQL registration endpoints are being built alongside
+the migration, but the current login/register UI and route protection still use
+Supabase. Do not direct users to the new authentication endpoints until the
+remaining application data services and authorization checks have been moved
+and tested. Configure a private `AUTH_SECRET` before enabling Auth.js.
+
+The current approved approach is a fresh MySQL start: existing Supabase
+accounts and application data will not be imported, and the Supabase project
+and Storage must remain untouched as a fallback. A Supabase backup is therefore
+not a prerequisite for this path. If a future task requires a database backup,
+configure `SUPABASE_DB_URL` and an access-controlled `MATCHPOIN_BACKUP_DIR`
+outside the repository, then run `npm run db:backup:supabase`. This requires
+PostgreSQL client tools (`pg_dump` and `pg_restore`) on `PATH`; the command
+verifies the custom dump archive but does not back up Supabase Storage objects
+or prove a restore succeeds.
 
 See [docs/mysql-migration-plan.md](./docs/mysql-migration-plan.md) for the
 proposed schema mapping, auth/storage decisions, verification, and rollback

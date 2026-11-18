@@ -20,7 +20,7 @@ export function GuestModal({
   onClose,
   title = "Masuk untuk Melanjutkan",
   description = "Aktivitas ini memerlukan akun pemain MATCHPOIN. Daftarkan diri Anda sekarang untuk mulai bertanding.",
-  actionText = "Masuk Akun",
+  actionText = "Masuk",
   redirectTo = "/dashboard",
 }: GuestModalProps) {
   if (!isOpen) return null;
