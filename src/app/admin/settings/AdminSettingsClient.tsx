@@ -165,7 +165,7 @@ export default function AdminSettingsClient({
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-sm">
                     <Database className="w-4 h-4 text-matchpoin-navy" />
-                    Database MySQL
+                    Database Supabase
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="flex items-center gap-3">
@@ -174,7 +174,7 @@ export default function AdminSettingsClient({
                     <p className="font-semibold text-slate-900">
                       {systemHealth.database === "healthy" ? "Sehat" : systemHealth.database === "degraded" ? "Terdegradasi" : "Error"}
                     </p>
-                    <p className="text-xs text-slate-500">Koneksi MySQL aktif</p>
+                    <p className="text-xs text-slate-500">Koneksi PostgreSQL aktif</p>
                   </div>
                 </CardContent>
               </Card>

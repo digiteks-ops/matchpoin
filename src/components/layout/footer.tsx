@@ -61,19 +61,19 @@ export async function Footer() {
             {user ? (
               <ul className="space-y-2 text-sm text-slate-300">
                 <li>
-                  <Link href="/mysql/profile" className="flex items-center gap-2 hover:text-matchpoin-tennis transition-colors">
+                  <Link href="/profile" className="flex items-center gap-2 hover:text-matchpoin-tennis transition-colors">
                     <User className="w-4 h-4" />
                     Profil Saya
                   </Link>
                 </li>
                 <li>
-                  <Link href="/mysql/dashboard" className="flex items-center gap-2 hover:text-matchpoin-tennis transition-colors">
+                  <Link href="/dashboard" className="flex items-center gap-2 hover:text-matchpoin-tennis transition-colors">
                     <Heart className="w-4 h-4" />
                     Dashboard
                   </Link>
                 </li>
                 <li>
-                  <Link href="/mysql/tournaments" className="flex items-center gap-2 hover:text-matchpoin-tennis transition-colors">
+                  <Link href="/tournaments" className="flex items-center gap-2 hover:text-matchpoin-tennis transition-colors">
                     <Trophy className="w-4 h-4" />
                     LIGA TENNIS IKA 17
                   </Link>
@@ -81,11 +81,11 @@ export async function Footer() {
               </ul>
             ) : (
               <div className="space-y-2">
-                <Link href="/mysql/auth/login" className="flex items-center gap-2 text-sm text-slate-300 hover:text-matchpoin-tennis transition-colors">
+                <Link href="/login" className="flex items-center gap-2 text-sm text-slate-300 hover:text-matchpoin-tennis transition-colors">
                   <LogIn className="w-4 h-4" />
                   Masuk
                 </Link>
-                <Link href="/mysql/auth/register" className="flex items-center gap-2 text-sm text-slate-300 hover:text-matchpoin-tennis transition-colors">
+                <Link href="/register" className="flex items-center gap-2 text-sm text-slate-300 hover:text-matchpoin-tennis transition-colors">
                   <UserPlus className="w-4 h-4" />
                   Daftar Gratis
                 </Link>

@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Connection, RowDataPacket } from "mysql2/promise";
-import {
-  VALID_CATEGORIES,
-  maxParticipantRows,
-  type CreateOpenMatchInput,
-} from "@/lib/matches/constants";
+import { type CreateOpenMatchInput } from "@/lib/matches/constants";
 import { toPlatformIsoString, todayInPlatformTimeZone } from "@/lib/utils";
+import {
+  buildMatchRoster,
+  MatchRosterError,
+  type MatchRoster,
+} from "./match-roster-core.mjs";
 
 interface CourtRow extends RowDataPacket {
   id: string;
@@ -32,18 +33,24 @@ export async function createMySqlMatch(
   if (title.length < 3 || title.length > 100) {
     throw new MatchCreationError("Judul pertandingan harus terdiri dari 3 sampai 100 karakter.");
   }
-  if (!VALID_CATEGORIES.includes(input.category)) {
-    throw new MatchCreationError("Kategori pertandingan tidak valid.");
+
+  let roster: MatchRoster;
+  try {
+    roster = buildMatchRoster({
+      category: input.category,
+      matchType: input.matchType,
+      organizerId: userId,
+      partnerUserId: input.partnerUserId,
+      opponentUserId: input.opponentUserId,
+      opponentPartnerUserId: input.opponentPartnerUserId,
+    });
+  } catch (error) {
+    if (error instanceof MatchRosterError) {
+      throw new MatchCreationError(error.message);
+    }
+    throw error;
   }
 
-  const isDoubles = input.category.includes("doubles");
-  const matchType = input.matchType ?? (isDoubles ? "open" : "private");
-  if (matchType !== "open" && matchType !== "private") {
-    throw new MatchCreationError("Tipe pertandingan tidak valid.");
-  }
-  if (!isDoubles && matchType !== "private") {
-    throw new MatchCreationError("Tipe pertandingan tidak valid.");
-  }
   if (input.umpireOption !== "dengan_wasit" && input.umpireOption !== "tanpa_wasit") {
     throw new MatchCreationError("Pilihan wasit tidak valid.");
   }
@@ -92,48 +99,37 @@ export async function createMySqlMatch(
     }
   } else {
     courtId = null;
-    if (manualCourtName.length < 2 || !manualProvince || !manualCity) {
-      throw new MatchCreationError("Nama lapangan, provinsi, dan kota wajib diisi.");
+    // For manual court entry, only court name is required; province/city optional
+    if (manualCourtName.length < 2) {
+      throw new MatchCreationError("Nama lapangan wajib diisi (minimal 2 karakter).");
     }
   }
 
-  const partnerUserId = input.partnerUserId?.trim() || null;
-  const opponentUserId = input.opponentUserId?.trim() || null;
-  const opponentPartnerUserId = input.opponentPartnerUserId?.trim() || null;
-  const selectedIds = [partnerUserId, opponentUserId, opponentPartnerUserId].filter(
-    (id): id is string => Boolean(id)
-  );
-  if (!isDoubles && selectedIds.length > 0) {
-    throw new MatchCreationError("Partner dan lawan hanya berlaku untuk pertandingan ganda.");
-  }
-
-  if (isDoubles && matchType === "private") {
-    if (!partnerUserId || !opponentUserId || !opponentPartnerUserId) {
-      throw new MatchCreationError("Ganda privat wajib memilih partner dan 2 pemain lawan.");
-    }
-    if (
-      new Set([userId, partnerUserId, opponentUserId, opponentPartnerUserId]).size !== 4
-    ) {
-      throw new MatchCreationError("Host, partner, dan pemain lawan harus berbeda.");
-    }
-  } else if (isDoubles && selectedIds.length > 0) {
-    throw new MatchCreationError("Pertandingan ganda terbuka tidak dapat menentukan pemain manual.");
-  }
-
-  if (selectedIds.length > 0) {
-    const placeholders = selectedIds.map(() => "?").join(", ");
+  if (roster.playerIdsToVerify.length > 0) {
+    const uniquePlayerIds = Array.from(new Set(roster.playerIdsToVerify));
+    const placeholders = uniquePlayerIds.map(() => "?").join(", ");
     const [players] = await connection.execute<PlayerRow[]>(
       `SELECT user_id FROM player_profiles WHERE user_id IN (${placeholders})`,
-      selectedIds
+      uniquePlayerIds
     );
-    if (players.length !== new Set(selectedIds).size) {
+    if (players.length !== uniquePlayerIds.length) {
       throw new MatchCreationError("Pemain yang dipilih tidak ditemukan.");
     }
   }
 
+  const [organizers] = await connection.execute<PlayerRow[]>(
+    "SELECT id AS user_id FROM users WHERE id = ? LIMIT 1",
+    [userId]
+  );
+  if (!organizers[0]) {
+    throw new MatchCreationError(
+      "Akun penyelenggara belum tersinkron dengan database pertandingan. Silakan masuk ulang."
+    );
+  }
+
   const metadata = {
-    category: input.category,
-    match_type: matchType,
+    category: roster.category,
+    match_type: roster.matchType,
     umpire_option: input.umpireOption,
     umpire_name: input.umpireName?.trim() || null,
     min_rating: minRating,
@@ -152,22 +148,14 @@ export async function createMySqlMatch(
       : null,
   };
   const matchId = randomUUID();
-  const participants = [
-    { userId, team: 1, isOrganizer: true, role: "organizer" },
-    ...(isDoubles && matchType === "private"
-      ? [
-          { userId: partnerUserId!, team: 1, isOrganizer: false, role: "host_partner" },
-          { userId: opponentUserId!, team: 2, isOrganizer: false, role: "opponent" },
-          { userId: opponentPartnerUserId!, team: 2, isOrganizer: false, role: "opponent_partner" },
-        ]
-      : []),
-  ];
 
+  // Both writes below run inside the caller's transaction (see the create
+  // route), so a match and its roster are committed or rolled back together.
   await connection.execute(
     `INSERT INTO matches
        (id, title, description, court_id, organizer_id, match_date, start_time,
         duration_minutes, max_players, current_players, status, is_private, metadata)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       matchId,
       title,
@@ -177,25 +165,35 @@ export async function createMySqlMatch(
       input.matchDate,
       startTime,
       duration,
-      maxParticipantRows(input.category),
-      participants.length,
-      matchType === "private",
+      roster.maxPlayers,
+      roster.currentPlayers,
+      roster.status,
+      roster.isPrivate,
       JSON.stringify(metadata),
     ]
   );
-  for (const participant of participants) {
+
+  if (roster.participants.length > 0) {
+    const participantPlaceholders = roster.participants
+      .map(() => "(?, ?, ?, ?, ?, ?, UTC_TIMESTAMP())")
+      .join(", ");
+    const participantValues = roster.participants.flatMap((participant) => [
+      randomUUID(),
+      matchId,
+      participant.userId,
+      participant.isOrganizer,
+      participant.team,
+      JSON.stringify({
+        status: "confirmed",
+        role: participant.role,
+        added_by: userId,
+      }),
+    ]);
     await connection.execute(
       `INSERT INTO match_participants
          (id, match_id, user_id, is_organizer, team, metadata, confirmed_at)
-       VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP())`,
-      [
-        randomUUID(),
-        matchId,
-        participant.userId,
-        participant.isOrganizer,
-        participant.team,
-        JSON.stringify({ status: "confirmed", role: participant.role, added_by: userId }),
-      ]
+       VALUES ${participantPlaceholders}`,
+      participantValues
     );
   }
 

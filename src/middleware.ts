@@ -1,25 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
-import { mysqlPathForPrimaryRoute } from "@/lib/mysql/primary-route-map";
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+
+  // Public auth routes and logout are handled by their route handlers.
   if (
-    pathname.startsWith("/mysql") ||
-    pathname.startsWith("/api/mysql") ||
-    pathname.startsWith("/api/auth")
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/api/auth") ||
+    pathname === "/"
   ) {
     return NextResponse.next();
   }
-  if (process.env.NEXT_PUBLIC_MATCHPOIN_APP_BACKEND === "mysql") {
-    const mysqlPath = mysqlPathForPrimaryRoute(pathname);
-    if (mysqlPath) {
-      const destination = request.nextUrl.clone();
-      destination.pathname = mysqlPath;
-      return NextResponse.redirect(destination);
-    }
-    return NextResponse.next();
-  }
+
   return await updateSession(request);
 }
 

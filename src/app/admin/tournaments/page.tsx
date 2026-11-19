@@ -1,8 +1,9 @@
-import { redirect } from "next/navigation";
 import { requirePageRole } from "@/lib/auth/guards";
 import AdminTournamentsClient from "./AdminTournamentsClient";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminTournamentsPage() {
-  await requirePageRole("super_admin", "/auth/login?redirectTo=/admin/tournaments");
+  await requirePageRole("super_admin", "/admin/tournaments");
   return <AdminTournamentsClient />;
 }

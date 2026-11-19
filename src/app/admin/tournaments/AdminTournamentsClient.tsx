@@ -43,7 +43,7 @@ export default function AdminTournamentsClient({}: AdminTournamentsClientProps) 
   const loadRegistrations = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/mysql/admin/tournaments/registrations", { cache: "no-store" });
+      const response = await fetch("/api/admin/tournaments/registrations", { cache: "no-store" });
       if (!response.ok) throw new Error("Gagal memuat data");
       const data = await response.json();
       if (data.success) {
@@ -61,7 +61,7 @@ export default function AdminTournamentsClient({}: AdminTournamentsClientProps) 
   const handleApprove = async (registration: PendingRegistration) => {
     setActionStates((prev) => ({ ...prev, [registration.id]: "approving" }));
     try {
-      const response = await fetch(`/api/mysql/admin/tournaments/registrations/${registration.id}/approve`, {
+      const response = await fetch(`/api/admin/tournaments/registrations/${registration.id}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason: null }),
@@ -95,7 +95,7 @@ export default function AdminTournamentsClient({}: AdminTournamentsClientProps) 
     }
     setActionStates((prev) => ({ ...prev, [registration.id]: "rejecting" }));
     try {
-      const response = await fetch(`/api/mysql/admin/tournaments/registrations/${registration.id}/reject`, {
+      const response = await fetch(`/api/admin/tournaments/registrations/${registration.id}/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason: reason.trim() }),

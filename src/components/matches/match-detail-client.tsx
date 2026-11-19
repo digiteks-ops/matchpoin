@@ -896,7 +896,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                 {!viewer.id && (
                   <>
                     <p className="text-slate-500">Masuk untuk mengajukan slot atau mengirim hasil.</p>
-                    <Link href={`/mysql/auth/login?redirectTo=/matches/${match.id}`}>
+                    <Link href={`/login?redirectTo=/matches/${match.id}`}>
                       <Button variant="tennis" className="w-full text-matchpoin-navy font-bold">
                         Masuk
                       </Button>

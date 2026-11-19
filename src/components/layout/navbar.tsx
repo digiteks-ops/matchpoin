@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Logo } from "./logo";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
@@ -22,7 +22,6 @@ import {
 
 export function Navbar() {
   const pathname = usePathname();
-  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<{ id: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,17 +53,23 @@ export function Navbar() {
     try {
       const supabase = createClient();
       await supabase.auth.signOut();
+    } catch (err) {
+      // The server logout route also clears the session cookies, so continue.
+      console.error("Gagal logout:", err);
+    } finally {
       setUser(null);
       setUserDropdown(false);
-      router.push("/");
-      router.refresh();
-    } catch (err) {
-      console.error("Gagal logout:", err);
+      setIsOpen(false);
+      // Full navigation so the App Router hits the logout Route Handler; a
+      // client-side router.push to a route handler can render a 404.
+      window.location.assign("/auth/logout");
     }
   };
 
-  const dashboardHref = "/mysql/dashboard";
-  const profileHref = "/mysql/profile";
+  const dashboardHref = "/dashboard";
+  const profileHref = "/profile";
+  const loginHref = "/login";
+  const registerHref = "/register";
   const navLinks = [
     { href: "/", label: "Beranda" },
     { href: "/players", label: "Cari Pemain", icon: Users },
@@ -143,12 +148,12 @@ export function Navbar() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <Link href="/auth/login">
+              <Link href={loginHref}>
                 <Button variant="ghost" size="sm" className="font-semibold text-slate-700">
                   Masuk
                 </Button>
               </Link>
-              <Link href="/auth/register">
+              <Link href={registerHref}>
                 <Button variant="tennis" size="sm">
                   Daftar Gratis
                 </Button>
@@ -205,7 +210,7 @@ export function Navbar() {
                     Profil Pemain Saya
                   </Button>
                 </Link>
-                <Link href="/mysql/notifications" onClick={() => setIsOpen(false)}>
+                <Link href="/notifications" onClick={() => setIsOpen(false)}>
                   <Button variant="outline" className="w-full justify-start gap-2 text-sm">
                     <Bell className="w-4 h-4" />
                     Notifikasi
@@ -225,12 +230,12 @@ export function Navbar() {
               </>
             ) : (
               <div className="grid grid-cols-2 gap-2">
-                <Link href="/auth/login" onClick={() => setIsOpen(false)}>
+                <Link href={loginHref} onClick={() => setIsOpen(false)}>
                   <Button variant="outline" className="w-full text-sm">
                     Masuk
                   </Button>
                 </Link>
-                <Link href="/auth/register" onClick={() => setIsOpen(false)}>
+                <Link href={registerHref} onClick={() => setIsOpen(false)}>
                   <Button variant="tennis" className="w-full text-sm font-bold">
                     Daftar Gratis
                   </Button>

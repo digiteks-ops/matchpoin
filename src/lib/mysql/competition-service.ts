@@ -5,6 +5,13 @@ import {
   notifyTournamentRegistration,
   notifySuperAdminsPendingRegistration,
 } from "@/lib/notifications/notification-service";
+import {
+  evaluateLeagueRegistration,
+  inferCategory,
+  isDoubles,
+  isValidId,
+  normalizeId,
+} from "./competition-registration-core.mjs";
 
 interface TournamentRow extends RowDataPacket {
   id: string;
@@ -83,17 +90,6 @@ interface PartnerRow extends RowDataPacket {
 type RegistrationResult =
   | { success: true; entryId: string; category: string; message: string }
   | { success: false; message: string };
-
-function inferCategory(name: string): string {
-  if (/mixed/i.test(name)) return "mixed_doubles";
-  if (/women.*doubles/i.test(name)) return "womens_doubles";
-  if (/doubles/i.test(name)) return "mens_doubles";
-  return "mens_singles";
-}
-
-function isDoubles(category: string): boolean {
-  return category.endsWith("_doubles");
-}
 
 export async function getMySqlTournamentList(
   connection: Connection,
@@ -258,13 +254,18 @@ export async function registerForCompetition(
   tournamentId: string,
   partnerUserId: string | null
 ): Promise<RegistrationResult> {
+  const leagueId = normalizeId(tournamentId);
+  if (!isValidId(leagueId)) {
+    return { success: false, message: "ID Liga tidak valid." };
+  }
+
   const [tournaments] = await connection.execute<TournamentRow[]>(
     `SELECT id, name, category, max_participants, status,
             DATE_FORMAT(registration_deadline, '%Y-%m-%d') AS registration_deadline
      FROM tournaments
-     WHERE id = ?
+     WHERE id = ? AND is_league = TRUE
      FOR UPDATE`,
-    [tournamentId]
+    [leagueId]
   );
   const tournament = tournaments[0];
   if (!tournament) return { success: false, message: "Liga tidak ditemukan." };
@@ -272,76 +273,58 @@ export async function registerForCompetition(
   const category = tournament.category || inferCategory(tournament.name);
   const doubles = isDoubles(category);
 
-  if (!doubles && partnerUserId) {
-    return { success: false, message: "Kategori tunggal tidak dapat memilih partner." };
-  }
-
-  if (tournament.status !== "registration_open") {
-    return { success: false, message: "Pendaftaran untuk kategori ini sudah ditutup." };
-  }
-
-  if (
-    tournament.registration_deadline &&
-    tournament.registration_deadline < todayInPlatformTimeZone()
-  ) {
-    return { success: false, message: "Pendaftaran untuk kategori ini sudah ditutup." };
-  }
-
-  if (doubles && !partnerUserId) {
-    return { success: false, message: "Kategori ganda wajib memilih partner." };
-  }
-  if (partnerUserId === userId) {
-    return { success: false, message: "Partner tidak boleh sama dengan diri sendiri." };
-  }
-
   const [existingEntries] = await connection.execute<RowDataPacket[]>(
     `SELECT user_id
      FROM tournament_participants
      WHERE tournament_id = ? AND user_id IN (?, ?) AND status <> 'rejected'`,
-    [tournamentId, userId, partnerUserId ?? userId]
+    [leagueId, userId, partnerUserId ?? userId]
   );
-  if (existingEntries.some((entry) => entry.user_id === userId)) {
-    return { success: false, message: "Anda sudah terdaftar pada kategori ini." };
-  }
-  if (partnerUserId && existingEntries.some((entry) => entry.user_id === partnerUserId)) {
-    return {
-      success: false,
-      message: "Partner yang dipilih sudah terdaftar di kategori lain.",
-    };
-  }
+  const registeredUserIds = existingEntries.map((entry) => String(entry.user_id));
 
-  let partner: UserRow | undefined;
-  if (partnerUserId) {
+  let partnerExists = true;
+  let partnerGender: string | null = null;
+  if (doubles && partnerUserId) {
     const [partners] = await connection.execute<UserRow[]>(
       "SELECT id, gender FROM users WHERE id = ? LIMIT 1",
       [partnerUserId]
     );
-    partner = partners[0];
-    if (!partner) return { success: false, message: "Partner tidak ditemukan." };
+    partnerExists = Boolean(partners[0]);
+    partnerGender = partners[0]?.gender ?? null;
+  }
 
-    if (category === "mixed_doubles") {
-      const [users] = await connection.execute<UserRow[]>(
-        "SELECT id, gender FROM users WHERE id = ? LIMIT 1",
-        [userId]
-      );
-      if (!users[0]) return { success: false, message: "Akun pemain tidak ditemukan." };
-      if (users[0].gender && partner.gender && users[0].gender === partner.gender) {
-        return {
-          success: false,
-          message: "Ganda Campuran wajib terdiri dari 1 pemain putra dan 1 pemain putri.",
-        };
-      }
-    }
+  let userExists = true;
+  let userGender: string | null = null;
+  if (category === "mixed_doubles" && partnerUserId) {
+    const [users] = await connection.execute<UserRow[]>(
+      "SELECT id, gender FROM users WHERE id = ? LIMIT 1",
+      [userId]
+    );
+    userExists = Boolean(users[0]);
+    userGender = users[0]?.gender ?? null;
   }
 
   const [counts] = await connection.execute<CountRow[]>(
     `SELECT COUNT(DISTINCT entry_id) AS entries
      FROM tournament_participants
      WHERE tournament_id = ? AND status <> 'rejected'`,
-    [tournamentId]
+    [leagueId]
   );
-  if (Number(counts[0]?.entries ?? 0) >= tournament.max_participants) {
-    return { success: false, message: "Kuota kategori ini sudah penuh." };
+  const entryCount = Number(counts[0]?.entries ?? 0);
+
+  const evaluation = evaluateLeagueRegistration({
+    tournament,
+    userId,
+    partnerUserId,
+    registeredUserIds,
+    entryCount,
+    userGender,
+    partnerGender,
+    userExists,
+    partnerExists,
+    today: todayInPlatformTimeZone(),
+  });
+  if (!evaluation.ok) {
+    return { success: false, message: evaluation.message };
   }
 
   const entryId = randomUUID();
@@ -349,31 +332,31 @@ export async function registerForCompetition(
     `INSERT INTO tournament_participants
        (id, tournament_id, user_id, category, entry_id, entry_role, partner_user_id, status)
      VALUES (?, ?, ?, ?, ?, 'captain', ?, 'pending')`,
-    [randomUUID(), tournamentId, userId, category, entryId, partnerUserId]
+    [randomUUID(), leagueId, userId, evaluation.category, entryId, partnerUserId]
   );
 
-  if (doubles && partnerUserId) {
+  if (evaluation.doubles && partnerUserId) {
     await connection.execute(
       `INSERT INTO tournament_participants
          (id, tournament_id, user_id, category, entry_id, entry_role, status)
        VALUES (?, ?, ?, ?, ?, 'partner', 'pending')`,
-      [randomUUID(), tournamentId, partnerUserId, category, entryId]
+      [randomUUID(), leagueId, partnerUserId, evaluation.category, entryId]
     );
     // Notify partner of pending registration
-    await notifyTournamentRegistration(partnerUserId, tournamentId, tournament.name);
+    await notifyTournamentRegistration(partnerUserId, leagueId, tournament.name);
   }
 
   // Notify user of pending registration
-  await notifyTournamentRegistration(userId, tournamentId, tournament.name);
+  await notifyTournamentRegistration(userId, leagueId, tournament.name);
 
   // Notify Super Admins about new pending registration
-  await notifySuperAdminsPendingRegistration(tournamentId, tournament.name, entryId);
+  await notifySuperAdminsPendingRegistration(leagueId, tournament.name, entryId);
 
   return {
     success: true,
     entryId,
-    category,
-    message: doubles
+    category: evaluation.category,
+    message: evaluation.doubles
       ? "Pendaftaran tim Anda telah dikirim dan menunggu persetujuan Super Admin."
       : "Pendaftaran Anda telah dikirim dan menunggu persetujuan Super Admin.",
   };
