@@ -27,6 +27,7 @@
     "db:seed-admin": "node scripts/supabase/seed-admin.mjs",
     "test:supabase-league": "node --test scripts/supabase/league-migration.test.mjs",
     "test:supabase-chat": "node --test scripts/supabase/chat-rls.test.mjs",
+    "test:supabase-registration": "node --test scripts/supabase/registration.test.mjs",
     "db:backup:mysql": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs --backup-only",
     "db:restore-mysql": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs",
     "db:validate:supabase": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs --validate-only"
