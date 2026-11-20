@@ -97,6 +97,23 @@ export function PhotoUpload({
     }
   };
 
+  const removePhoto = async (url: string) => {
+    onChange(value.filter((u) => u !== url));
+
+    // Best effort: also delete the stored object when the player removes a
+    // photo before submitting. Storage failures must not block the UI.
+    const marker = `/object/public/${RESULTS_BUCKET}/`;
+    const markerIndex = url.indexOf(marker);
+    if (markerIndex < 0) return;
+    const objectPath = decodeURIComponent(url.slice(markerIndex + marker.length));
+    try {
+      const supabase = createClient();
+      await supabase.storage.from(RESULTS_BUCKET).remove([objectPath]);
+    } catch (err) {
+      console.warn("Gagal menghapus foto bukti:", err);
+    }
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -125,7 +142,7 @@ export function PhotoUpload({
             />
             <button
               type="button"
-              onClick={() => onChange(value.filter((u) => u !== url))}
+              onClick={() => removePhoto(url)}
               disabled={disabled}
               className="absolute top-1 right-1 p-0.5 rounded-full bg-slate-900/70 text-white disabled:opacity-50"
               aria-label="Hapus foto"

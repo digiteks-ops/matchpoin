@@ -47,6 +47,12 @@ test("match results upload to the match-results bucket with a participant path",
   assert.match(photoUpload, /Mengunggah foto/);
 });
 
+test("removing a match photo also deletes the stored object", () => {
+  assert.match(photoUpload, /const removePhoto = async/);
+  assert.match(photoUpload, /\.remove\(\[objectPath\]\)/);
+  assert.match(photoUpload, /onClick=\{\(\) => removePhoto\(url\)\}/);
+});
+
 test("storage migration creates buckets and owner/participant policies", () => {
   assert.match(migration, /\('avatars', 'avatars', TRUE/);
   assert.match(migration, /\('match-results', 'match-results', TRUE/);
