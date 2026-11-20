@@ -24,6 +24,9 @@
     "db:migrate": "node --env-file=.env.local scripts/mysql/migrate.mjs",
     "db:bootstrap-super-admin": "node --env-file=.env.local scripts/supabase/bootstrap-super-admin.mjs",
     "db:backup:supabase": "node --env-file=.env.local scripts/mysql/backup-supabase.mjs",
+    "db:seed-admin": "node scripts/supabase/seed-admin.mjs",
+    "test:supabase-league": "node --test scripts/supabase/league-migration.test.mjs",
+    "test:supabase-chat": "node --test scripts/supabase/chat-rls.test.mjs",
     "db:backup:mysql": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs --backup-only",
     "db:restore-mysql": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs",
     "db:validate:supabase": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs --validate-only"
@@ -45,7 +48,8 @@
     "next": "14.2.24",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwind-merge": "^2.5.4"
+    "tailwind-merge": "^2.5.4",
+    "ws": "^8.23.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
@@ -57,5 +61,12 @@
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.4.5"
-  }
+  },
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }
