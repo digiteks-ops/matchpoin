@@ -41,6 +41,34 @@ Base tag: `pre-refactor`
 - Measurement tooling: `00020_query_explain_tool.sql` + `npm run db:explain` (plans) and `npm run db:time` (REST medians).
 - Measured numbers pending valid local Supabase credentials: the current `.env`/`.env.local` service key returns `Unregistered API key`. Run `npm run db:time` before applying `00021`, then again after, on a machine with the current project keys.
 
+## Phase 3 Part B — frontend performance + deployment readiness (2026-11-20)
+
+Findings and fixes:
+
+| Problem | Location | Impact | Fix |
+| --- | --- | --- | --- |
+| Session + roles queried repeatedly per request | `supabase-auth.ts`, `rbac-service.ts`, guards | 2–3 extra Supabase calls on protected pages | `React.cache()` around `getSupabaseSession` and `getUserRoles` |
+| No route-level loading UI | `src/app/**` | Blank area while server renders | 13 `loading.tsx` skeletons (shared `PageSkeleton`) |
+| Full reload for internal notifications | `notification-bell.tsx` | Lost client state, extra document request | `router.push()` |
+| Heavy client views shipped eagerly | `/matches/[id]`, `/admin/settings`, `/admin/tournaments/[id]` | Larger initial JS execution | `next/dynamic` code splitting (defers hydration; Next's reported First Load JS is unchanged) |
+| Cities re-fetched on every profile view | `public-player-service.ts` | Repeated DB reads for static data | `unstable_cache` (1 h, tag `cities`) |
+| Vercel functions in default region | `vercel.json` | Extra latency to Supabase (Singapore) | `regions: ["sin1"]` |
+
+Measurements (local prod server, 3-run median TTFB): before → after
+
+| Route | Before | After |
+| --- | --- | --- |
+| `/` | 0.086 s | 0.057 s |
+| `/login` | 0.071 s | 0.070 s |
+| `/matches` | 0.647 s | 0.668 s |
+| `/tournaments` | 0.043 s | 0.064 s |
+| `/players` | 0.047 s | 0.061 s |
+| `/leaderboard` | 0.047 s | 0.056 s |
+| `/dashboard` (redirect) | 0.008 s | 0.010 s |
+| `/admin` (redirect) | 0.007 s | 0.004 s |
+
+Local DB credentials are invalid (`Unregistered API key`), so `/matches` timing is dominated by the failing data call and the remaining deltas are within noise. No improvement is claimed for TTFB. Bundle: shared JS 87.2 kB unchanged; `/matches` 99.3 kB; `/dashboard` 95.8 kB; `/matches/[id]` 190 kB. Lighthouse was not available in this environment.
+
 ## Next step
 
 1. Merge `refactor/supabase-lean` → `main` (or set Vercel Production Branch) and redeploy.

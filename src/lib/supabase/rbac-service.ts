@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeRoles, type AppRole } from "@/lib/auth/roles";
@@ -25,7 +26,7 @@ function messageOf(error: { message?: string } | null, fallback: string): string
  * Reads active roles from Supabase. A missing RBAC table or RPC fails closed to
  * the lowest privilege, exactly like the MySQL implementation.
  */
-export async function getUserRoles(userId: string): Promise<AppRole[]> {
+export const getUserRoles = cache(async (userId: string): Promise<AppRole[]> => {
   if (!userId) return ["player"];
   try {
     const supabase = createClient();
@@ -41,7 +42,7 @@ export async function getUserRoles(userId: string): Promise<AppRole[]> {
   } catch {
     return ["player"];
   }
-}
+});
 
 export async function assignRole(
   userId: string,

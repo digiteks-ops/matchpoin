@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export interface PublicPlayer {
@@ -154,14 +155,19 @@ export async function getPublicPlayer(userId: string): Promise<PublicPlayer | nu
   return data ? mapPublicPlayer(data as PublicPlayerRow) : null;
 }
 
-export async function getActiveCities(): Promise<PlayerCity[]> {
-  const { data, error } = await client()
-    .from("cities")
-    .select("id, name, province, sort_order")
-    .eq("is_active", true)
-    .order("sort_order", { ascending: true })
-    .order("province", { ascending: true })
-    .order("name", { ascending: true });
-  if (error) throw new Error(`Gagal memuat kota: ${error.message}`);
-  return (data ?? []) as PlayerCity[];
-}
+// Cities change rarely: cache the list for an hour across requests.
+export const getActiveCities = unstable_cache(
+  async (): Promise<PlayerCity[]> => {
+    const { data, error } = await client()
+      .from("cities")
+      .select("id, name, province, sort_order")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .order("province", { ascending: true })
+      .order("name", { ascending: true });
+    if (error) throw new Error(`Gagal memuat kota: ${error.message}`);
+    return (data ?? []) as PlayerCity[];
+  },
+  ["active-cities"],
+  { revalidate: 3600, tags: ["cities"] }
+);

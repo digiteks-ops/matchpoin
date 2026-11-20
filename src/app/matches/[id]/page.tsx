@@ -1,8 +1,17 @@
-import { notFound } from "next/navigation";
+﻿import { notFound } from "next/navigation";
+import nextDynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/server";
 import { getMatchDetail } from "@/lib/services/match-service";
 import { getMatchResult } from "@/lib/services/rating-service";
-import { MatchDetailClient, type ViewerInfo } from "@/components/matches/match-detail-client";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
+import type { ViewerInfo } from "@/components/matches/match-detail-client";
+
+// Heavy interactive detail view is split into its own chunk.
+const MatchDetailClient = nextDynamic(
+  () =>
+    import("@/components/matches/match-detail-client").then((mod) => mod.MatchDetailClient),
+  { loading: () => <PageSkeleton variant="detail" /> }
+);
 
 export const dynamic = "force-dynamic";
 

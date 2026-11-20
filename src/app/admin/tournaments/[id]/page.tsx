@@ -1,7 +1,12 @@
-import { notFound } from "next/navigation";
+﻿import { notFound } from "next/navigation";
+import nextDynamic from "next/dynamic";
 import { requirePageRole } from "@/lib/auth/guards";
 import { getManagedLeague } from "@/lib/supabase/tournament-admin-service";
-import AdminTournamentDetailClient from "./AdminTournamentDetailClient";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
+
+const AdminTournamentDetailClient = nextDynamic(() => import("./AdminTournamentDetailClient"), {
+  loading: () => <PageSkeleton variant="list" />,
+});
 
 export const dynamic = "force-dynamic";
 
@@ -16,3 +21,4 @@ export default async function AdminTournamentDetailPage({
 
   return <AdminTournamentDetailClient initialLeague={league} />;
 }
+
