@@ -173,6 +173,21 @@ approach.
 | `NEXT_PUBLIC_APP_URL` | Base URL for links |
 | `NEXT_PUBLIC_DEFAULT_TIMEZONE` | `Asia/Makassar` |
 
+### Vercel environment variables
+
+Set these in Vercel → Project → Settings → Environment Variables (Production and Preview):
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | yes | Supabase project URL (browser + server) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase publishable/anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | yes | Server-only key for notifications, admin RPCs and seed scripts |
+| `NEXT_PUBLIC_APP_URL` | yes | `https://matchpoin.vercel.app` (used in links and OAuth redirects) |
+| `NEXT_PUBLIC_DEFAULT_TIMEZONE` | recommended | `Asia/Makassar` |
+| `NEXT_PUBLIC_APP_ENV` | recommended | `production` |
+
+Also set Supabase → Authentication → URL Configuration: Site URL `https://matchpoin.vercel.app`, redirect URLs `https://matchpoin.vercel.app/auth/callback` and `http://localhost:3000/auth/callback`. The canonical login route is `/login`; `/auth/login` redirects to it.
+
 ---
 
 ## Scripts
