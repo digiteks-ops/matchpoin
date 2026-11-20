@@ -14,6 +14,14 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      { source: "/auth/login", destination: "/login", permanent: false },
+      { source: "/auth/register", destination: "/register", permanent: false },
+      { source: "/auth/forgot-password", destination: "/forgot-password", permanent: false },
+      { source: "/auth/reset-password", destination: "/reset-password", permanent: false },
+    ];
+  },
   async headers() {
     const securityHeaders = [
       { key: "X-Frame-Options", value: "DENY" },
