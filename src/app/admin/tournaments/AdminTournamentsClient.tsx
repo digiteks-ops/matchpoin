@@ -60,6 +60,7 @@ interface LeagueOption {
 
 interface AdminTournamentsClientProps {
   leagues: ManagedLeagueSummary[];
+  initialError?: string | null;
 }
 
 const STATUS_OPTIONS = [
@@ -91,14 +92,14 @@ function statusBadge(status: string) {
   );
 }
 
-export default function AdminTournamentsClient({ leagues }: AdminTournamentsClientProps) {
+export default function AdminTournamentsClient({ leagues, initialError = null }: AdminTournamentsClientProps) {
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [stats, setStats] = useState<RegistrationStats>({ pending: 0, accepted: 0, declined: 0 });
   const [tournaments, setTournaments] = useState<LeagueOption[]>([]);
   const [statusFilter, setStatusFilter] = useState("pending");
   const [tournamentFilter, setTournamentFilter] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [actionStates, setActionStates] = useState<Record<string, "approving" | "rejecting" | null>>({});
   const [rejectModal, setRejectModal] = useState<{ mode: "single" | "bulk"; id?: string } | null>(null);

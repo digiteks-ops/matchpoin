@@ -57,9 +57,10 @@ interface AdminDashboardClientProps {
     confirmedRegistrations: number;
   };
   initialActivity: ActivityItem[];
+  errorMessage?: string | null;
 }
 
-export default function AdminDashboardClient({ initialStats, initialActivity }: AdminDashboardClientProps) {
+export default function AdminDashboardClient({ initialStats, initialActivity, errorMessage = null }: AdminDashboardClientProps) {
   const stats = initialStats;
   const activity = initialActivity;
 
@@ -84,6 +85,19 @@ export default function AdminDashboardClient({ initialStats, initialActivity }: 
             </button>
           </Link>
         </div>
+
+        {errorMessage && (
+          <div role="alert" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold">Data admin belum lengkap.</p>
+              <p className="mt-1 text-xs">{errorMessage}</p>
+            </div>
+            <Link href="/admin" className="text-xs font-bold underline">
+              Muat ulang
+            </Link>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <StatCard

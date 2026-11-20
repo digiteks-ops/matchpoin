@@ -1,5 +1,6 @@
 import { requirePageRole } from "@/lib/auth/guards";
 import { getAdminSettingsData } from "@/lib/supabase/admin-service";
+import { logError } from "@/lib/errors";
 import AdminSettingsClient from "./AdminSettingsClient";
 
 export const dynamic = "force-dynamic";
@@ -13,16 +14,36 @@ export default async function AdminSettingsPage({
 
   const { tab } = await searchParams;
   const activeTab = tab || "overview";
-  const { users, players, matches, tournaments, systemHealth } = await getAdminSettingsData(activeTab);
+
+  let data = {
+    users: [],
+    players: [],
+    matches: [],
+    tournaments: [],
+    systemHealth: {},
+  } as Awaited<ReturnType<typeof getAdminSettingsData>>;
+
+  try {
+    data = await getAdminSettingsData(activeTab);
+  } catch (error) {
+    logError("admin.settings.page", error);
+    data = {
+      users: [],
+      players: [],
+      matches: [],
+      tournaments: [],
+      systemHealth: { database: "error" },
+    };
+  }
 
   return (
     <AdminSettingsClient
       activeTab={activeTab}
-      initialUsers={users}
-      initialPlayers={players}
-      initialMatches={matches}
-      initialTournaments={tournaments}
-      initialSystemHealth={systemHealth}
+      initialUsers={data.users}
+      initialPlayers={data.players}
+      initialMatches={data.matches}
+      initialTournaments={data.tournaments}
+      initialSystemHealth={data.systemHealth}
     />
   );
 }

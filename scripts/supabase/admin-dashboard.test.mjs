@@ -11,6 +11,14 @@ const tournamentsPage = await readFile(
   new URL("../../src/app/admin/tournaments/page.tsx", import.meta.url),
   "utf8"
 );
+const dashboardPage = await readFile(
+  new URL("../../src/app/admin/page.tsx", import.meta.url),
+  "utf8"
+);
+const dashboardClient = await readFile(
+  new URL("../../src/app/admin/AdminDashboardClient.tsx", import.meta.url),
+  "utf8"
+);
 const approveRoute = await readFile(
   new URL("../../src/app/api/admin/tournaments/registrations/[id]/approve/route.ts", import.meta.url),
   "utf8"
@@ -21,6 +29,10 @@ const rejectRoute = await readFile(
 );
 const competitionService = await readFile(
   new URL("../../src/lib/supabase/competition-service.ts", import.meta.url),
+  "utf8"
+);
+const adminService = await readFile(
+  new URL("../../src/lib/supabase/admin-service.ts", import.meta.url),
   "utf8"
 );
 
@@ -86,4 +98,16 @@ test("admin accept/decline endpoints require the admin role server-side", () => 
 test("tournament list reads quota counts from the aggregate RPC, not raw rows", () => {
   assert.match(competitionService, /rpc\("league_registration_counts"\)/);
   assert.match(competitionService, /registration_count: Number\(counts\.get\(row\.id\)\?\.accepted/);
+});
+
+test("admin pages degrade gracefully instead of hitting the error boundary", () => {
+  assert.match(dashboardPage, /try \{[\s\S]*?getAdminDashboard\(\)[\s\S]*?\} catch \(error\)/);
+  assert.match(dashboardPage, /SUPABASE_SERVICE_ROLE_KEY sudah diset di Vercel/);
+  assert.match(dashboardClient, /errorMessage/);
+  assert.match(tournamentsPage, /try \{[\s\S]*?listManagedLeagues\(\)[\s\S]*?\} catch \(error\)/);
+});
+
+test("dashboard service treats optional activity/stats failures as non-fatal", () => {
+  assert.match(adminService, /admin_registration_stats failed/);
+  assert.match(adminService, /admin activity log failed/);
 });

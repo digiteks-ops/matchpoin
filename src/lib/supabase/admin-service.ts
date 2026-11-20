@@ -55,7 +55,9 @@ export async function getAdminDashboard(): Promise<{
       count("tournaments"),
       supabase.rpc("admin_registration_stats").then(({ data, error }) => {
         if (error) {
-          throw new Error(`Gagal memuat statistik pendaftaran: ${error.message}`);
+          // A missing/older stats RPC must not blank the whole dashboard.
+          console.error("admin_registration_stats failed:", error.message);
+          return { pending_entries: 0, accepted_entries: 0 };
         }
         return (data ?? {}) as {
           pending_entries?: number;
@@ -72,10 +74,14 @@ export async function getAdminDashboard(): Promise<{
     .select("id, action, previous_status, new_status, reason, created_at, actor_id, tournament_id")
     .order("created_at", { ascending: false })
     .limit(20);
-  if (error) throw new Error(`Gagal memuat aktivitas: ${error.message}`);
+  if (error) {
+    // The activity feed is optional; log and show an empty list instead.
+    console.error("admin activity log failed:", error.message);
+  }
+  const logRows = error ? [] : logs ?? [];
 
-  const actorIds = Array.from(new Set((logs ?? []).map((row) => row.actor_id).filter(Boolean)));
-  const tournamentIds = Array.from(new Set((logs ?? []).map((row) => row.tournament_id).filter(Boolean)));
+  const actorIds = Array.from(new Set(logRows.map((row) => row.actor_id).filter(Boolean)));
+  const tournamentIds = Array.from(new Set(logRows.map((row) => row.tournament_id).filter(Boolean)));
 
   const [{ data: actors }, { data: tournaments }] = await Promise.all([
     actorIds.length
@@ -88,7 +94,7 @@ export async function getAdminDashboard(): Promise<{
   const actorById = new Map((actors ?? []).map((actor) => [actor.id, actor]));
   const tournamentById = new Map((tournaments ?? []).map((tournament) => [tournament.id, tournament]));
 
-  const activity = (logs ?? []).map((row) => {
+  const activity = logRows.map((row) => {
     const actor = actorById.get(row.actor_id);
     return {
       id: row.id,
