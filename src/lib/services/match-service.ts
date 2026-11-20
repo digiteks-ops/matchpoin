@@ -184,49 +184,48 @@ function assertCategoryGender(
 async function getProfilesForUsers(userIds: string[]) {
   const supabase = createClient();
   const unique = Array.from(new Set(userIds.filter(Boolean)));
-  if (unique.length === 0) return new Map<string, { full_name: string | null; avatar_url: string | null; gender: string | null; rating: number }>();
+  const profileMap = new Map<
+    string,
+    { full_name: string | null; avatar_url: string | null; gender: string | null; rating: number }
+  >();
+  if (unique.length === 0) return profileMap;
 
-  // 1. Read user account names from public.users (authoritative source for full_name)
-  const { data: usersData } = await supabase
-    .from("users")
-    .select("id, full_name, avatar_url")
-    .in("id", unique);
-
-  const userMap = new Map<string, { full_name: string | null; avatar_url: string | null }>();
-  (usersData ?? []).forEach((u) => {
-    userMap.set(u.id, { full_name: u.full_name, avatar_url: u.avatar_url ?? null });
-  });
-
-  // 2. Read player profile details from player_profiles (for rating, etc.)
-  const { data: profilesData } = await supabase
-    .from("player_profiles")
-    .select("user_id, display_name, preferred_hand, backhand")
+  // Single batched lookup for every card: `public_players` is a view that joins
+  // users + player_profiles + player_ratings, so one query returns name, avatar
+  // and rating for all organizers/participants. No per-card query (no N+1).
+  const { data: publicRows } = await supabase
+    .from("public_players")
+    .select("user_id, full_name, display_name, avatar_url, current_rating")
     .in("user_id", unique);
 
-  const { data: ratings } = await supabase
-    .from("player_ratings")
-    .select("user_id, current_rating")
-    .in("user_id", unique);
-
-  const ratingMap = new Map<string, number>();
-  (ratings ?? []).forEach((r) => ratingMap.set(r.user_id, Number(r.current_rating ?? 1)));
-
-  const profileMap = new Map<string, { full_name: string | null; avatar_url: string | null; gender: string | null; rating: number }>();
-  unique.forEach((id) => {
-    const userInfo = userMap.get(id);
-    const profile = profilesData?.find((p) => p.user_id === id);
-
-    // Prefer users.full_name (account name) over player_profiles.display_name (tennis profile name)
-    // This ensures the organizer/host name always matches the account that created the match.
-    const fullName = userInfo?.full_name ?? profile?.display_name ?? null;
-
-    profileMap.set(id, {
-      full_name: fullName || "Pemain",
-      avatar_url: userInfo?.avatar_url ?? null,
+  (publicRows ?? []).forEach((row) => {
+    profileMap.set(row.user_id, {
+      full_name: row.full_name ?? row.display_name ?? "Pemain",
+      avatar_url: row.avatar_url ?? null,
       gender: null,
-      rating: ratingMap.get(id) ?? 1,
+      rating: Number(row.current_rating ?? 1),
     });
   });
+
+  // Players who keep their profile private are not in the public view. Fill
+  // those few ids with one extra batched query so names still resolve.
+  const missing = unique.filter((id) => !profileMap.has(id));
+  if (missing.length > 0) {
+    const [{ data: usersData }, { data: ratings }] = await Promise.all([
+      supabase.from("users").select("id, full_name, avatar_url").in("id", missing),
+      supabase.from("player_ratings").select("user_id, current_rating").in("user_id", missing),
+    ]);
+    const ratingMap = new Map<string, number>();
+    (ratings ?? []).forEach((r) => ratingMap.set(r.user_id, Number(r.current_rating ?? 1)));
+    (usersData ?? []).forEach((u) => {
+      profileMap.set(u.id, {
+        full_name: u.full_name ?? "Pemain",
+        avatar_url: u.avatar_url ?? null,
+        gender: null,
+        rating: ratingMap.get(u.id) ?? 1,
+      });
+    });
+  }
 
   return profileMap;
 }
@@ -975,8 +974,10 @@ function buildMatchDetail(
       ? organizerParticipant.fullName
       : organizerProfile?.full_name && organizerProfile.full_name !== "Pemain"
       ? organizerProfile.full_name
-      : null) || "Host";
+      : null) || "Pemain";
   const organizerName = resolvedOrganizerName;
+  const organizerAvatarUrl =
+    organizerParticipant?.avatarUrl ?? organizerProfile?.avatar_url ?? null;
 
   // Host/organizer must always be Side 1 (Team A). Normalize display order for clarity.
   const sideSorted = [...confirmed].sort((a, b) => {
@@ -1013,6 +1014,7 @@ function buildMatchDetail(
     cityName: typeof meta.court_city === "string" ? meta.court_city : null,
     organizerId: match.organizer_id,
     organizerName,
+    organizerAvatarUrl,
     matchDate: match.match_date,
     startTime: match.start_time,
     durationMinutes: match.duration_minutes ?? 90,
