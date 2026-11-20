@@ -18,7 +18,7 @@ Status legend: **PASS** = verified by build/unit test; **MANUAL** = requires liv
 | 10 | Player directory + detail | `/players`, `/players/[id]`, `/api/players` | PASS | Reads `public_players` view |
 | 11 | Leaderboard | `/leaderboard`, `/api/leaderboard` | PASS | Rating visibility respected |
 | 12 | Match list/detail | `/matches`, `/matches/[id]`, `/api/matches` | PASS | Supabase `getOpenMatches`/`getMatchDetail` |
-| 13 | Create match (roster) | `/matches/new`, `/api/matches/create` | PASS | Shared roster invariants; roster tests 12/12 |
+| 13 | Create match (roster) | `/matches/new`, `/api/matches/create` | PASS | Singles 1v1 and doubles 2v2; shared roster builder; migration 00014 drops the legacy `matches.court_id` NOT NULL constraint |
 | 14 | Join / accept / reject / leave / cancel | `/api/matches/[id]/*` | PASS | Existing Supabase workflows |
 | 15 | Invitations | `/api/invites*` | PASS | Send, list, respond, revoke |
 | 16 | Match result submit/confirm/dispute | `/api/matches/[id]/*` | PASS | `rating-service` (formula untouched) |
@@ -26,15 +26,19 @@ Status legend: **PASS** = verified by build/unit test; **MANUAL** = requires liv
 | 18 | Rating engine | services | PASS | `test:rating` |
 | 19 | Match history + stats | `/api/profile/history` | PASS | `getPlayerStats` |
 | 20 | Dashboard | `/dashboard` | PASS | Profile, rating, upcoming, invites |
-| 21 | Tournament/league registration | `/tournaments`, `/league`, `/api/tournaments/register` | PASS | RPC `register_for_competition` (pending + approval) |
+| 21 | Tournament/league registration | `/tournaments`, `/league`, `/api/tournaments/register` | PASS | IKA17 5 categories, quota 24 accepted, pending/accepted/rejected, gender and partner rules |
 | 22 | League overview/standings | `/league`, `/api/leagues/[category]` | PASS | Supabase reads |
 | 23 | Admin dashboard | `/admin` | PASS | Supabase counts + audit log |
 | 24 | Admin settings (users/players/matches/tournaments) | `/admin/settings` | PASS | Supabase reads |
-| 25 | Super Admin registration approvals | `/admin/tournaments`, `/api/admin/*` | PASS | Atomic RPC + audit |
+| 25 | Admin registration approvals | `/admin/tournaments`, `/api/admin/*` | PASS | Admin/super_admin guard, atomic RPC, quota enforcement + audit |
+| 25a | IKA17 league admin | `/admin/tournaments/[id]` | PASS | Category tabs, accept/reject, quota, edit dates, create/cancel matches |
+| 25b | Admin seed + IKA17 seed | `npm run db:seed-admin` | PASS | `ADMIN_EMAIL`/`ADMIN_PASSWORD` from env; Supabase Auth hashes the password |
 | 26 | RBAC (player/admin/super_admin) | `src/lib/supabase/rbac-service.ts` | PASS | RPCs mirror MySQL rules; last Super Admin protected |
 | 27 | Notifications (list/read + realtime broadcast) | `/notifications`, `/api/notifications*` | PASS | Supabase table + Realtime broadcast |
-| 28 | RLS isolation | all tables | MANUAL | Policies in 00001–00012 + 00013; verify on deployed DB |
+| 28 | RLS isolation | all tables | MANUAL | Policies in 00001–00013, rewritten chat policies in 00015, registration RLS in 00017; verify on deployed DB |
 | 29 | MySQL data import | `scripts/supabase/migrate-mysql-data.mjs` | MANUAL | Backup-first, idempotent, count + FK validation |
+| 30 | Google/Facebook login | `/login`, `/register`, `/auth/callback` | PASS | Supabase OAuth, profiles trigger (00018), Indonesian error states; `test:supabase-oauth` |
+| 31 | Avatar + match-result uploads | `/profile/edit`, match result form | PASS | Client compression ≤300 KB/WebP, `avatars`/`match-results` buckets + policies (00019), old-file cleanup; `test:supabase-storage` |
 
 ## Manual verification checklist (Phase 4)
 
