@@ -12,13 +12,18 @@ async function count(
   table: string,
   filter?: (query: { eq: (column: string, value: string) => unknown }) => unknown
 ) {
-  let query: unknown = admin().from(table).select("id", { count: "exact", head: true });
+  // `select("*")` works for tables and views alike; `public_players` is a view
+  // that exposes `user_id`, not `id`, so selecting "id" made the count fail.
+  let query: unknown = admin().from(table).select("*", { count: "exact", head: true });
   if (filter) query = filter(query as { eq: (column: string, value: string) => unknown });
   const { count: total, error } = (await query) as {
     count: number | null;
-    error: { message: string } | null;
+    error: { message: string; code?: string; hint?: string } | null;
   };
-  if (error) throw new Error(`Gagal menghitung ${table}: ${error.message}`);
+  if (error) {
+    const detail = [error.message, error.code, error.hint].filter(Boolean).join(" ");
+    throw new Error(`Gagal menghitung ${table}: ${detail}`);
+  }
   return total ?? 0;
 }
 
@@ -274,7 +279,7 @@ export async function getAdminSettingsData(tab: string): Promise<{
   if (tab === "matches" || tab === "overview") {
     const { data, error } = await supabase
       .from("matches")
-      .select("id, title, category, match_date, start_time, status, court_name, city_name, created_at")
+      .select("id, title, match_date, start_time, status, created_at, metadata, tennis_courts(name, address)")
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) throw new Error(`Gagal memuat pertandingan: ${error.message}`);
@@ -288,18 +293,25 @@ export async function getAdminSettingsData(tab: string): Promise<{
       countByMatch.set(participant.match_id, (countByMatch.get(participant.match_id) ?? 0) + 1);
     }
 
-    matches = (data ?? []).map((row) => ({
-      id: row.id,
-      title: row.title,
-      category: row.category ?? "mens_singles",
-      match_date: row.match_date,
-      start_time: row.start_time,
-      status: row.status,
-      court_name: row.court_name,
-      city_name: row.city_name,
-      created_at: row.created_at,
-      participant_count: countByMatch.get(row.id) ?? 0,
-    }));
+    matches = (data ?? []).map((row) => {
+      const meta = (row.metadata ?? {}) as Record<string, unknown>;
+      const court = Array.isArray(row.tennis_courts) ? row.tennis_courts[0] : row.tennis_courts;
+      return {
+        id: row.id,
+        title: row.title,
+        category:
+          (typeof meta.category === "string" && meta.category) || "mens_singles",
+        match_date: row.match_date,
+        start_time: row.start_time,
+        status: row.status,
+        court_name:
+          court?.name || (typeof meta.court_name === "string" ? meta.court_name : null),
+        city_name:
+          typeof meta.court_city === "string" ? meta.court_city : null,
+        created_at: row.created_at,
+        participant_count: countByMatch.get(row.id) ?? 0,
+      };
+    });
   }
 
   if (tab === "tournaments" || tab === "overview") {
