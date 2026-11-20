@@ -32,6 +32,15 @@ Base tag: `pre-refactor`
 - **Google/Facebook OAuth** — `00018_oauth_profiles_trigger.sql` fills `profiles` from provider metadata; callback handles denied consent, missing code, exchange failure, and Facebook without email; branded "Mengalihkan ke …" overlay; README setup guide. Test: `test:supabase-oauth`.
 - **Image uploads** — client compression (≤300 KB, WebP, 1280 px / 512 px avatars), JPG/PNG/WEBP validation, 10 MB original cap, buckets `avatars`/`match-results` with owner/participant policies, old avatar deletion, match-photo deletion on remove. Test: `test:supabase-storage`.
 
+## Phase 3 Part A — database/query performance (2026-11-20)
+
+- Match lists embed `match_participants` in the match query: `/matches` and `/matches/[id]` drop from 3 to 2 DB round trips; dashboard from 4 to 3.
+- List payloads use explicit columns (`public_players`, admin player list) and bounded limits (admin tournaments 200, league registrants 1000).
+- `00021_perf_indexes_and_rls.sql`: 7 hot-path indexes plus `(select auth.uid())` policies and definer helpers (`is_match_member`, `is_match_organizer`). Policy names and access rules unchanged.
+- Realtime: fallback polling only while disconnected (60 s) and `removeChannel` on unmount.
+- Measurement tooling: `00020_query_explain_tool.sql` + `npm run db:explain` (plans) and `npm run db:time` (REST medians).
+- Measured numbers pending valid local Supabase credentials: the current `.env`/`.env.local` service key returns `Unregistered API key`. Run `npm run db:time` before applying `00021`, then again after, on a machine with the current project keys.
+
 ## Next step
 
 1. Merge `refactor/supabase-lean` → `main` (or set Vercel Production Branch) and redeploy.
