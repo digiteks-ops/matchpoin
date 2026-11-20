@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Users, Trophy, Calendar, Clock, AlertTriangle, CheckCircle2, XCircle, Activity } from "lucide-react";
 import { formatIndonesianDate, formatIndonesianTime } from "@/lib/utils";
 
@@ -58,9 +59,10 @@ interface AdminDashboardClientProps {
   };
   initialActivity: ActivityItem[];
   errorMessage?: string | null;
+  errorDetail?: string | null;
 }
 
-export default function AdminDashboardClient({ initialStats, initialActivity, errorMessage = null }: AdminDashboardClientProps) {
+export default function AdminDashboardClient({ initialStats, initialActivity, errorMessage = null, errorDetail = null }: AdminDashboardClientProps) {
   const stats = initialStats;
   const activity = initialActivity;
 
@@ -80,9 +82,9 @@ export default function AdminDashboardClient({ initialStats, initialActivity, er
             <p className="text-slate-600 mt-1 text-sm">Ringkasan operasional platform MATCHPOIN.</p>
           </div>
           <Link href="/admin/tournaments">
-            <button className="btn-tennis text-matchpoin-navy font-bold">
+            <Button variant="tennis" className="font-bold text-matchpoin-navy">
               Kelola Persetujuan Turnamen
-            </button>
+            </Button>
           </Link>
         </div>
 
@@ -92,6 +94,16 @@ export default function AdminDashboardClient({ initialStats, initialActivity, er
             <div className="flex-1">
               <p className="font-semibold">Data admin belum lengkap.</p>
               <p className="mt-1 text-xs">{errorMessage}</p>
+              {errorDetail && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-[11px] font-semibold underline">
+                    Detail teknis
+                  </summary>
+                  <p className="mt-1 break-words rounded bg-white/60 p-2 font-mono text-[10px] text-amber-900">
+                    {errorDetail}
+                  </p>
+                </details>
+              )}
             </div>
             <Link href="/admin" className="text-xs font-bold underline">
               Muat ulang

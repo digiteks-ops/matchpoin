@@ -20,6 +20,7 @@ export default async function AdminDashboardPage() {
   let stats = EMPTY_STATS;
   let activity: Awaited<ReturnType<typeof getAdminDashboard>>["activity"] = [];
   let loadError: string | null = null;
+  let loadDetail: string | null = null;
 
   try {
     const data = await getAdminDashboard();
@@ -28,6 +29,7 @@ export default async function AdminDashboardPage() {
   } catch (error) {
     logError("admin.dashboard", error);
     const message = error instanceof Error ? error.message : "";
+    loadDetail = message || null;
     if (/service role is not configured/i.test(message)) {
       loadError =
         "Konfigurasi server admin belum lengkap. Pastikan SUPABASE_SERVICE_ROLE_KEY sudah diset di Vercel lalu redeploy.";
@@ -41,6 +43,7 @@ export default async function AdminDashboardPage() {
       initialStats={stats}
       initialActivity={activity}
       errorMessage={loadError}
+      errorDetail={loadDetail}
     />
   );
 }

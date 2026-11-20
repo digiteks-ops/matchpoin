@@ -9,6 +9,7 @@ import { getMyMatches } from "@/lib/services/match-service";
 import { getPendingInvites } from "@/lib/services/invite-service";
 import { ensurePlayerRecords } from "@/lib/services/player-sync";
 import { getPlayerStats } from "@/lib/services/match-history-service";
+import { getUserRoles } from "@/lib/supabase/rbac-service";
 import { logError } from "@/lib/errors";
 import { formatIndonesianDate, formatIndonesianTime } from "@/lib/utils";
 import type { DbUser, PlayerProfile, PlayerRating } from "@/types/database.types";
@@ -50,6 +51,16 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
 
   if (!authUser) redirect("/login?redirectTo=/dashboard");
+
+  // Admin accounts use the dedicated admin area; players keep this dashboard.
+  let isAdminAccount = false;
+  try {
+    const roles = await getUserRoles(authUser.id);
+    isAdminAccount = roles.includes("admin") || roles.includes("super_admin");
+  } catch (error) {
+    logError("dashboard.roles", error, { userId: authUser.id });
+  }
+  if (isAdminAccount) redirect("/admin");
 
   await ensurePlayerRecords(
     authUser.id,
