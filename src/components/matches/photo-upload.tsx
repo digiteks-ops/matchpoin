@@ -3,9 +3,12 @@
 import React, { useRef, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
-import { compressImageToLimit, formatFileSize } from "@/lib/utils/image";
+import { assertValidImageFile, compressImage, formatFileSize } from "@/lib/utils/image";
 import { Button } from "@/components/ui/button";
 import { Camera, Loader2, X, AlertCircle } from "lucide-react";
+
+const RESULTS_BUCKET =
+  process.env.NEXT_PUBLIC_SUPABASE_STORAGE_RESULTS_BUCKET || "match-results";
 
 interface PhotoUploadProps {
   matchId: string;
@@ -26,6 +29,7 @@ export function PhotoUpload({
 }: PhotoUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -49,24 +53,37 @@ export function PhotoUpload({
       const uploaded: string[] = [];
 
       for (let i = 0; i < selected.length; i += 1) {
-        const compressed = await compressImageToLimit(selected[i], 1024 * 1024);
-        const path = `${userId}/matches/${matchId}/${Date.now()}-${i}.jpg`;
+        const file = selected[i];
+        assertValidImageFile(file);
 
+        setProgress(`Mengompres foto ${i + 1} dari ${selected.length}...`);
+        const compressed = await compressImage(file, {
+          maxBytes: 300 * 1024,
+          maxDimension: 1280,
+          quality: 0.8,
+          mimeType: "image/webp",
+        });
+
+        const extension = compressed.type === "image/webp" ? "webp" : "jpg";
+        // Folder layout lets storage policies verify match participation.
+        const path = `matches/${matchId}/${userId}/${Date.now()}-${i}.${extension}`;
+
+        setProgress(`Mengunggah foto ${i + 1} dari ${selected.length}...`);
         const { error: uploadError } = await supabase.storage
-          .from("avatars")
+          .from(RESULTS_BUCKET)
           .upload(path, compressed, {
             cacheControl: "3600",
             upsert: false,
-            contentType: "image/jpeg",
+            contentType: compressed.type,
           });
 
         if (uploadError) {
-          throw new Error(`Gagal mengunggah ${selected[i].name}: ${uploadError.message}`);
+          throw new Error(`Gagal mengunggah ${file.name}: ${uploadError.message}`);
         }
 
         const {
           data: { publicUrl },
-        } = supabase.storage.from("avatars").getPublicUrl(path);
+        } = supabase.storage.from(RESULTS_BUCKET).getPublicUrl(path);
         uploaded.push(publicUrl);
       }
 
@@ -75,6 +92,7 @@ export function PhotoUpload({
       setError(err instanceof Error ? err.message : "Gagal mengunggah foto.");
     } finally {
       setIsUploading(false);
+      setProgress(null);
       if (inputRef.current) inputRef.current.value = "";
     }
   };
@@ -85,7 +103,7 @@ export function PhotoUpload({
         <span className="text-xs font-bold text-slate-700">
           Foto Bukti Hasil (wajib diunggah, maks. {maxPhotos})
         </span>
-        <span className="text-[10px] text-slate-400">Dikompres otomatis ≤ 1 MB</span>
+        <span className="text-[10px] text-slate-400">Dikompres otomatis ≤ 300 KB</span>
       </div>
 
       {value.length === 0 && !isUploading && (
@@ -148,7 +166,7 @@ export function PhotoUpload({
 
       {isUploading && (
         <p className="text-[10px] text-slate-400">
-          Mengompres dan mengunggah foto... Maks {formatFileSize(1024 * 1024)} per foto.
+          {progress ?? "Mengompres dan mengunggah foto..."} Maks {formatFileSize(300 * 1024)} per foto.
         </p>
       )}
     </div>

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { assertValidImageFile, compressImage } from "@/lib/utils/image";
 import type { DbUser, PlayerProfile, PlayerRating } from "@/types/database.types";
 
 type AnySupabase = SupabaseClient<any, any, any>;
@@ -135,18 +136,47 @@ export async function ensurePlayerRecords(userId: string, email: string, fullNam
 }
 
 /**
- * Upload profile photo to Supabase Storage 'avatars' bucket.
+ * Uploads a profile photo: validates (JPG/PNG/WEBP, max 10 MB), compresses in
+ * the browser (512 px, ≤300 KB, WebP), stores only the resulting path/URL and
+ * removes the previous file when it is replaced.
  */
-export async function uploadAvatar(userId: string, file: File): Promise<string> {
-  const supabase = createClient();
-  const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const fileName = `${userId}-${Date.now()}.${fileExt}`;
-  const filePath = `avatars/${fileName}`;
+export async function uploadAvatar(
+  userId: string,
+  file: File,
+  onStage?: (stage: "compress" | "upload") => void
+): Promise<string> {
+  assertValidImageFile(file);
+  onStage?.("compress");
 
-  const { error: uploadError } = await supabase.storage.from("avatars").upload(filePath, file, {
-    upsert: true,
-    cacheControl: "3600",
+  const compressed = await compressImage(file, {
+    maxBytes: 300 * 1024,
+    maxDimension: 512,
+    quality: 0.8,
+    mimeType: "image/webp",
   });
+
+  const supabase = createClient();
+  const extension = compressed.type === "image/webp" ? "webp" : "jpg";
+  // Folder per user keeps the storage policy simple: {userId}/...
+  const filePath = `${userId}/avatar-${Date.now()}.${extension}`;
+
+  const { data: current } = await supabase
+    .from("users")
+    .select("avatar_url")
+    .eq("id", userId)
+    .maybeSingle();
+  const previousKey = avatarKeyFromUrl(
+    (current as { avatar_url?: string | null } | null)?.avatar_url ?? null
+  );
+
+  onStage?.("upload");
+  const { error: uploadError } = await supabase.storage
+    .from("avatars")
+    .upload(filePath, compressed, {
+      upsert: false,
+      cacheControl: "3600",
+      contentType: compressed.type,
+    });
 
   if (uploadError) {
     throw new Error(`Gagal mengunggah foto: ${uploadError.message}`);
@@ -165,5 +195,31 @@ export async function uploadAvatar(userId: string, file: File): Promise<string> 
     throw new Error(`Foto tersimpan tetapi profil gagal diperbarui: ${updateError.message}`);
   }
 
+  if (previousKey && previousKey !== filePath) {
+    // Best effort: an orphan file must not fail the avatar update.
+    const { error: removeError } = await supabase.storage
+      .from("avatars")
+      .remove([previousKey]);
+    if (removeError) {
+      console.warn("Gagal menghapus foto profil lama:", removeError.message);
+    }
+  }
+
   return publicUrl;
+}
+
+/**
+ * Converts a stored avatar value (public URL or storage key) into a bucket path.
+ * Returns null when the value is not an avatars object.
+ */
+export function avatarKeyFromUrl(value: string | null): string | null {
+  if (!value) return null;
+  if (value.includes("..")) return null;
+  const marker = "/object/public/avatars/";
+  const markerIndex = value.indexOf(marker);
+  if (markerIndex >= 0) {
+    return decodeURIComponent(value.slice(markerIndex + marker.length));
+  }
+  if (value.startsWith("avatars/")) return value;
+  return null;
 }

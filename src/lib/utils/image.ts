@@ -1,5 +1,30 @@
-const DEFAULT_MAX_BYTES = 1024 * 1024; // 1 MB
+const DEFAULT_MAX_BYTES = 1024 * 1024; // 1 MB (legacy helper)
 const DEFAULT_MAX_DIMENSION = 1600;
+
+export const MAX_ORIGINAL_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
+export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+
+export type CompressMimeType = "image/webp" | "image/jpeg";
+
+export interface CompressImageOptions {
+  /** Target size after compression. Default 300 KB. */
+  maxBytes?: number;
+  /** Longest side in pixels. Default 1280 (avatars should pass 512). */
+  maxDimension?: number;
+  /** Initial quality. Default 0.8. */
+  quality?: number;
+  /** Output format. Default WebP (JPEG fallback when the browser cannot encode it). */
+  mimeType?: CompressMimeType;
+}
+
+export function assertValidImageFile(file: File): void {
+  if (!(ALLOWED_IMAGE_TYPES as readonly string[]).includes(file.type)) {
+    throw new Error("Format foto harus JPG, PNG, atau WEBP.");
+  }
+  if (file.size > MAX_ORIGINAL_IMAGE_BYTES) {
+    throw new Error("Ukuran foto asli maksimal 10 MB.");
+  }
+}
 
 function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -17,36 +42,40 @@ function loadImage(file: File): Promise<HTMLImageElement> {
   });
 }
 
-function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  type: CompressMimeType,
+  quality: number
+): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
         if (blob) resolve(blob);
         else reject(new Error("Gagal memproses gambar."));
       },
-      "image/jpeg",
+      type,
       quality
     );
   });
 }
 
 /**
- * Compresses an image file to a JPEG that is at most `maxBytes` (default 1 MB).
- * The image is downscaled iteratively until it fits.
+ * Compresses an image in the browser before upload: downscale, convert to
+ * WebP/JPEG and iterate until it fits `maxBytes` (default 300 KB).
  */
-export async function compressImageToLimit(
+export async function compressImage(
   file: File,
-  maxBytes: number = DEFAULT_MAX_BYTES,
-  maxDimension: number = DEFAULT_MAX_DIMENSION
+  options: CompressImageOptions = {}
 ): Promise<File> {
-  if (!file.type.startsWith("image/")) {
-    throw new Error("Berkas harus berupa gambar (JPG, PNG, atau WEBP).");
-  }
+  assertValidImageFile(file);
+
+  const maxBytes = options.maxBytes ?? 300 * 1024;
+  const maxDimension = options.maxDimension ?? 1280;
+  const targetType: CompressMimeType = options.mimeType ?? "image/webp";
 
   const image = await loadImage(file);
   let width = image.naturalWidth || image.width;
   let height = image.naturalHeight || image.height;
-
   if (!width || !height) {
     throw new Error("Dimensi gambar tidak valid.");
   }
@@ -55,7 +84,7 @@ export async function compressImageToLimit(
   width = Math.max(1, Math.round(width * initialScale));
   height = Math.max(1, Math.round(height * initialScale));
 
-  let quality = 0.82;
+  let quality = options.quality ?? 0.8;
   let blob: Blob | null = null;
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -69,7 +98,7 @@ export async function compressImageToLimit(
     ctx.fillRect(0, 0, width, height);
     ctx.drawImage(image, 0, 0, width, height);
 
-    blob = await canvasToBlob(canvas, quality);
+    blob = await canvasToBlob(canvas, targetType, quality);
 
     if (blob.size <= maxBytes) break;
 
@@ -84,13 +113,32 @@ export async function compressImageToLimit(
 
   if (!blob) throw new Error("Gagal mengompres gambar.");
   if (blob.size > maxBytes) {
-    throw new Error("Gambar gagal dikompres di bawah 1 MB. Silakan pilih gambar lain.");
+    const limitKb = Math.round(maxBytes / 1024);
+    throw new Error(`Gambar gagal dikompres di bawah ${limitKb} KB. Silakan pilih gambar lain.`);
   }
 
+  const actualType: CompressMimeType = blob.type === "image/webp" ? "image/webp" : "image/jpeg";
+  const extension = actualType === "image/webp" ? "webp" : "jpg";
   const baseName = file.name.replace(/\.[^.]+$/, "") || "foto";
-  return new File([blob], `${baseName}.jpg`, {
-    type: "image/jpeg",
+  return new File([blob], `${baseName}.${extension}`, {
+    type: actualType,
     lastModified: Date.now(),
+  });
+}
+
+/**
+ * Legacy helper kept for existing callers: JPEG output constrained to `maxBytes`.
+ */
+export async function compressImageToLimit(
+  file: File,
+  maxBytes: number = DEFAULT_MAX_BYTES,
+  maxDimension: number = DEFAULT_MAX_DIMENSION
+): Promise<File> {
+  return compressImage(file, {
+    maxBytes,
+    maxDimension,
+    quality: 0.82,
+    mimeType: "image/jpeg",
   });
 }
 
