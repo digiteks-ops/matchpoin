@@ -12,7 +12,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireApiRole("super_admin");
+  const guard = await requireApiRole("admin");
   if (guard instanceof NextResponse) return guard;
 
   const { id: registrationId } = await params;
@@ -38,17 +38,23 @@ export async function POST(
     }
 
     if (result.user_id && result.tournament_id) {
-      await notifyTournamentRegistration(
-        result.user_id,
-        result.tournament_id,
-        result.tournament_name ?? "Liga"
-      );
-      if (result.partner_user_id) {
+      try {
         await notifyTournamentRegistration(
-          result.partner_user_id,
+          result.user_id,
           result.tournament_id,
           result.tournament_name ?? "Liga"
         );
+        if (result.partner_user_id) {
+          await notifyTournamentRegistration(
+            result.partner_user_id,
+            result.tournament_id,
+            result.tournament_name ?? "Liga"
+          );
+        }
+      } catch (notificationError) {
+        logError("admin.tournaments.registrations.approve.notify", notificationError, {
+          registrationId,
+        });
       }
     }
 

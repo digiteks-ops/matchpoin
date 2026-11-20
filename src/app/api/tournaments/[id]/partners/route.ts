@@ -6,7 +6,7 @@ import { getTournamentPartners } from "@/lib/supabase/competition-service";
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   const user = await getCurrentUser();
@@ -17,8 +17,10 @@ export async function GET(
     );
   }
 
+  const category = new URL(request.url).searchParams.get("category");
+
   try {
-    const partners = await getTournamentPartners(params.id, user.id);
+    const partners = await getTournamentPartners(params.id, user.id, category);
     if (!partners) {
       return NextResponse.json(
         { success: false, message: "Kompetisi tidak ditemukan." },

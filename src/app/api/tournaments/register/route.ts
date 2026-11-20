@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { parseRegistrationPayload } from "@/lib/mysql/competition-registration-core.mjs";
 import { logError } from "@/lib/errors";
 import {
-  notifySuperAdminsPendingRegistration,
+  notifyAdminsPendingRegistration,
   notifyTournamentRegistration,
 } from "@/lib/notifications/notification-service";
 
@@ -17,6 +17,7 @@ interface RegistrationRpcResult {
   category?: string;
   tournament_name?: string;
   partner_user_id?: string | null;
+  status?: string;
 }
 
 function isUuid(value: string): boolean {
@@ -47,8 +48,8 @@ async function resolveTournamentId(leagueId: string): Promise<string | null> {
  * - one entry per player per category
  * - mixed doubles: one male + one female
  * - partner required for doubles
- * Registrations start as `pending` and require Super Admin approval, exactly
- * like the MySQL flow.
+ * Registrations start as `pending` and require admin approval, exactly like
+ * the MySQL flow.
  */
 export async function POST(request: Request) {
   const supabase = createClient();
@@ -100,18 +101,23 @@ export async function POST(request: Request) {
     }
 
     const tournamentName = result.tournament_name ?? "Liga";
-    await notifyTournamentRegistration(user.id, tournamentId, tournamentName);
-    if (partnerUserId) {
-      await notifyTournamentRegistration(partnerUserId, tournamentId, tournamentName);
-    }
-    if (result.entry_id) {
-      await notifySuperAdminsPendingRegistration(tournamentId, tournamentName, result.entry_id);
+    try {
+      await notifyTournamentRegistration(user.id, tournamentId, tournamentName);
+      if (partnerUserId) {
+        await notifyTournamentRegistration(partnerUserId, tournamentId, tournamentName);
+      }
+      if (result.entry_id) {
+        await notifyAdminsPendingRegistration(tournamentId, tournamentName, result.entry_id);
+      }
+    } catch (notificationError) {
+      logError("league.register.notify", notificationError, { tournamentId, userId: user.id });
     }
 
     return NextResponse.json({
       success: true,
       entryId: result.entry_id,
       category: result.category,
+      status: result.status ?? "pending",
       message: result.message,
     });
   } catch (err: unknown) {

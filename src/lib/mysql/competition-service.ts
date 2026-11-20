@@ -3,7 +3,7 @@ import type { Connection, ResultSetHeader, RowDataPacket } from "mysql2/promise"
 import { todayInPlatformTimeZone } from "@/lib/utils";
 import {
   notifyTournamentRegistration,
-  notifySuperAdminsPendingRegistration,
+  notifyAdminsPendingRegistration,
 } from "@/lib/notifications/notification-service";
 import {
   evaluateLeagueRegistration,
@@ -349,16 +349,16 @@ export async function registerForCompetition(
   // Notify user of pending registration
   await notifyTournamentRegistration(userId, leagueId, tournament.name);
 
-  // Notify Super Admins about new pending registration
-  await notifySuperAdminsPendingRegistration(leagueId, tournament.name, entryId);
+  // Notify admins about a new pending registration
+  await notifyAdminsPendingRegistration(leagueId, tournament.name, entryId);
 
   return {
     success: true,
     entryId,
     category: evaluation.category,
     message: evaluation.doubles
-      ? "Pendaftaran tim Anda telah dikirim dan menunggu persetujuan Super Admin."
-      : "Pendaftaran Anda telah dikirim dan menunggu persetujuan Super Admin.",
+      ? "Pendaftaran tim Anda telah dikirim dan menunggu persetujuan admin."
+      : "Pendaftaran Anda telah dikirim dan menunggu persetujuan admin.",
   };
 }
 
