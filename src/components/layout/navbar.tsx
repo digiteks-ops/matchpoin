@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Logo } from "./logo";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
@@ -22,17 +22,29 @@ import {
 
 export function Navbar() {
   const pathname = usePathname();
-  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<{ id: string } | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userDropdown, setUserDropdown] = useState(false);
 
   useEffect(() => {
     try {
       const supabase = createClient();
+
+      const loadRoles = async (userId: string) => {
+        try {
+          const { data } = await supabase.rpc("get_user_roles", { p_user_id: userId });
+          const roles = Array.isArray(data) ? (data as string[]) : [];
+          setIsAdmin(roles.includes("admin") || roles.includes("super_admin"));
+        } catch {
+          setIsAdmin(false);
+        }
+      };
+
       supabase.auth.getUser().then(({ data: { user } }) => {
         setUser(user ? { id: user.id } : null);
+        if (user) void loadRoles(user.id);
         setLoading(false);
       });
 
@@ -40,6 +52,8 @@ export function Navbar() {
         data: { subscription },
       } = supabase.auth.onAuthStateChange((_event, session) => {
         setUser(session?.user ?? null);
+        if (session?.user) void loadRoles(session.user.id);
+        else setIsAdmin(false);
       });
 
       return () => {
@@ -54,17 +68,24 @@ export function Navbar() {
     try {
       const supabase = createClient();
       await supabase.auth.signOut();
-      setUser(null);
-      setUserDropdown(false);
-      router.push("/");
-      router.refresh();
     } catch (err) {
+      // The server logout route also clears the session cookies, so continue.
       console.error("Gagal logout:", err);
+    } finally {
+      setUser(null);
+      setIsAdmin(false);
+      setUserDropdown(false);
+      setIsOpen(false);
+      // Full navigation so the App Router hits the logout Route Handler; a
+      // client-side router.push to a route handler can render a 404.
+      window.location.assign("/auth/logout");
     }
   };
 
-  const dashboardHref = "/mysql/dashboard";
-  const profileHref = "/mysql/profile";
+  const dashboardHref = "/dashboard";
+  const profileHref = "/profile";
+  const loginHref = "/login";
+  const registerHref = "/register";
   const navLinks = [
     { href: "/", label: "Beranda" },
     { href: "/players", label: "Cari Pemain", icon: Users },
@@ -107,27 +128,42 @@ export function Navbar() {
             <div className="h-9 w-24 animate-pulse rounded-md bg-slate-200" />
           ) : user ? (
             <div className="flex items-center gap-2">
-              <Link href={dashboardHref}>
-                <Button
-                  variant={pathname === dashboardHref ? "secondary" : "ghost"}
-                  size="sm"
-                  className="gap-2 text-slate-700"
-                >
-                  <LayoutDashboard className="w-4 h-4 text-slate-600" />
-                  Dashboard
-                </Button>
-              </Link>
+              {isAdmin ? (
+                <Link href="/admin">
+                  <Button
+                    variant={pathname.startsWith("/admin") ? "secondary" : "ghost"}
+                    size="sm"
+                    className="gap-2 text-slate-700"
+                  >
+                    <Settings className="w-4 h-4 text-slate-600" />
+                    Admin
+                  </Button>
+                </Link>
+              ) : (
+                <>
+                  <Link href={dashboardHref}>
+                    <Button
+                      variant={pathname === dashboardHref ? "secondary" : "ghost"}
+                      size="sm"
+                      className="gap-2 text-slate-700"
+                    >
+                      <LayoutDashboard className="w-4 h-4 text-slate-600" />
+                      Dashboard
+                    </Button>
+                  </Link>
 
-              <Link href={profileHref}>
-                <Button
-                  variant={pathname.startsWith(profileHref) ? "secondary" : "ghost"}
-                  size="sm"
-                  className="gap-2 text-slate-700"
-                >
-                  <UserIcon className="w-4 h-4 text-slate-600" />
-                  Profil
-                </Button>
-              </Link>
+                  <Link href={profileHref}>
+                    <Button
+                      variant={pathname.startsWith(profileHref) ? "secondary" : "ghost"}
+                      size="sm"
+                      className="gap-2 text-slate-700"
+                    >
+                      <UserIcon className="w-4 h-4 text-slate-600" />
+                      Profil
+                    </Button>
+                  </Link>
+                </>
+              )}
 
               <NotificationBell />
 
@@ -143,12 +179,12 @@ export function Navbar() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <Link href="/auth/login">
+              <Link href={loginHref}>
                 <Button variant="ghost" size="sm" className="font-semibold text-slate-700">
                   Masuk
                 </Button>
               </Link>
-              <Link href="/auth/register">
+              <Link href={registerHref}>
                 <Button variant="tennis" size="sm">
                   Daftar Gratis
                 </Button>
@@ -193,19 +229,30 @@ export function Navbar() {
           <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
             {user ? (
               <>
-                <Link href={dashboardHref} onClick={() => setIsOpen(false)}>
-                  <Button variant="outline" className="w-full justify-start gap-2 text-sm">
-                    <LayoutDashboard className="w-4 h-4" />
-                    Dashboard Pemain
-                  </Button>
-                </Link>
-                <Link href={profileHref} onClick={() => setIsOpen(false)}>
-                  <Button variant="outline" className="w-full justify-start gap-2 text-sm">
-                    <UserIcon className="w-4 h-4" />
-                    Profil Pemain Saya
-                  </Button>
-                </Link>
-                <Link href="/mysql/notifications" onClick={() => setIsOpen(false)}>
+                {isAdmin ? (
+                  <Link href="/admin" onClick={() => setIsOpen(false)}>
+                    <Button variant="outline" className="w-full justify-start gap-2 text-sm">
+                      <Settings className="w-4 h-4" />
+                      Dasbor Admin
+                    </Button>
+                  </Link>
+                ) : (
+                  <>
+                    <Link href={dashboardHref} onClick={() => setIsOpen(false)}>
+                      <Button variant="outline" className="w-full justify-start gap-2 text-sm">
+                        <LayoutDashboard className="w-4 h-4" />
+                        Dashboard Pemain
+                      </Button>
+                    </Link>
+                    <Link href={profileHref} onClick={() => setIsOpen(false)}>
+                      <Button variant="outline" className="w-full justify-start gap-2 text-sm">
+                        <UserIcon className="w-4 h-4" />
+                        Profil Pemain Saya
+                      </Button>
+                    </Link>
+                  </>
+                )}
+                <Link href="/notifications" onClick={() => setIsOpen(false)}>
                   <Button variant="outline" className="w-full justify-start gap-2 text-sm">
                     <Bell className="w-4 h-4" />
                     Notifikasi
@@ -225,12 +272,12 @@ export function Navbar() {
               </>
             ) : (
               <div className="grid grid-cols-2 gap-2">
-                <Link href="/auth/login" onClick={() => setIsOpen(false)}>
+                <Link href={loginHref} onClick={() => setIsOpen(false)}>
                   <Button variant="outline" className="w-full text-sm">
                     Masuk
                   </Button>
                 </Link>
-                <Link href="/auth/register" onClick={() => setIsOpen(false)}>
+                <Link href={registerHref} onClick={() => setIsOpen(false)}>
                   <Button variant="tennis" className="w-full text-sm font-bold">
                     Daftar Gratis
                   </Button>

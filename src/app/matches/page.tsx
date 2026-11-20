@@ -1,10 +1,11 @@
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { getOpenMatches, type OpenMatchDetail } from "@/lib/services/match-service";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Calendar, MapPin, Plus, Users, Trophy, AlertCircle } from "lucide-react";
+import { Calendar, MapPin, Plus, Users, AlertCircle } from "lucide-react";
 import { formatIndonesianDate, formatIndonesianTime } from "@/lib/utils";
 import { ERROR_LOAD, logError } from "@/lib/errors";
 
@@ -129,7 +130,19 @@ export default async function MatchesPage() {
                       )}
                     </span>
                     <span className="flex min-w-0 items-center justify-end gap-1.5 text-right text-slate-600">
-                      <Trophy className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                      {match.organizerAvatarUrl ? (
+                        <Image
+                          src={match.organizerAvatarUrl}
+                          alt={match.organizerName}
+                          width={20}
+                          height={20}
+                          className="h-5 w-5 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
+                          {match.organizerName.charAt(0).toUpperCase()}
+                        </span>
+                      )}
                       <span className="truncate"><span className="text-slate-400">Host:</span> <strong className="text-slate-800">{match.organizerName}</strong></span>
                     </span>
                   </div>

@@ -13,14 +13,30 @@
     "test:stats": "node scripts/test-player-stats.mjs",
     "test:e2e": "node scripts/e2e-flows.mjs",
     "test:mysql-config": "node --test scripts/mysql/db.test.mjs",
+    "test:logout": "node --test scripts/auth/logout.test.mjs",
+    "test:mysql-registration": "node --test scripts/mysql/competition-registration.test.mjs",
+    "test:mysql-roster": "node --test scripts/mysql/match-roster.test.mjs",
     "test:mysql-workflows": "node --env-file=.env.local scripts/mysql/result-workflow.integration.mjs",
     "test:mysql-email": "node --test scripts/mysql/password-reset-email.test.mjs",
     "test:rbac": "node --test scripts/mysql/rbac.test.mjs",
     "test:r2-storage": "node scripts/mysql/r2-storage.test.mjs",
     "db:check": "node --env-file=.env.local scripts/mysql/check.mjs",
     "db:migrate": "node --env-file=.env.local scripts/mysql/migrate.mjs",
-    "db:bootstrap-super-admin": "node --env-file=.env.local scripts/mysql/bootstrap-super-admin.mjs",
-    "db:backup:supabase": "node --env-file=.env.local scripts/mysql/backup-supabase.mjs"
+    "db:bootstrap-super-admin": "node --env-file=.env.local scripts/supabase/bootstrap-super-admin.mjs",
+    "db:backup:supabase": "node --env-file=.env.local scripts/mysql/backup-supabase.mjs",
+    "db:seed-admin": "node scripts/supabase/seed-admin.mjs",
+    "test:supabase-league": "node --test scripts/supabase/league-migration.test.mjs",
+    "test:supabase-chat": "node --test scripts/supabase/chat-rls.test.mjs",
+    "test:supabase-registration": "node --test scripts/supabase/registration.test.mjs",
+    "test:supabase-open-match": "node --test scripts/supabase/open-match.test.mjs",
+    "test:supabase-match-card": "node --test scripts/supabase/match-card-host.test.mjs",
+    "test:supabase-auth-login": "node --test scripts/supabase/auth-login.test.mjs",
+    "test:supabase-admin": "node --test scripts/supabase/admin-dashboard.test.mjs",
+    "test:supabase-oauth": "node --test scripts/supabase/oauth-login.test.mjs",
+    "test:supabase-storage": "node --test scripts/supabase/storage-uploads.test.mjs",
+    "db:backup:mysql": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs --backup-only",
+    "db:restore-mysql": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs",
+    "db:validate:supabase": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs --validate-only"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1171.0",
@@ -39,7 +55,8 @@
     "next": "14.2.24",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwind-merge": "^2.5.4"
+    "tailwind-merge": "^2.5.4",
+    "ws": "^8.23.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
@@ -51,5 +68,12 @@
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.4.5"
-  }
+  },
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

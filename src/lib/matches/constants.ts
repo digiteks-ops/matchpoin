@@ -34,6 +34,9 @@ export interface CreateOpenMatchInput {
   partnerUserId?: string;
   opponentUserId?: string;
   opponentPartnerUserId?: string;
+  tournamentId?: string | null;
+  team1UserIds?: string[];
+  team2UserIds?: string[];
 }
 
 export interface MatchParticipantInfo {
@@ -60,6 +63,7 @@ export interface OpenMatchDetail {
   cityName?: string | null;
   organizerId: string;
   organizerName: string;
+  organizerAvatarUrl?: string | null;
   matchDate: string;
   startTime: string;
   durationMinutes: number;

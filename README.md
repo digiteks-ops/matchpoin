@@ -173,6 +173,53 @@ approach.
 | `NEXT_PUBLIC_APP_URL` | Base URL for links |
 | `NEXT_PUBLIC_DEFAULT_TIMEZONE` | `Asia/Makassar` |
 
+### Vercel environment variables
+
+Set these in Vercel → Project → Settings → Environment Variables (Production and Preview):
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | yes | Supabase project URL (browser + server) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase publishable/anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | yes | Server-only key for notifications, admin RPCs and seed scripts |
+| `NEXT_PUBLIC_APP_URL` | yes | `https://matchpoin.vercel.app` (used in links and OAuth redirects) |
+| `NEXT_PUBLIC_DEFAULT_TIMEZONE` | recommended | `Asia/Makassar` |
+| `NEXT_PUBLIC_APP_ENV` | recommended | `production` |
+
+Also set Supabase → Authentication → URL Configuration: Site URL `https://matchpoin.vercel.app`, redirect URLs `https://matchpoin.vercel.app/auth/callback` and `http://localhost:3000/auth/callback`. The canonical login route is `/login`; `/auth/login` redirects to it.
+
+### Admin access
+
+The admin area lives at `/admin` and is protected by middleware plus a server-side role check on every page and action. Promote an account from the Supabase SQL Editor (run as `postgres`, which the role trigger allows):
+
+```sql
+UPDATE public.users SET role = 'admin' WHERE email = 'matchpoin.id@gmail.com';
+-- If the profiles table exists in your environment:
+UPDATE public.profiles p SET role = 'admin'
+FROM public.users u WHERE p.id = u.id AND u.email = 'matchpoin.id@gmail.com';
+```
+
+You can also grant the RBAC role through the service-role RPC (`assign_role`) or `npm run db:seed-admin`. Players cannot change their own `role` through the API: the `guard_role_column` trigger rejects any such update, and the `authenticated`/`anon` roles have no column-level `UPDATE` on `role`.
+
+### Google & Facebook login (Supabase OAuth)
+
+The app uses Supabase Auth OAuth, so provider secrets are stored in the Supabase dashboard, never in this repository. The buttons on `/login` and `/register` read the enabled providers from Supabase at runtime.
+
+1. Apply `supabase/migrations/00018_oauth_profiles_trigger.sql` (creates a `profiles` row on first login with name, email and provider avatar).
+2. Supabase → Authentication → Providers → enable **Google** and/or **Facebook**, paste the provider credentials, and save.
+3. Supabase → Authentication → URL Configuration:
+   - Site URL: `https://matchpoin.vercel.app`
+   - Redirect URLs: `https://matchpoin.vercel.app/auth/callback`, `http://localhost:3000/auth/callback`
+4. Google Cloud Console → APIs & Services → Credentials → Create OAuth client ID (Web application):
+   - Authorized JavaScript origins: `http://localhost:3000`, `https://matchpoin.vercel.app`
+   - Authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`
+5. Meta for Developers → Create app → Facebook Login → Settings:
+   - Valid OAuth Redirect URIs: `https://<project-ref>.supabase.co/auth/v1/callback`
+   - Provide a Privacy Policy URL and Data Deletion URL (use your own published pages), then switch the app to **Live**.
+6. Optional environment variables for documentation/CI only (the running app does not read them): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`.
+
+Identity linking: Supabase links a Google/Facebook identity to an existing account when the provider email is verified and "Link accounts with the same email" is enabled. A Facebook user without an email is signed out and asked to use Google or email sign-up.
+
 ---
 
 ## Scripts

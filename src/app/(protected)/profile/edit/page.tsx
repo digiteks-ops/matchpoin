@@ -30,6 +30,7 @@ export default function EditProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [photoStage, setPhotoStage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -143,14 +144,19 @@ const loadProfile = useCallback(async () => {
     if (!file || !userId) return;
 
     setIsUploadingPhoto(true);
+    setPhotoStage("Mengompres foto...");
     setErrorMessage(null);
 
     try {
-      const publicUrl = await uploadAvatar(userId, file);
+      const publicUrl = await uploadAvatar(userId, file, (stage) => {
+        setPhotoStage(stage === "compress" ? "Mengompres foto..." : "Mengunggah foto...");
+      });
       setAvatarUrl(publicUrl);
+      setPhotoStage(null);
       setSuccessMessage("Foto profil berhasil diperbarui!");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
+      setPhotoStage(null);
       setErrorMessage(err?.message || "Gagal mengunggah foto.");
     } finally {
       setIsUploadingPhoto(false);
@@ -320,7 +326,7 @@ const loadProfile = useCallback(async () => {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp"
                     onChange={handlePhotoUpload}
                     className="hidden"
                   />
@@ -329,8 +335,12 @@ const loadProfile = useCallback(async () => {
                 <div className="space-y-1">
                   <h4 className="text-xs font-bold text-slate-800">Foto Profil</h4>
                   <p className="text-[11px] text-slate-500">
-                    Format JPG, PNG, atau WEBP. Maksimal 5 MB.
+                    Format JPG, PNG, atau WEBP. Maksimal 10 MB. Foto dikompres otomatis
+                    (512 px, ≤300 KB) sebelum diunggah.
                   </p>
+                  {photoStage && (
+                    <p className="text-[11px] font-semibold text-matchpoin-navy">{photoStage}</p>
+                  )}
                   <Button
                     type="button"
                     variant="outline"

@@ -120,8 +120,14 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
       const bHost = b.userId === hostId || b.isOrganizer ? 0 : 1;
       return aHost - bHost || a.fullName.localeCompare(b.fullName);
     });
+  const organizerParticipates = match.participants.some(
+    (participant) => participant.userId === hostId || participant.isOrganizer
+  );
   const team1Members = sortTeamMembers(match.participants.filter(
-    (participant) => participant.userId === hostId || participant.isOrganizer || (!isSinglesMatch && participant.team === hostStoredTeam)
+    (participant) =>
+      participant.userId === hostId ||
+      participant.isOrganizer ||
+      participant.team === hostStoredTeam
   ));
   const team2Members = sortTeamMembers(match.participants.filter(
     (participant) => !team1Members.some((member) => member.userId === participant.userId)
@@ -131,7 +137,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
   const team1Players = finalTeam1.length;
   const team2Players = finalTeam2.length;
   const hostFallback = "Host";
-  const oppFallback = "Lawan";
+  const oppFallback = match.status === "open" ? "Terbuka" : "Lawan";
   const team1Label = finalTeam1.map((participant) => participant.fullName).join(" & ") || hostFallback;
   const team2Label = finalTeam2.map((participant) => participant.fullName).join(" & ") || oppFallback;
   const hostSideScore = result ? (hostStoredTeam === 1 ? result.team1Score : result.team2Score) : 0;
@@ -155,7 +161,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
   }, [match.participants, match.pendingRequests, result?.submittedBy]);
 
   const canSubmitResult =
-    viewer.isOrganizer &&
+    (viewer.isOrganizer || (!organizerParticipates && viewer.isParticipant)) &&
     match.status !== "cancelled" &&
     (!result || result.status === "pending");
   const canConfirm =
@@ -896,7 +902,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                 {!viewer.id && (
                   <>
                     <p className="text-slate-500">Masuk untuk mengajukan slot atau mengirim hasil.</p>
-                    <Link href={`/mysql/auth/login?redirectTo=/matches/${match.id}`}>
+                    <Link href={`/login?redirectTo=/matches/${match.id}`}>
                       <Button variant="tennis" className="w-full text-matchpoin-navy font-bold">
                         Masuk
                       </Button>

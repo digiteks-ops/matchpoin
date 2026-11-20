@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -110,37 +110,7 @@ export default function LeaguePage() {
 
   const selectedCategoryMeta = CATEGORIES.find((c) => c.id === category) ?? CATEGORIES[0];
 
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
-  }, []);
-
-  useEffect(() => {
-    loadLeagueData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category]);
-
-  useEffect(() => {
-    if (!league?.end_date) return;
-    const endDate = new Date(`${league.end_date}T23:59:59+07:00`);
-    const tick = () => {
-      const diff = endDate.getTime() - Date.now();
-      if (diff <= 0) {
-        setCountdown({ days: 0, hours: 0, minutes: 0 });
-        return;
-      }
-      setCountdown({
-        days: Math.floor(diff / 86400000),
-        hours: Math.floor((diff % 86400000) / 3600000),
-        minutes: Math.floor((diff % 3600000) / 60000),
-      });
-    };
-    tick();
-    const interval = setInterval(tick, 60000);
-    return () => clearInterval(interval);
-  }, [league?.end_date]);
-
-  async function loadLeagueData() {
+  const loadLeagueData = useCallback(async () => {
     setIsLoading(true);
     setProvinceFilter("all");
     setCityFilter("all");
@@ -167,7 +137,7 @@ export default function LeaguePage() {
         return;
       }
 
-const { data: partRows } = await supabase
+      const { data: partRows } = await supabase
         .from("tournament_participants")
         .select("entry_id, user_id, joined_at, status")
         .eq("tournament_id", lg.id)
@@ -300,7 +270,36 @@ const { data: partRows } = await supabase
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [category]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
+  }, []);
+
+  useEffect(() => {
+    loadLeagueData();
+  }, [category, loadLeagueData]);
+
+  useEffect(() => {
+    if (!league?.end_date) return;
+    const endDate = new Date(`${league.end_date}T23:59:59+07:00`);
+    const tick = () => {
+      const diff = endDate.getTime() - Date.now();
+      if (diff <= 0) {
+        setCountdown({ days: 0, hours: 0, minutes: 0 });
+        return;
+      }
+      setCountdown({
+        days: Math.floor(diff / 86400000),
+        hours: Math.floor((diff % 86400000) / 3600000),
+        minutes: Math.floor((diff % 3600000) / 60000),
+      });
+    };
+    tick();
+    const interval = setInterval(tick, 60000);
+    return () => clearInterval(interval);
+  }, [league?.end_date]);
 
   async function openRegistration() {
     setRegOpen(true);
@@ -534,24 +533,32 @@ const { data: partRows } = await supabase
               {regStep === 2 && (
                 <div className="space-y-3">
                   <p className="font-semibold text-slate-700">Langkah 2 — Konfirmasi Pendaftaran</p>
-                  <div className="p-3 rounded-lg border border-slate-200 space-y-1">
-                    <div><span className="text-slate-500">Kategori:</span> <strong>{regCatMeta.label}</strong></div>
-                    <div><span className="text-slate-500">Liga:</span> <strong>{regLeague?.name} {regLeague?.season}</strong></div>
-                    <div><span className="text-slate-500">Nama:</span> <strong>{regProfile?.name ?? "-"}</strong></div>
-                    <div><span className="text-slate-500">Lokasi:</span> <strong>{[regProfile?.city, regProfile?.province].filter(Boolean).join(", ") || "Belum diisi di profil"}</strong></div>
-                    <div><span className="text-slate-500">Kuota saat ini:</span> <strong>{regParticipantsCount}/{regLeague?.max_participants ?? 12}</strong></div>
-                  </div>
-                  <p className="text-slate-500">Pastikan data profil benar. Satu pemain hanya dapat terdaftar 1x per kategori liga.</p>
-                  <div className="flex justify-between gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setRegStep(1)} disabled={regLoading}>Kembali</Button>
-                    <Button variant="tennis" size="sm" className="text-matchpoin-navy font-bold" onClick={confirmRegistration} disabled={regLoading || !currentUser || regAlready}>
-                      {regLoading ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Mendaftarkan...</> : "Konfirmasi Pendaftaran"}
-                    </Button>
-                  </div>
+                  {!regLeague ? (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs">
+                      Memuat data liga... Silakan tunggu.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="p-3 rounded-lg border border-slate-200 space-y-1">
+                        <div><span className="text-slate-500">Kategori:</span> <strong>{regCatMeta.label}</strong></div>
+                        <div><span className="text-slate-500">Liga:</span> <strong>{regLeague?.name} {regLeague?.season}</strong></div>
+                        <div><span className="text-slate-500">Nama:</span> <strong>{regProfile?.name ?? "-"}</strong></div>
+                        <div><span className="text-slate-500">Lokasi:</span> <strong>{[regProfile?.city, regProfile?.province].filter(Boolean).join(", ") || "Belum diisi di profil"}</strong></div>
+                        <div><span className="text-slate-500">Kuota saat ini:</span> <strong>{regParticipantsCount}/{regLeague?.max_participants ?? 12}</strong></div>
+                      </div>
+                      <p className="text-slate-500">Pastikan data profil benar. Satu pemain hanya dapat terdaftar 1x per kategori liga.</p>
+                      <div className="flex justify-between gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setRegStep(1)} disabled={regLoading}>Kembali</Button>
+                        <Button variant="tennis" size="sm" className="text-matchpoin-navy font-bold" onClick={confirmRegistration} disabled={regLoading || !currentUser || regAlready || !regLeague}>
+                          {regLoading ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Mendaftarkan...</> : "Konfirmasi Pendaftaran"}
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
-{regStep === 3 && regSuccess && (
+              {regStep === 3 && regSuccess && (
                 <div className="space-y-3 text-center py-2">
                   <Clock className="w-10 h-10 text-amber-600 mx-auto" />
                   <p className="font-semibold text-slate-800">Pendaftaran Diterima</p>
@@ -624,34 +631,34 @@ const { data: partRows } = await supabase
                   <p className="p-4 text-xs text-slate-500">Belum ada peserta terdaftar {provinceFilter !== "all" || cityFilter !== "all" ? "untuk filter lokasi ini." : "di kategori ini."}</p>
                 ) : (
                   <div className="divide-y divide-slate-100">
-{filteredParticipants.map((p) => (
-                        <div key={p.userId} className="px-4 py-3 flex items-center justify-between gap-3 text-xs">
-                          <div className="min-w-0">
-                            <div className="font-semibold text-slate-800 truncate">{p.name}</div>
-                            <div className="text-slate-500 flex items-center gap-1"><MapPin className="w-3 h-3" /> {[p.cityName, p.province].filter(Boolean).join(", ") || "Lokasi belum diisi"}</div>
-                          </div>
-                          <Badge
-                            variant={
-                              p.status === "confirmed"
-                                ? "success"
-                                : p.status === "pending"
-                                ? "secondary"
-                                : p.status === "rejected"
-                                ? "destructive"
-                                : "outline"
-                            }
-                            className="text-[10px] shrink-0"
-                          >
-                            {p.status === "confirmed"
-                              ? "Diterima"
-                              : p.status === "pending"
-                              ? "Menunggu Persetujuan"
-                              : p.status === "rejected"
-                              ? "Ditolak"
-                              : p.status}
-                          </Badge>
+                    {filteredParticipants.map((p) => (
+                      <div key={p.userId} className="px-4 py-3 flex items-center justify-between gap-3 text-xs">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-800 truncate">{p.name}</div>
+                          <div className="text-slate-500 flex items-center gap-1"><MapPin className="w-3 h-3" /> {[p.cityName, p.province].filter(Boolean).join(", ") || "Lokasi belum diisi"}</div>
                         </div>
-                      ))}
+                        <Badge
+                          variant={
+                            p.status === "confirmed"
+                              ? "success"
+                              : p.status === "pending"
+                              ? "secondary"
+                              : p.status === "rejected"
+                              ? "destructive"
+                              : "outline"
+                          }
+                          className="text-[10px] shrink-0"
+                        >
+                          {p.status === "confirmed"
+                            ? "Diterima"
+                            : p.status === "pending"
+                            ? "Menunggu Persetujuan"
+                            : p.status === "rejected"
+                            ? "Ditolak"
+                            : p.status}
+                        </Badge>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>

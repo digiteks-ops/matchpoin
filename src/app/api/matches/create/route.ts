@@ -53,24 +53,30 @@ export async function POST(request: Request) {
   }
 
   const isDoubles = payload.category.includes('doubles');
-  // Doubles default to an open match: the host leaves the partner and opponent
-  // slots empty for other players to fill.
   const matchType = payload.matchType ?? (isDoubles ? 'open' : 'private');
 
   if (matchType !== 'open' && matchType !== 'private') {
     return NextResponse.json({ success: false, message: 'Tipe pertandingan tidak valid.' }, { status: 400 });
   }
 
-  if (!isDoubles && matchType !== 'private') {
-    return NextResponse.json({ success: false, message: 'Tipe pertandingan tidak valid.' }, { status: 400 });
+  if (!isDoubles && (payload.partnerUserId || payload.opponentPartnerUserId)) {
+    return NextResponse.json({ success: false, message: 'Partner hanya untuk pertandingan ganda.' }, { status: 400 });
   }
 
-  if (!isDoubles && payload.partnerUserId) {
-    return NextResponse.json({ success: false, message: 'Partner hanya untuk pertandingan ganda.' }, { status: 400 });
+  if (!isDoubles && matchType === 'open' && payload.opponentUserId) {
+    return NextResponse.json({ success: false, message: 'Pertandingan tunggal terbuka tidak dapat menentukan lawan manual.' }, { status: 400 });
   }
 
   if (payload.partnerUserId && payload.partnerUserId === user.id) {
     return NextResponse.json({ success: false, message: 'Partner tidak boleh sama dengan Host.' }, { status: 400 });
+  }
+
+  if (payload.opponentUserId && payload.opponentUserId === user.id) {
+    return NextResponse.json({ success: false, message: 'Lawan tidak boleh sama dengan Host.' }, { status: 400 });
+  }
+
+  if (!isDoubles && matchType === 'private' && !payload.opponentUserId && !payload.team1UserIds?.length) {
+    return NextResponse.json({ success: false, message: 'Pilih lawan untuk pertandingan tunggal (1 vs 1).' }, { status: 400 });
   }
 
   if (isDoubles && matchType === 'private') {
@@ -82,14 +88,19 @@ export async function POST(request: Request) {
     }
   }
 
-  if (isDoubles && matchType === 'open' && (payload.opponentUserId || payload.opponentPartnerUserId)) {
-    return NextResponse.json({ success: false, message: 'Slot lawan terbuka tidak dapat dipilih.' }, { status: 400 });
+  if (isDoubles && matchType === 'open' && (payload.partnerUserId || payload.opponentUserId || payload.opponentPartnerUserId)) {
+    return NextResponse.json({ success: false, message: 'Slot terbuka tidak dapat diisi pemain manual.' }, { status: 400 });
   }
 
   // Kuota monetisasi dinonaktifkan untuk fase pertumbuhan 100-500 pengguna pertama (Unlimited)
 
   try {
-    const matchId = await createOpenMatch(user.id, payload);
+    const matchId = await createOpenMatch(user.id, {
+      ...payload,
+      tournamentId: null,
+      team1UserIds: undefined,
+      team2UserIds: undefined,
+    });
     return NextResponse.json({ success: true, matchId, message: 'Pertandingan dibuat.' });
   } catch (err) {
     logError('match.create.route', err, { userId: user.id, courtId: payload.courtId ?? null, courtName: payload.courtName ?? null });

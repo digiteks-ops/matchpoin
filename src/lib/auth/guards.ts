@@ -2,46 +2,38 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { hasRole, type AppRole } from "@/lib/auth/roles";
-import { connectToMySql } from "@/lib/mysql/db.mjs";
-import { getUserRoles } from "@/lib/mysql/rbac-service";
+import { getUserRoles } from "@/lib/supabase/rbac-service";
 import { getSupabaseSession, requireUser, requireRole } from "./supabase-auth";
 import { logError } from "@/lib/errors";
 
-export const MY_SQL_LOGIN_PATH = "/mysql/auth/login";
-export const MY_SQL_DASHBOARD_PATH = "/mysql/dashboard";
-
-async function freshRoles(userId: string): Promise<AppRole[]> {
-  const connection = await connectToMySql();
-  try {
-    return await getUserRoles(connection, userId);
-  } finally {
-    await connection.end();
-  }
-}
+export const APP_LOGIN_PATH = "/login";
+export const APP_DASHBOARD_PATH = "/dashboard";
+export const MY_SQL_LOGIN_PATH = APP_LOGIN_PATH;
+export const MY_SQL_DASHBOARD_PATH = APP_DASHBOARD_PATH;
 
 export async function requirePageUser(
-  redirectTo: string = MY_SQL_LOGIN_PATH
+  redirectTo: string = APP_LOGIN_PATH
 ): Promise<{ user: { id: string } }> {
   const session = await getSupabaseSession();
   if (!session.user?.id) {
-    redirect(`${MY_SQL_LOGIN_PATH}?redirectTo=${encodeURIComponent(redirectTo)}`);
+    redirect(`${APP_LOGIN_PATH}?redirectTo=${encodeURIComponent(redirectTo)}`);
   }
   return { user: { id: session.user.id } };
 }
 
 export async function requirePageRole(
   required: AppRole,
-  redirectTo: string = MY_SQL_LOGIN_PATH
+  redirectTo: string = APP_LOGIN_PATH
 ): Promise<{ user: { id: string } }> {
   const session = await requirePageUser(redirectTo);
   let roles: AppRole[] = [];
   try {
-    roles = await freshRoles(session.user.id);
+    roles = await getUserRoles(session.user.id);
   } catch (error) {
     logError("require-page-role", error);
-    redirect(MY_SQL_DASHBOARD_PATH);
+    redirect(APP_DASHBOARD_PATH);
   }
-  if (!hasRole(roles, required)) redirect(MY_SQL_DASHBOARD_PATH);
+  if (!hasRole(roles, required)) redirect(APP_DASHBOARD_PATH);
   return session;
 }
 
@@ -58,7 +50,7 @@ export async function requireApiRole(
 
   let roles: AppRole[] = [];
   try {
-    roles = await freshRoles(session.user.id);
+    roles = await getUserRoles(session.user.id);
   } catch (error) {
     logError("require-api-role", error);
     return NextResponse.json(

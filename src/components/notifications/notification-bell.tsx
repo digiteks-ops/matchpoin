@@ -206,9 +206,9 @@ export function NotificationBell() {
                           setIsOpen(false);
                           if (notification.referenceId) {
                             if (notification.type.startsWith("match")) {
-                              window.location.href = `/mysql/matches/${notification.referenceId}`;
+                              window.location.href = `/matches/${notification.referenceId}`;
                             } else if (notification.type.startsWith("tournament")) {
-                              window.location.href = `/mysql/tournaments`;
+                              window.location.href = `/tournaments`;
                             }
                           }
                         }}
@@ -219,7 +219,7 @@ export function NotificationBell() {
                 <Separator />
                 <div className="p-3 text-center">
                   <Link
-                    href="/mysql/notifications"
+                    href="/notifications"
                     className="text-sm font-medium text-matchpoin-navy hover:underline"
                     onClick={(e) => {
                       e.stopPropagation();

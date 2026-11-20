@@ -134,10 +134,6 @@ export default function TournamentsPage() {
     loadTournaments();
   }, [loadTournaments]);
 
-  useEffect(() => {
-    loadTournaments();
-  }, [loadTournaments]);
-
   async function openRegistration(t: TournamentRow) {
     setSelectedTournament(t);
     setRegError(null);

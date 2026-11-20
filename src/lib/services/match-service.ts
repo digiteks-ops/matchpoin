@@ -1,7 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { logError, toUserMessage } from "@/lib/errors";
 import { ensurePlayerRecords } from "@/lib/services/player-sync";
 import { toPlatformIsoString, todayInPlatformTimeZone } from "@/lib/utils";
+import {
+  buildExplicitTeamRoster,
+  buildMatchRoster,
+  MatchRosterError,
+} from "@/lib/mysql/match-roster-core.mjs";
 import {
   MATCH_CATEGORY_LABELS,
   VALID_CATEGORIES,
@@ -105,52 +111,121 @@ function normalizeStatus(status: string | null | undefined): MatchStatus {
   return VALID_STATUSES.includes(status as MatchStatus) ? (status as MatchStatus) : "open";
 }
 
+interface RosterParticipant {
+  userId: string;
+  team: 1 | 2;
+  isOrganizer: boolean;
+  role: string;
+}
+
+interface BuiltRoster {
+  category: MatchCategory;
+  matchType: MatchType;
+  isPrivate: boolean;
+  maxPlayers: number;
+  currentPlayers: number;
+  status: "open" | "full";
+  participants: RosterParticipant[];
+  playerIdsToVerify: string[];
+}
+
+function assertCategoryGender(
+  category: MatchCategory,
+  participants: RosterParticipant[],
+  genderById: Map<string, string | null>,
+  strict: boolean
+): void {
+  const genderOf = (userId: string): string | null => genderById.get(userId) ?? null;
+  const requireGender = (userId: string): string | null => {
+    const gender = genderOf(userId);
+    if (!gender && strict) {
+      throw new Error("Lengkapi jenis kelamin pemain di profil sebelum membuat pertandingan kategori ini.");
+    }
+    return gender;
+  };
+
+  if (category === "mixed_doubles") {
+    const teams: Record<1 | 2, string[]> = { 1: [], 2: [] };
+    for (const participant of participants) {
+      teams[participant.team].push(participant.userId);
+    }
+    for (const team of [1, 2] as const) {
+      const members = teams[team];
+      if (members.length !== 2) continue;
+      const genders = members.map(genderOf);
+      if (genders.some((gender) => !gender)) {
+        throw new Error("Lengkapi jenis kelamin kedua pemain untuk kategori ganda campuran.");
+      }
+      if (genders.includes("male") && genders.includes("female")) continue;
+      throw new Error("Setiap tim ganda campuran wajib terdiri dari 1 pemain putra dan 1 pemain putri.");
+    }
+    return;
+  }
+
+  const requiredGender = category.startsWith("mens_")
+    ? "male"
+    : category.startsWith("womens_")
+    ? "female"
+    : null;
+  if (!requiredGender) return;
+
+  for (const participant of participants) {
+    const gender = requireGender(participant.userId);
+    if (gender && gender !== requiredGender) {
+      throw new Error(
+        requiredGender === "male"
+          ? "Kategori putra hanya dapat diisi pemain putra."
+          : "Kategori putri hanya dapat diisi pemain putri."
+      );
+    }
+  }
+}
+
 async function getProfilesForUsers(userIds: string[]) {
   const supabase = createClient();
   const unique = Array.from(new Set(userIds.filter(Boolean)));
-  if (unique.length === 0) return new Map<string, { full_name: string | null; avatar_url: string | null; gender: string | null; rating: number }>();
+  const profileMap = new Map<
+    string,
+    { full_name: string | null; avatar_url: string | null; gender: string | null; rating: number }
+  >();
+  if (unique.length === 0) return profileMap;
 
-  // 1. Read user account names from public.users (authoritative source for full_name)
-  const { data: usersData } = await supabase
-    .from("users")
-    .select("id, full_name, avatar_url")
-    .in("id", unique);
-
-  const userMap = new Map<string, { full_name: string | null; avatar_url: string | null }>();
-  (usersData ?? []).forEach((u) => {
-    userMap.set(u.id, { full_name: u.full_name, avatar_url: u.avatar_url ?? null });
-  });
-
-  // 2. Read player profile details from player_profiles (for rating, etc.)
-  const { data: profilesData } = await supabase
-    .from("player_profiles")
-    .select("user_id, display_name, preferred_hand, backhand")
+  // Single batched lookup for every card: `public_players` is a view that joins
+  // users + player_profiles + player_ratings, so one query returns name, avatar
+  // and rating for all organizers/participants. No per-card query (no N+1).
+  const { data: publicRows } = await supabase
+    .from("public_players")
+    .select("user_id, full_name, display_name, avatar_url, current_rating")
     .in("user_id", unique);
 
-  const { data: ratings } = await supabase
-    .from("player_ratings")
-    .select("user_id, current_rating")
-    .in("user_id", unique);
-
-  const ratingMap = new Map<string, number>();
-  (ratings ?? []).forEach((r) => ratingMap.set(r.user_id, Number(r.current_rating ?? 1)));
-
-  const profileMap = new Map<string, { full_name: string | null; avatar_url: string | null; gender: string | null; rating: number }>();
-  unique.forEach((id) => {
-    const userInfo = userMap.get(id);
-    const profile = profilesData?.find((p) => p.user_id === id);
-
-    // Prefer users.full_name (account name) over player_profiles.display_name (tennis profile name)
-    // This ensures the organizer/host name always matches the account that created the match.
-    const fullName = userInfo?.full_name ?? profile?.display_name ?? null;
-
-    profileMap.set(id, {
-      full_name: fullName || "Pemain",
-      avatar_url: userInfo?.avatar_url ?? null,
+  (publicRows ?? []).forEach((row) => {
+    profileMap.set(row.user_id, {
+      full_name: row.full_name ?? row.display_name ?? "Pemain",
+      avatar_url: row.avatar_url ?? null,
       gender: null,
-      rating: ratingMap.get(id) ?? 1,
+      rating: Number(row.current_rating ?? 1),
     });
   });
+
+  // Players who keep their profile private are not in the public view. Fill
+  // those few ids with one extra batched query so names still resolve.
+  const missing = unique.filter((id) => !profileMap.has(id));
+  if (missing.length > 0) {
+    const [{ data: usersData }, { data: ratings }] = await Promise.all([
+      supabase.from("users").select("id, full_name, avatar_url").in("id", missing),
+      supabase.from("player_ratings").select("user_id, current_rating").in("user_id", missing),
+    ]);
+    const ratingMap = new Map<string, number>();
+    (ratings ?? []).forEach((r) => ratingMap.set(r.user_id, Number(r.current_rating ?? 1)));
+    (usersData ?? []).forEach((u) => {
+      profileMap.set(u.id, {
+        full_name: u.full_name ?? "Pemain",
+        avatar_url: u.avatar_url ?? null,
+        gender: null,
+        rating: ratingMap.get(u.id) ?? 1,
+      });
+    });
+  }
 
   return profileMap;
 }
@@ -225,69 +300,54 @@ export async function createOpenMatch(
     }
   }
 
-  const isDoublesCategory = input.category.includes("doubles");
-  // Doubles are open by default: the host creates the match and leaves the
-  // partner and opponent slots for other players to fill. Only an explicitly
-  // private (targeted) doubles match requires all four players up front.
-  const matchType: MatchType =
-    input.matchType ?? (isDoublesCategory ? "open" : "private");
-  const partnerUserId = (input.partnerUserId ?? "").trim() || null;
-  const opponentUserId = (input.opponentUserId ?? "").trim() || null;
-  const opponentPartnerUserId = (input.opponentPartnerUserId ?? "").trim() || null;
+  const tournamentId = (input.tournamentId ?? "").trim() || null;
+  const explicitTeam1 = Array.isArray(input.team1UserIds)
+    ? input.team1UserIds.filter((id): id is string => Boolean(id))
+    : [];
+  const explicitTeam2 = Array.isArray(input.team2UserIds)
+    ? input.team2UserIds.filter((id): id is string => Boolean(id))
+    : [];
 
-  if (!isDoublesCategory && (partnerUserId || opponentUserId || opponentPartnerUserId)) {
-    throw new Error("Partner dan lawan hanya berlaku untuk pertandingan ganda.");
+  let roster: BuiltRoster;
+  try {
+    if (explicitTeam1.length > 0 || explicitTeam2.length > 0) {
+      roster = buildExplicitTeamRoster({
+        category: input.category,
+        team1UserIds: explicitTeam1,
+        team2UserIds: explicitTeam2,
+      }) as BuiltRoster;
+    } else {
+      const isDoublesCategory = input.category.includes("doubles");
+      const wantsOpenSingles = !isDoublesCategory && input.matchType === "open";
+      if (!isDoublesCategory && !wantsOpenSingles && !(input.opponentUserId ?? "").trim()) {
+        throw new MatchRosterError("Pilih lawan untuk pertandingan tunggal (1 vs 1).");
+      }
+      roster = buildMatchRoster({
+        category: input.category,
+        matchType: input.matchType,
+        organizerId: userId,
+        partnerUserId: input.partnerUserId,
+        opponentUserId: input.opponentUserId,
+        opponentPartnerUserId: input.opponentPartnerUserId,
+      }) as BuiltRoster;
+    }
+  } catch (error) {
+    throw new Error(
+      error instanceof Error ? error.message : "Susunan pemain pertandingan tidak valid."
+    );
   }
 
-  if (isDoublesCategory && matchType === "private") {
-    if (!partnerUserId) {
-      throw new Error("Pilih partner Anda untuk pertandingan ganda privat.");
-    }
-    if (partnerUserId === userId) {
-      throw new Error("Anda tidak dapat memilih diri sendiri sebagai partner.");
-    }
-    if (!opponentUserId) {
-      throw new Error("Pilih lawan untuk tim lawan (Team B).");
-    }
-    if (!opponentPartnerUserId) {
-      throw new Error("Pilih partner lawan untuk tim lawan (Team B).");
-    }
-    if (opponentUserId === userId) {
-      throw new Error("Lawan tidak boleh sama dengan Host.");
-    }
-    if (opponentPartnerUserId === userId) {
-      throw new Error("Partner lawan tidak boleh sama dengan Host.");
-    }
-    if (opponentUserId === partnerUserId) {
-      throw new Error("Lawan dan partner Host tidak boleh sama.");
-    }
-    if (opponentPartnerUserId === partnerUserId) {
-      throw new Error("Partner lawan dan partner Host tidak boleh sama.");
-    }
-    if (opponentPartnerUserId === opponentUserId) {
-      throw new Error("Lawan dan partner lawan tidak boleh sama.");
-    }
-  }
+  const matchType = roster.matchType;
+  const playerIds = Array.from(new Set(roster.participants.map((participant) => participant.userId)));
+  const referencedPlayers = playerIds.filter((id) => id !== userId);
 
-  if (
-    isDoublesCategory &&
-    matchType === "open" &&
-    (partnerUserId || opponentUserId || opponentPartnerUserId)
-  ) {
-    throw new Error("Pertandingan ganda terbuka tidak dapat menentukan pemain secara manual.");
-  }
-
-  // Every referenced player must have a player profile.
-  const referencedPlayers = [partnerUserId, opponentUserId, opponentPartnerUserId].filter(
-    (id): id is string => Boolean(id)
-  );
-  if (referencedPlayers.length > 0) {
+  if (!tournamentId && referencedPlayers.length > 0) {
     const { data: foundProfiles } = await supabase
       .from("player_profiles")
       .select("user_id")
       .in("user_id", referencedPlayers);
 
-    const found = new Set((foundProfiles ?? []).map((p) => p.user_id));
+    const found = new Set((foundProfiles ?? []).map((profile) => profile.user_id));
     for (const id of referencedPlayers) {
       if (!found.has(id)) {
         throw new Error("Pemain yang dipilih tidak ditemukan.");
@@ -295,9 +355,54 @@ export async function createOpenMatch(
     }
   }
 
+  const { data: genderRows } = await supabase
+    .from("users")
+    .select("id, gender")
+    .in("id", playerIds);
+  const genderById = new Map<string, string | null>(
+    (genderRows ?? []).map((row) => [row.id, row.gender ?? null])
+  );
+  assertCategoryGender(input.category, roster.participants, genderById, Boolean(tournamentId));
+
+  if (tournamentId) {
+    const { data: tournament, error: tournamentError } = await supabase
+      .from("tournaments")
+      .select("id, name, category, is_league")
+      .eq("id", tournamentId)
+      .maybeSingle();
+
+    if (tournamentError) {
+      throw new Error("Data turnamen tidak dapat dibaca. Pastikan migrasi turnamen sudah dijalankan.");
+    }
+    if (!tournament || tournament.is_league !== true) {
+      throw new Error("Turnamen tidak ditemukan.");
+    }
+    if (tournament.category && tournament.category !== input.category) {
+      throw new Error("Kategori pertandingan tidak sesuai dengan kategori turnamen.");
+    }
+
+    const { data: registrations, error: registrationError } = await supabase
+      .from("tournament_participants")
+      .select("user_id, status")
+      .eq("tournament_id", tournamentId)
+      .eq("category", input.category)
+      .in("user_id", playerIds)
+      .in("status", ["accepted", "confirmed"]);
+
+    if (registrationError) {
+      throw new Error("Data pendaftar turnamen tidak dapat dibaca.");
+    }
+
+    const acceptedPlayers = new Set((registrations ?? []).map((row) => row.user_id));
+    if (playerIds.some((id) => !acceptedPlayers.has(id))) {
+      throw new Error("Semua pemain harus terdaftar dan sudah diterima di kategori turnamen ini.");
+    }
+  }
+
   const metadata: MatchMetadata = {
     category: input.category,
     match_type: matchType,
+    tournament_id: tournamentId,
     umpire_option: input.umpireOption,
     umpire_name: input.umpireName || null,
     min_rating: input.minRating ?? 1.0,
@@ -328,7 +433,10 @@ export async function createOpenMatch(
       duration_minutes: duration,
       max_players: maxParticipantRows(input.category),
       current_players: 0,
-      status: "open",
+      status: roster.status,
+      is_private: roster.isPrivate,
+      tournament_id: tournamentId,
+      is_league_challenge: Boolean(tournamentId),
       level: input.level ?? "all",
       metadata,
     })
@@ -344,80 +452,36 @@ export async function createOpenMatch(
     throw new Error(toUserMessage(matchError, "Pertandingan gagal dibuat."));
   }
 
-  const { error: participantError } = await supabase.from("match_participants").insert({
+  const participantRows = roster.participants.map((participant) => ({
     match_id: matchData.id,
-    user_id: userId,
-    is_organizer: true,
-    team: 1,
-    metadata: { status: "confirmed" },
+    user_id: participant.userId,
+    is_organizer: participant.isOrganizer,
+    team: participant.team,
+    metadata: {
+      status: "confirmed",
+      role: participant.role,
+      added_by: userId,
+    },
     confirmed_at: new Date().toISOString(),
-  });
+  }));
+
+  const { error: participantError } = await supabase
+    .from("match_participants")
+    .insert(participantRows);
 
   if (participantError) {
-    logError("match.create.organizer", participantError, { matchId: matchData.id, userId });
-    // Roll back the match so we never leave an orphaned open match.
+    logError("match.create.participants", participantError, {
+      matchId: matchData.id,
+      userId,
+      playerIds,
+    });
+    // Roll back the match so we never leave an orphaned match behind.
+    await supabase.from("match_participants").delete().eq("match_id", matchData.id);
     await supabase.from("matches").delete().eq("id", matchData.id);
     throw new Error(toUserMessage(participantError, "Pertandingan gagal dibuat."));
   }
 
-  if (isDoublesCategory && partnerUserId) {
-    const { error: partnerError } = await supabase.from("match_participants").insert({
-      match_id: matchData.id,
-      user_id: partnerUserId,
-      is_organizer: false,
-      team: 1,
-      metadata: { status: "confirmed", added_by: userId, role: "host_partner" },
-      confirmed_at: new Date().toISOString(),
-    });
-
-    if (partnerError) {
-      logError("match.create.partner", partnerError, { matchId: matchData.id, userId, partnerUserId });
-      await supabase.from("match_participants").delete().eq("match_id", matchData.id);
-      await supabase.from("matches").delete().eq("id", matchData.id);
-      throw new Error(toUserMessage(partnerError, "Gagal menambahkan partner. Pertandingan dibatalkan."));
-    }
-
-    // Private doubles: also create opponent team positions up front.
-    if (matchType === "private") {
-      if (opponentUserId) {
-        const { error: opponentError } = await supabase.from("match_participants").insert({
-          match_id: matchData.id,
-          user_id: opponentUserId,
-          is_organizer: false,
-          team: 2,
-          metadata: { status: "confirmed", added_by: userId, role: "opponent" },
-          confirmed_at: new Date().toISOString(),
-        });
-
-        if (opponentError) {
-          logError("match.create.opponent", opponentError, { matchId: matchData.id, userId, opponentUserId });
-          await supabase.from("match_participants").delete().eq("match_id", matchData.id);
-          await supabase.from("matches").delete().eq("id", matchData.id);
-          throw new Error(toUserMessage(opponentError, "Gagal menambahkan lawan. Pertandingan dibatalkan."));
-        }
-      }
-
-      if (opponentPartnerUserId) {
-        const { error: opponentPartnerError } = await supabase.from("match_participants").insert({
-          match_id: matchData.id,
-          user_id: opponentPartnerUserId,
-          is_organizer: false,
-          team: 2,
-          metadata: { status: "confirmed", added_by: userId, role: "opponent_partner" },
-          confirmed_at: new Date().toISOString(),
-        });
-
-        if (opponentPartnerError) {
-          logError("match.create.opponentPartner", opponentPartnerError, { matchId: matchData.id, userId, opponentPartnerUserId });
-          await supabase.from("match_participants").delete().eq("match_id", matchData.id);
-          await supabase.from("matches").delete().eq("id", matchData.id);
-          throw new Error(toUserMessage(opponentPartnerError, "Gagal menambahkan partner lawan. Pertandingan dibatalkan."));
-        }
-      }
-    }
-
-    await resyncPlayerCount(supabase, matchData.id);
-  }
+  await resyncPlayerCount(supabase, matchData.id);
 
   return matchData.id;
 }
@@ -657,6 +721,37 @@ export async function cancelOpenMatch(
   }
 }
 
+export async function cancelTournamentMatchAsAdmin(
+  matchId: string,
+  adminUserId: string,
+  reason?: string
+): Promise<void> {
+  const supabase = createAdminClient();
+  if (!supabase) {
+    throw new Error("Supabase service role is not configured.");
+  }
+
+  const { data, error } = await supabase
+    .from("matches")
+    .update({
+      status: "cancelled",
+      cancellation_reason: reason?.trim() || "Dibatalkan oleh admin turnamen.",
+      cancelled_at: new Date().toISOString(),
+      cancelled_by: adminUserId,
+    })
+    .eq("id", matchId)
+    .not("tournament_id", "is", null)
+    .select("id");
+
+  if (error) {
+    logError("match.cancel.admin", error, { matchId, adminUserId });
+    throw new Error(toUserMessage(error, "Pertandingan gagal dibatalkan."));
+  }
+  if (!data || data.length === 0) {
+    throw new Error("Pertandingan turnamen tidak ditemukan atau tidak dapat dibatalkan.");
+  }
+}
+
 const MATCH_SELECT =
   "id, title, description, court_id, organizer_id, match_date, start_time, duration_minutes, max_players, current_players, status, metadata, created_at, tennis_courts(name, address)";
 
@@ -847,9 +942,20 @@ function buildMatchDetail(
       } satisfies MatchParticipantInfo;
     });
 
-  // Singles: host is always side 1, the other confirmed player is always side 2.
+  // Singles: when the organizer plays, they are side 1 and the opponent is
+  // side 2. Tournament matches created by an admin have no organizer
+  // participant, so the stored team assignment is authoritative.
+  const organizerPlays = participants.some(
+    (participant) => participant.is_organizer || participant.user_id === match.organizer_id
+  );
   const all = rawAll.map((p) => {
-    if (maxPlayers <= 2 && p.status === "confirmed" && !p.isOrganizer && p.userId !== match.organizer_id) {
+    if (
+      organizerPlays &&
+      maxPlayers <= 2 &&
+      p.status === "confirmed" &&
+      !p.isOrganizer &&
+      p.userId !== match.organizer_id
+    ) {
       return { ...p, team: 2 as 1 | 2 };
     }
     if (p.isOrganizer || p.userId === match.organizer_id) {
@@ -868,8 +974,10 @@ function buildMatchDetail(
       ? organizerParticipant.fullName
       : organizerProfile?.full_name && organizerProfile.full_name !== "Pemain"
       ? organizerProfile.full_name
-      : null) || "Host";
+      : null) || "Pemain";
   const organizerName = resolvedOrganizerName;
+  const organizerAvatarUrl =
+    organizerParticipant?.avatarUrl ?? organizerProfile?.avatar_url ?? null;
 
   // Host/organizer must always be Side 1 (Team A). Normalize display order for clarity.
   const sideSorted = [...confirmed].sort((a, b) => {
@@ -906,6 +1014,7 @@ function buildMatchDetail(
     cityName: typeof meta.court_city === "string" ? meta.court_city : null,
     organizerId: match.organizer_id,
     organizerName,
+    organizerAvatarUrl,
     matchDate: match.match_date,
     startTime: match.start_time,
     durationMinutes: match.duration_minutes ?? 90,
