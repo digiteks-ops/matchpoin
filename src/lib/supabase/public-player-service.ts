@@ -122,6 +122,9 @@ function mapPublicPlayer(row: PublicPlayerRow): PublicPlayer {
   };
 }
 
+const PUBLIC_PLAYER_COLUMNS =
+  "user_id, display_name, full_name, avatar_url, gender, city_id, city_name, province, bio, preferred_hand, backhand, play_frequency, preferred_categories, preferred_times, self_assessed_level, playing_since, completion_score, allow_invites, show_rating, current_rating, peak_rating, matches_played, wins, losses, draws, is_verified_player";
+
 function client() {
   const supabase = createAdminClient();
   if (!supabase) throw new Error("Supabase service role is not configured.");
@@ -132,7 +135,7 @@ export async function getPublicPlayers(
   limit: number,
   order: "name" | "rating" = "name"
 ): Promise<PublicPlayer[]> {
-  let query = client().from("public_players").select("*").limit(limit);
+  let query = client().from("public_players").select(PUBLIC_PLAYER_COLUMNS).limit(limit);
   for (const clause of ORDERING[order]) {
     query = query.order(clause.column, { ascending: clause.ascending });
   }
@@ -144,7 +147,7 @@ export async function getPublicPlayers(
 export async function getPublicPlayer(userId: string): Promise<PublicPlayer | null> {
   const { data, error } = await client()
     .from("public_players")
-    .select("*")
+    .select(PUBLIC_PLAYER_COLUMNS)
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw new Error(`Gagal memuat profil pemain: ${error.message}`);

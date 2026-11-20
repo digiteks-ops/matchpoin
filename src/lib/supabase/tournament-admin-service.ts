@@ -173,7 +173,8 @@ export async function getManagedLeague(tournamentId: string): Promise<ManagedLea
     .from("tournament_participants")
     .select("id, tournament_id, user_id, category, entry_id, entry_role, partner_user_id, status, joined_at")
     .in("tournament_id", tournamentIds)
-    .order("joined_at", { ascending: true });
+    .order("joined_at", { ascending: true })
+    .limit(1000);
   if (participantError) throw new Error(`Gagal memuat pendaftar: ${participantError.message}`);
 
   const participants = (participantRows ?? []) as ParticipantRow[];
