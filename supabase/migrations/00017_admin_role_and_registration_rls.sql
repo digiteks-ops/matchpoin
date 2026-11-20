@@ -81,9 +81,12 @@ END $$;
 
 -- ---------------------------------------------------------------------------
 -- 3. is_admin(): role column OR an active admin/super_admin RBAC grant.
+--    Two explicit overloads (0-arg wrapper + 1-arg) avoid the "function
+--    is_admin() is not unique" error when the live project already defines a
+--    zero-argument is_admin().
 -- ---------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION public.is_admin(p_user_id UUID DEFAULT auth.uid())
+CREATE OR REPLACE FUNCTION public.is_admin(p_user_id UUID)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
 STABLE
@@ -91,7 +94,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_uid UUID := COALESCE(p_user_id, auth.uid());
+  v_uid UUID := p_user_id;
   v_flag BOOLEAN := FALSE;
 BEGIN
   IF v_uid IS NULL THEN
@@ -126,8 +129,20 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT public.is_admin(auth.uid());
+$$;
+
 REVOKE ALL ON FUNCTION public.is_admin(UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_admin() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.is_admin(UUID) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated, service_role;
 
 -- Promote a role column admin into the RBAC array used by the app guards.
 CREATE OR REPLACE FUNCTION public.get_user_roles(p_user_id UUID)

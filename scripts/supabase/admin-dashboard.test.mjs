@@ -42,8 +42,14 @@ test("self-escalation is blocked by an invoker trigger and column revoke", () =>
 test("is_admin is a SECURITY DEFINER helper with a pinned search_path", () => {
   assert.match(
     migration,
-    /CREATE OR REPLACE FUNCTION public\.is_admin\(p_user_id UUID DEFAULT auth\.uid\(\)\)[\s\S]*?SECURITY DEFINER[\s\S]*?SET search_path = public/
+    /CREATE OR REPLACE FUNCTION public\.is_admin\(p_user_id UUID\)[\s\S]*?SECURITY DEFINER[\s\S]*?SET search_path = public/
   );
+});
+
+test("is_admin has explicit 0-arg and 1-arg overloads (no ambiguous default)", () => {
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.is_admin\(\)/);
+  assert.doesNotMatch(migration, /p_user_id UUID DEFAULT/);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.is_admin\(\) TO authenticated, service_role/);
 });
 
 test("players read only their own registrations and only admins update", () => {
