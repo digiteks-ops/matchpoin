@@ -12,7 +12,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireApiRole("super_admin");
+  const guard = await requireApiRole("admin");
   if (guard instanceof NextResponse) return guard;
 
   const { id: registrationId } = await params;
@@ -31,31 +31,31 @@ export async function POST(
   }
 
   const reason = typeof payload.reason === "string" ? payload.reason.trim().slice(0, 500) : "";
-  if (!reason) {
-    return NextResponse.json(
-      { success: false, message: "Alasan penolakan wajib diisi." },
-      { status: 400 }
-    );
-  }
 
   try {
-    const result = await rejectRegistration(registrationId, guard.session.user.id, reason);
+    const result = await rejectRegistration(registrationId, guard.session.user.id, reason || null);
     if (!result.success) {
       return NextResponse.json({ success: false, message: result.message }, { status: 409 });
     }
 
     if (result.user_id && result.tournament_id) {
-      await notifyTournamentRegistration(
-        result.user_id,
-        result.tournament_id,
-        result.tournament_name ?? "Liga"
-      );
-      if (result.partner_user_id) {
+      try {
         await notifyTournamentRegistration(
-          result.partner_user_id,
+          result.user_id,
           result.tournament_id,
           result.tournament_name ?? "Liga"
         );
+        if (result.partner_user_id) {
+          await notifyTournamentRegistration(
+            result.partner_user_id,
+            result.tournament_id,
+            result.tournament_name ?? "Liga"
+          );
+        }
+      } catch (notificationError) {
+        logError("admin.tournaments.registrations.reject.notify", notificationError, {
+          registrationId,
+        });
       }
     }
 

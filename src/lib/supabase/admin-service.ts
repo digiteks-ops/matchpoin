@@ -47,15 +47,25 @@ export async function getAdminDashboard(): Promise<{
   activity: AdminActivityItem[];
 }> {
   const supabase = admin();
-  const [totalUsers, activePlayers, totalMatches, totalTournaments, pendingRegistrations, confirmedRegistrations] =
+  const [totalUsers, activePlayers, totalMatches, totalTournaments, registrationStats] =
     await Promise.all([
       count("users"),
       count("public_players"),
       count("matches"),
       count("tournaments"),
-      count("tournament_participants", (query) => query.eq("status", "pending")),
-      count("tournament_participants", (query) => query.eq("status", "confirmed")),
+      supabase.rpc("admin_registration_stats").then(({ data, error }) => {
+        if (error) {
+          throw new Error(`Gagal memuat statistik pendaftaran: ${error.message}`);
+        }
+        return (data ?? {}) as {
+          pending_entries?: number;
+          accepted_entries?: number;
+        };
+      }),
     ]);
+
+  const pendingRegistrations = Number(registrationStats.pending_entries ?? 0);
+  const confirmedRegistrations = Number(registrationStats.accepted_entries ?? 0);
 
   const { data: logs, error } = await supabase
     .from("tournament_registration_audit_logs")
@@ -364,9 +374,64 @@ export interface PendingRegistration {
 }
 
 export async function listPendingRegistrations(): Promise<PendingRegistration[]> {
-  const { data, error } = await admin().rpc("admin_list_pending_registrations");
-  if (error) throw new Error(`Gagal memuat pendaftaran tertunda: ${error.message}`);
+  return listRegistrations();
+}
+
+export interface RegistrationFilters {
+  tournamentId?: string;
+  status?: string;
+}
+
+export async function listRegistrations(
+  filters: RegistrationFilters = {}
+): Promise<PendingRegistration[]> {
+  const { data, error } = await admin().rpc("admin_list_registrations", {
+    p_tournament_id: filters.tournamentId ?? null,
+    p_status: filters.status ?? null,
+  });
+  if (error) throw new Error(`Gagal memuat pendaftaran: ${error.message}`);
   return Array.isArray(data) ? (data as PendingRegistration[]) : [];
+}
+
+export interface RegistrationStats {
+  pending: number;
+  accepted: number;
+  declined: number;
+}
+
+export async function getRegistrationStats(): Promise<RegistrationStats> {
+  const { data, error } = await admin().rpc("admin_registration_stats");
+  if (error) throw new Error(`Gagal memuat statistik pendaftaran: ${error.message}`);
+  const row = (data ?? {}) as {
+    pending_entries?: number;
+    accepted_entries?: number;
+    declined_entries?: number;
+  };
+  return {
+    pending: Number(row.pending_entries ?? 0),
+    accepted: Number(row.accepted_entries ?? 0),
+    declined: Number(row.declined_entries ?? 0),
+  };
+}
+
+export interface LeagueOption {
+  id: string;
+  name: string;
+  category: string;
+}
+
+export async function listLeagueOptions(): Promise<LeagueOption[]> {
+  const { data, error } = await admin()
+    .from("tournaments")
+    .select("id, name, category")
+    .eq("is_league", true)
+    .order("name", { ascending: true });
+  if (error) throw new Error(`Gagal memuat daftar liga: ${error.message}`);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    category: row.category ?? "",
+  }));
 }
 
 export interface RegistrationDecision {
@@ -395,7 +460,7 @@ export async function approveRegistration(
 export async function rejectRegistration(
   registrationId: string,
   actorId: string,
-  reason: string
+  reason: string | null
 ): Promise<RegistrationDecision> {
   const { data, error } = await admin().rpc("admin_reject_registration", {
     p_registration_id: registrationId,

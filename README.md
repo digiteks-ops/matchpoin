@@ -188,6 +188,19 @@ Set these in Vercel → Project → Settings → Environment Variables (Producti
 
 Also set Supabase → Authentication → URL Configuration: Site URL `https://matchpoin.vercel.app`, redirect URLs `https://matchpoin.vercel.app/auth/callback` and `http://localhost:3000/auth/callback`. The canonical login route is `/login`; `/auth/login` redirects to it.
 
+### Admin access
+
+The admin area lives at `/admin` and is protected by middleware plus a server-side role check on every page and action. Promote an account from the Supabase SQL Editor (run as `postgres`, which the role trigger allows):
+
+```sql
+UPDATE public.users SET role = 'admin' WHERE email = 'matchpoin.id@gmail.com';
+-- If the profiles table exists in your environment:
+UPDATE public.profiles p SET role = 'admin'
+FROM public.users u WHERE p.id = u.id AND u.email = 'matchpoin.id@gmail.com';
+```
+
+You can also grant the RBAC role through the service-role RPC (`assign_role`) or `npm run db:seed-admin`. Players cannot change their own `role` through the API: the `guard_role_column` trigger rejects any such update, and the `authenticated`/`anon` roles have no column-level `UPDATE` on `role`.
+
 ---
 
 ## Scripts

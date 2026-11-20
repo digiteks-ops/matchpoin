@@ -7,17 +7,25 @@ export interface TournamentListItem {
   name: string;
   category: string;
   season: string;
+  league_key: string | null;
+  league_name: string | null;
   start_date: string;
   end_date: string;
+  main_event_start_date: string | null;
+  main_event_end_date: string | null;
+  registration_deadline: string | null;
   status: string;
   max_participants: number;
   registration_count: number;
+  pending_count: number;
   is_registered: boolean;
+  my_status: string | null;
 }
 
 export interface TournamentPartner {
   id: string;
   name: string;
+  gender: string | null;
 }
 
 export interface LeagueOverview {
@@ -61,53 +69,99 @@ function client() {
   return createClient();
 }
 
+/**
+ * Server-side reader for registration rows. RLS now limits players to their own
+ * registrations, so quota counts, partner exclusions and public league rosters
+ * are read with the service role (the data returned to the browser is filtered
+ * to public-safe fields by each caller).
+ */
+function dataClient() {
+  return createAdminClient() ?? createClient();
+}
+
+interface RegistrationCountRow {
+  tournament_id: string;
+  accepted: number;
+  pending: number;
+}
+
 export async function getTournamentList(userId: string | null): Promise<TournamentListItem[]> {
   const supabase = client();
+  const data = dataClient();
   const { data: tournaments, error } = await supabase
     .from("tournaments")
-    .select("id, name, category, season, start_date, end_date, status, max_participants")
+    .select(
+      "id, name, category, season, league_key, league_name, start_date, end_date, main_event_start_date, main_event_end_date, registration_deadline, status, max_participants"
+    )
     .eq("is_league", true)
     .order("start_date", { ascending: true })
     .order("name", { ascending: true });
   if (error) throw new Error(`Gagal memuat kompetisi: ${error.message}`);
 
   const ids = (tournaments ?? []).map((row) => row.id);
-  const { data: entries } = ids.length
-    ? await supabase
-        .from("tournament_participants")
-        .select("tournament_id, user_id, entry_id, status")
-        .in("tournament_id", ids)
-    : { data: [] as Array<{ tournament_id: string; user_id: string; entry_id: string; status: string }> };
 
-  const entriesByTournament = new Map<string, Set<string>>();
-  const registeredForUser = new Set<string>();
+  // Quota counts come from a definer RPC that only exposes aggregates.
+  const { data: countRows } = await data.rpc("league_registration_counts");
+  const counts = new Map<string, RegistrationCountRow>();
+  for (const row of (Array.isArray(countRows) ? countRows : []) as RegistrationCountRow[]) {
+    counts.set(row.tournament_id, row);
+  }
+
+  // The session client only returns the caller's own registrations under RLS.
+  const { data: entries } =
+    userId && ids.length
+      ? await supabase
+          .from("tournament_participants")
+          .select("tournament_id, user_id, entry_id, status")
+          .in("tournament_id", ids)
+          .eq("user_id", userId)
+      : {
+          data: [] as Array<{
+            tournament_id: string;
+            user_id: string;
+            entry_id: string | null;
+            status: string;
+          }>,
+        };
+
+  const statusForUser = new Map<string, string>();
   for (const entry of entries ?? []) {
-    if (entry.status === "rejected") continue;
-    const set = entriesByTournament.get(entry.tournament_id) ?? new Set<string>();
-    set.add(entry.entry_id);
-    entriesByTournament.set(entry.tournament_id, set);
-    if (userId && entry.user_id === userId) registeredForUser.add(entry.tournament_id);
+    if (userId && entry.user_id === userId) {
+      const current = statusForUser.get(entry.tournament_id);
+      if (!current || current === "rejected" || entry.status !== "rejected") {
+        statusForUser.set(entry.tournament_id, entry.status);
+      }
+    }
   }
 
   return (tournaments ?? []).map((row) => ({
     id: row.id,
     name: row.name,
     category: row.category ?? "mens_singles",
-    season: row.season ?? "Q1 2027",
+    season: row.season ?? "Musim 1 2027",
+    league_key: row.league_key ?? null,
+    league_name: row.league_name ?? null,
     start_date: row.start_date,
     end_date: row.end_date,
+    main_event_start_date: row.main_event_start_date ?? null,
+    main_event_end_date: row.main_event_end_date ?? null,
+    registration_deadline: row.registration_deadline ?? null,
     status: row.status,
     max_participants: Number(row.max_participants),
-    registration_count: entriesByTournament.get(row.id)?.size ?? 0,
-    is_registered: registeredForUser.has(row.id),
+    registration_count: Number(counts.get(row.id)?.accepted ?? 0),
+    pending_count: Number(counts.get(row.id)?.pending ?? 0),
+    is_registered: Boolean(statusForUser.get(row.id) && statusForUser.get(row.id) !== "rejected"),
+    my_status: statusForUser.get(row.id) ?? null,
   }));
 }
 
 export async function getTournamentPartners(
   tournamentId: string,
-  userId: string
+  userId: string,
+  category?: string | null
 ): Promise<TournamentPartner[] | null> {
   const supabase = client();
+  const data = dataClient();
   const { data: tournament, error } = await supabase
     .from("tournaments")
     .select("id")
@@ -119,17 +173,19 @@ export async function getTournamentPartners(
 
   const { data: players, error: playerError } = await supabase
     .from("public_players")
-    .select("user_id, display_name, full_name")
+    .select("user_id, display_name, full_name, gender")
     .neq("user_id", userId)
     .order("display_name", { ascending: true })
     .limit(200);
   if (playerError) throw new Error(`Gagal memuat calon partner: ${playerError.message}`);
 
-  const { data: entries } = await supabase
+  let takenQuery = data
     .from("tournament_participants")
     .select("user_id")
     .eq("tournament_id", tournamentId)
     .neq("status", "rejected");
+  if (category) takenQuery = takenQuery.eq("category", category);
+  const { data: entries } = await takenQuery;
   const taken = new Set((entries ?? []).map((entry) => entry.user_id));
 
   return (players ?? [])
@@ -138,11 +194,13 @@ export async function getTournamentPartners(
     .map((player) => ({
       id: player.user_id,
       name: player.display_name || player.full_name || "Pemain MATCHPOIN",
+      gender: (player as { gender?: string | null }).gender ?? null,
     }));
 }
 
 export async function getLeagueOverview(category: string): Promise<LeagueOverview> {
   const supabase = client();
+  const data = dataClient();
   const { data: league, error } = await supabase
     .from("tournaments")
     .select("id, name, category, season, start_date, end_date, status, max_participants")
@@ -156,11 +214,11 @@ export async function getLeagueOverview(category: string): Promise<LeagueOvervie
 
   const [{ data: entries, error: entryError }, { data: standings, error: standingError }] =
     await Promise.all([
-      supabase
+      data
         .from("tournament_participants")
         .select("entry_id, user_id, joined_at, status")
         .eq("tournament_id", league.id)
-        .neq("status", "rejected")
+        .in("status", ["accepted", "confirmed"])
         .order("joined_at", { ascending: true }),
       supabase
         .from("league_standings")

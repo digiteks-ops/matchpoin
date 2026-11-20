@@ -31,6 +31,7 @@
     "test:supabase-open-match": "node --test scripts/supabase/open-match.test.mjs",
     "test:supabase-match-card": "node --test scripts/supabase/match-card-host.test.mjs",
     "test:supabase-auth-login": "node --test scripts/supabase/auth-login.test.mjs",
+    "test:supabase-admin": "node --test scripts/supabase/admin-dashboard.test.mjs",
     "db:backup:mysql": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs --backup-only",
     "db:restore-mysql": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs",
     "db:validate:supabase": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs --validate-only"
