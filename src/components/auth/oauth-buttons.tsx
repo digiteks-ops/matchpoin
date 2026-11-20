@@ -12,10 +12,29 @@ interface OAuthButtonsProps {
   mode?: "signin" | "signup";
 }
 
+const PROVIDER_LABEL: Record<Provider, string> = {
+  google: "Google",
+  facebook: "Facebook",
+};
+
+function mapOAuthError(provider: Provider, message: string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes("not enabled") || lower.includes("unsupported provider")) {
+    return `Masuk dengan ${PROVIDER_LABEL[provider]} belum diaktifkan. Hubungi admin MATCHPOIN.`;
+  }
+  if (lower.includes("access_denied") || lower.includes("denied")) {
+    return "Anda membatalkan proses masuk. Silakan coba lagi.";
+  }
+  if (lower.includes("redirect") || lower.includes("callback")) {
+    return "Alamat callback OAuth tidak valid. Periksa pengaturan provider.";
+  }
+  return `Gagal memulai proses masuk dengan ${PROVIDER_LABEL[provider]}. Silakan coba lagi.`;
+}
+
 export function OAuthButtons({ redirectTo = "/dashboard", mode = "signin" }: OAuthButtonsProps) {
-  const [enabled, setEnabled] = useState<Record<Provider, boolean>>({
-    google: false,
-    facebook: false,
+  const [enabled, setEnabled] = useState<Record<Provider, boolean | null>>({
+    google: null,
+    facebook: null,
   });
   const [isLoading, setIsLoading] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +62,8 @@ export function OAuthButtons({ redirectTo = "/dashboard", mode = "signin" }: OAu
             facebook: Boolean(json.external?.facebook),
           });
         }
-      } catch (err) {
-        console.warn("Unable to load auth providers:", err);
+      } catch {
+        // Keep both buttons usable; the provider call will surface a clear error.
       }
     }
 
@@ -56,6 +75,14 @@ export function OAuthButtons({ redirectTo = "/dashboard", mode = "signin" }: OAu
 
   const handleOAuth = async (provider: Provider) => {
     setError(null);
+
+    if (enabled[provider] === false) {
+      setError(
+        `Masuk dengan ${PROVIDER_LABEL[provider]} belum diaktifkan. Hubungi admin MATCHPOIN.`
+      );
+      return;
+    }
+
     setIsLoading(provider);
 
     try {
@@ -73,54 +100,59 @@ export function OAuthButtons({ redirectTo = "/dashboard", mode = "signin" }: OAu
       });
 
       if (oauthError) {
-        setError(oauthError.message);
+        setError(mapOAuthError(provider, oauthError.message));
         setIsLoading(null);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memulai proses masuk.");
+      const message = err instanceof Error ? err.message : "";
+      setError(mapOAuthError(provider, message));
       setIsLoading(null);
     }
   };
 
-  if (!enabled.google && !enabled.facebook) return null;
-
-  const label = mode === "signin" ? "Masuk" : "Daftar";
+  const label = "Lanjutkan";
 
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {enabled.google && (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full gap-2"
-            disabled={isLoading !== null}
-            onClick={() => handleOAuth("google")}
-          >
-            {isLoading === "google" ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Chrome className="w-4 h-4" />
-            )}
-            {label} dengan Google
-          </Button>
-        )}
-        {enabled.facebook && (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full gap-2"
-            disabled={isLoading !== null}
-            onClick={() => handleOAuth("facebook")}
-          >
-            {isLoading === "facebook" ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Facebook className="w-4 h-4" />
-            )}
-            {label} dengan Facebook
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full gap-2"
+          disabled={isLoading !== null}
+          onClick={() => handleOAuth("google")}
+          title={
+            enabled.google === false
+              ? "Provider Google belum diaktifkan di Supabase"
+              : "Lanjutkan dengan Google"
+          }
+        >
+          {isLoading === "google" ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Chrome className="w-4 h-4" />
+          )}
+          {label} dengan Google
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full gap-2"
+          disabled={isLoading !== null}
+          onClick={() => handleOAuth("facebook")}
+          title={
+            enabled.facebook === false
+              ? "Provider Facebook belum diaktifkan di Supabase"
+              : "Lanjutkan dengan Facebook"
+          }
+        >
+          {isLoading === "facebook" ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Facebook className="w-4 h-4" />
+          )}
+          {label} dengan Facebook
+        </Button>
       </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}

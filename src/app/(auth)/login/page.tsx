@@ -14,14 +14,25 @@ import { ensurePlayerRecords } from "@/lib/services/player-service";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { AlertCircle, ArrowLeft, Loader2 } from "lucide-react";
 
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  oauth_denied: "Anda membatalkan proses masuk dengan penyedia. Silakan coba lagi.",
+  oauth_failed: "Gagal masuk dengan penyedia. Silakan coba lagi atau gunakan email.",
+  missing_code: "Proses masuk tidak selesai. Silakan coba lagi.",
+  email_missing:
+    "Facebook tidak memberikan alamat email. Silakan masuk dengan Google atau daftar dengan email.",
+};
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") || "/dashboard";
+  const queryError = searchParams.get("error");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(
+    queryError ? AUTH_ERROR_MESSAGES[queryError] ?? "Gagal masuk. Silakan coba lagi." : null
+  );
   const [isLoading, setIsLoading] = useState(false);
 
   const safeRedirect = redirectTo.startsWith("/") ? redirectTo : "/dashboard";
