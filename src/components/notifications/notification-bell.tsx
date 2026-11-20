@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Bell, X, MessageSquare, AlertCircle, CheckCircle2, Clock, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -95,6 +96,7 @@ function NotificationItem({
 }
 
 export function NotificationBell() {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -206,9 +208,9 @@ export function NotificationBell() {
                           setIsOpen(false);
                           if (notification.referenceId) {
                             if (notification.type.startsWith("match")) {
-                              window.location.href = `/matches/${notification.referenceId}`;
+                              router.push(`/matches/${notification.referenceId}`);
                             } else if (notification.type.startsWith("tournament")) {
-                              window.location.href = `/tournaments`;
+                              router.push("/tournaments");
                             }
                           }
                         }}

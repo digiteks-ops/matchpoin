@@ -34,6 +34,10 @@
     "test:supabase-admin": "node --test scripts/supabase/admin-dashboard.test.mjs",
     "test:supabase-oauth": "node --test scripts/supabase/oauth-login.test.mjs",
     "test:supabase-storage": "node --test scripts/supabase/storage-uploads.test.mjs",
+    "test:supabase-perf": "node --test scripts/supabase/perf-audit.test.mjs",
+    "test:supabase-frontend-perf": "node --test scripts/supabase/frontend-perf.test.mjs",
+    "db:explain": "node --env-file=.env.local scripts/supabase/explain-hot-queries.mjs",
+    "db:time": "node --env-file=.env.local scripts/supabase/time-hot-endpoints.mjs",
     "db:backup:mysql": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs --backup-only",
     "db:restore-mysql": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs",
     "db:validate:supabase": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs --validate-only"

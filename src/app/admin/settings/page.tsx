@@ -1,7 +1,12 @@
+﻿import nextDynamic from "next/dynamic";
 import { requirePageRole } from "@/lib/auth/guards";
 import { getAdminSettingsData } from "@/lib/supabase/admin-service";
 import { logError } from "@/lib/errors";
-import AdminSettingsClient from "./AdminSettingsClient";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
+
+const AdminSettingsClient = nextDynamic(() => import("./AdminSettingsClient"), {
+  loading: () => <PageSkeleton variant="list" />,
+});
 
 export const dynamic = "force-dynamic";
 
@@ -47,3 +52,4 @@ export default async function AdminSettingsPage({
     />
   );
 }
+

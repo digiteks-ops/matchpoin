@@ -1,405 +1,395 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Trophy, Users, Calendar, MapPin, AlertCircle, CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertCircle, Calendar, CheckCircle2, Clock, Loader2, MapPin, Trophy, Users } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
+import { formatIndonesianDate } from "@/lib/utils";
+import {
+  IKA17_CATEGORIES,
+  IKA17_END_DATE,
+  IKA17_LEAGUE_NAME,
+  IKA17_MAIN_EVENT_END,
+  IKA17_MAIN_EVENT_START,
+  IKA17_QUOTA,
+  IKA17_REGISTRATION_DEADLINE,
+  IKA17_START_DATE,
+  ika17Category,
+} from "@/lib/tournaments/ika17";
 
 interface TournamentRow {
   id: string;
   name: string;
   category: string;
   season: string;
+  league_key: string | null;
+  league_name: string | null;
   start_date: string;
   end_date: string;
+  main_event_start_date: string | null;
+  main_event_end_date: string | null;
+  registration_deadline: string | null;
   status: string;
   max_participants: number;
+  registration_count: number;
+  pending_count: number;
+  is_registered: boolean;
+  my_status: string | null;
 }
 
-interface ParticipantRow {
-  userId: string;
+interface PartnerOption {
+  id: string;
   name: string;
+  gender: string | null;
 }
 
-const CATEGORIES = [
-  { id: "mens_singles", label: "Men's Singles" },
-  { id: "mens_doubles", label: "Men's Doubles" },
-  { id: "mixed_doubles", label: "Mixed Doubles" },
-  { id: "womens_doubles", label: "Women's Doubles" },
-] as const;
+const dateLabel = (value: string | null | undefined) =>
+  value ? formatIndonesianDate(value, { day: "numeric", month: "long", year: "numeric" }) : "-";
 
-function categoryLabel(id: string): string {
-  const c = CATEGORIES.find((x) => x.id === id);
-  return c ? c.label : id;
+function statusLabel(status: string | null): string | null {
+  if (status === "pending") return "Menunggu persetujuan";
+  if (status === "accepted" || status === "confirmed") return "Diterima";
+  if (status === "rejected") return "Ditolak";
+  return null;
 }
 
 export default function TournamentsPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentGender, setCurrentGender] = useState<string | null>(null);
   const [tournaments, setTournaments] = useState<TournamentRow[]>([]);
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  const [registeredIds, setRegisteredIds] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedTournament, setSelectedTournament] = useState<TournamentRow | null>(null);
-
-  // Modal registration state
-  const [regOpen, setRegOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<TournamentRow | null>(null);
+  const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [partnerUserId, setPartnerUserId] = useState("");
-  const [partnerOptions, setPartnerOptions] = useState<{ id: string; name: string }[]>([]);
+  const [partnersLoading, setPartnersLoading] = useState(false);
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
   const [regSuccess, setRegSuccess] = useState<string | null>(null);
-  const [participants, setParticipants] = useState<ParticipantRow[]>([]);
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      setCurrentUser(user);
+      if (!user) return;
+      const { data } = await supabase
+        .from("public_players")
+        .select("gender")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      setCurrentGender((data as { gender?: string | null } | null)?.gender ?? null);
+    });
   }, []);
 
   const loadTournaments = useCallback(async () => {
     setIsLoading(true);
+    setError(null);
     try {
-      const supabase = createClient();
-      // `tournaments` is the league container; `league_participants` was never
-      // created on this project, so the old query always returned empty.
-      const { data: rows, error } = await supabase
-        .from("tournaments")
-        .select("id, name, category, season, start_date, end_date, status, max_participants, is_league")
-        .order("start_date", { ascending: true });
-
-      if (error || !rows) {
-        setTournaments([]);
-        return;
+      const response = await fetch("/api/tournaments", { cache: "no-store" });
+      const payload = (await response.json()) as {
+        success?: boolean;
+        tournaments?: TournamentRow[];
+        message?: string;
+      };
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || "Gagal memuat turnamen.");
       }
-
-      const list: TournamentRow[] = rows
-        .filter((r: any) => r.is_league !== false)
-        .map((r: any) => ({
-          id: r.id,
-          name: r.name,
-          category: r.category || "mens_singles",
-          season: r.season || "Q1 2027",
-          start_date: r.start_date,
-          end_date: r.end_date,
-          status: r.status,
-          max_participants: r.max_participants || 12,
-        }));
-
-      setTournaments(list);
-
-      const ids = list.map((t) => t.id);
-      if (ids.length === 0) return;
-
-      const { data: partRows } = await supabase
-        .from("tournament_participants")
-        .select("tournament_id, user_id, entry_id")
-        .in("tournament_id", ids);
-
-      const countMap: Record<string, number> = {};
-      const regMap: Record<string, boolean> = {};
-      // One competition entry == one quota slot: a doubles team is two rows
-      // sharing an entry_id and must only consume a single slot.
-      const entrySets: Record<string, Set<string>> = {};
-      ids.forEach((id) => {
-        countMap[id] = 0;
-        regMap[id] = false;
-        entrySets[id] = new Set<string>();
-      });
-
-      (partRows ?? []).forEach((p: any) => {
-        const bucket = entrySets[p.tournament_id];
-        if (bucket) bucket.add(p.entry_id ?? p.user_id);
-        if (currentUser && p.user_id === currentUser.id) {
-          regMap[p.tournament_id] = true;
-        }
-      });
-
-      Object.keys(entrySets).forEach((id) => {
-        countMap[id] = entrySets[id].size;
-      });
-
-      setCounts(countMap);
-      setRegisteredIds(regMap);
+      setTournaments(payload.tournaments ?? []);
     } catch (err) {
-      console.error("Error loading tournaments:", err);
+      setError(err instanceof Error ? err.message : "Gagal memuat turnamen.");
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser]);
+  }, []);
 
   useEffect(() => {
     loadTournaments();
   }, [loadTournaments]);
 
-  async function openRegistration(t: TournamentRow) {
-    setSelectedTournament(t);
+  const league = useMemo(() => {
+    const first = tournaments[0];
+    return {
+      name: first?.league_name || IKA17_LEAGUE_NAME,
+      start: first?.start_date || IKA17_START_DATE,
+      end: first?.end_date || IKA17_END_DATE,
+      mainEventStart: first?.main_event_start_date || IKA17_MAIN_EVENT_START,
+      mainEventEnd: first?.main_event_end_date || IKA17_MAIN_EVENT_END,
+      deadline: first?.registration_deadline || IKA17_REGISTRATION_DEADLINE,
+    };
+  }, [tournaments]);
+
+  const categories = useMemo(() => {
+    return IKA17_CATEGORIES.map((definition) => {
+      const row = tournaments.find((entry) => entry.category === definition.id);
+      return { definition, row };
+    });
+  }, [tournaments]);
+
+  const openRegistration = async (row: TournamentRow) => {
+    setSelected(row);
+    setPartnerUserId("");
     setRegError(null);
     setRegSuccess(null);
-    setPartnerUserId("");
-    setRegOpen(true);
-    setRegLoading(true);
+    setPartners([]);
 
+    const definition = ika17Category(row.category);
+    if (!definition?.doubles) return;
+
+    setPartnersLoading(true);
     try {
-      const supabase = createClient();
-
-      // Load existing participants
-      const { data: parts } = await supabase
-        .from("tournament_participants")
-        .select("user_id")
-        .eq("tournament_id", t.id);
-
-      const uids = (parts ?? []).map((p: any) => p.user_id);
-      if (uids.length > 0) {
-        const { data: usersData } = await supabase
-          .from("users")
-          .select("id, full_name")
-          .in("id", uids);
-        setParticipants(
-          (usersData ?? []).map((u: any) => ({
-            userId: u.id,
-            name: u.full_name || "Pemain MATCHPOIN",
-          }))
-        );
-      } else {
-        setParticipants([]);
+      const response = await fetch(
+        `/api/tournaments/${row.id}/partners?category=${encodeURIComponent(row.category)}`,
+        { cache: "no-store" }
+      );
+      const payload = (await response.json()) as {
+        success?: boolean;
+        partners?: PartnerOption[];
+        message?: string;
+      };
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || "Gagal memuat calon partner.");
       }
-
-      // If doubles, load available partners
-      if (t.category.includes("doubles")) {
-        const { data: availablePlayers } = await supabase
-          .from("player_profiles")
-          .select("user_id, display_name")
-          .eq("is_profile_public", true)
-          .neq("user_id", currentUser?.id ?? "")
-          .limit(100);
-
-        setPartnerOptions(
-          (availablePlayers ?? []).map((p: any) => ({
-            id: p.user_id,
-            name: p.display_name || "Pemain MATCHPOIN",
-          }))
-        );
-      }
+      const allowed = (payload.partners ?? []).filter((partner) => {
+        if (definition.genderRule === "male") return partner.gender === "male";
+        if (definition.genderRule === "female") return partner.gender === "female";
+        if (currentGender === "male") return partner.gender === "female";
+        if (currentGender === "female") return partner.gender === "male";
+        return true;
+      });
+      setPartners(allowed);
+    } catch (err) {
+      setRegError(err instanceof Error ? err.message : "Gagal memuat calon partner.");
     } finally {
-      setRegLoading(false);
+      setPartnersLoading(false);
     }
-  }
+  };
 
-  async function confirmRegistration() {
-    if (!currentUser || !selectedTournament) return;
+  const closeModal = () => {
+    if (regLoading) return;
+    setSelected(null);
+    setPartnerUserId("");
     setRegError(null);
-    setRegLoading(true);
+  };
 
+  const submitRegistration = async () => {
+    if (!selected) return;
+    const definition = ika17Category(selected.category);
+    if (!definition) return;
+
+    setRegError(null);
+    setRegSuccess(null);
+    if (definition.genderRule === "male" && currentGender && currentGender !== "male") {
+      setRegError("Kategori ini khusus pemain putra.");
+      return;
+    }
+    if (definition.genderRule === "female" && currentGender && currentGender !== "female") {
+      setRegError("Kategori ini khusus pemain putri.");
+      return;
+    }
+    if (definition.doubles && !partnerUserId) {
+      setRegError("Pilih partner untuk kategori ganda.");
+      return;
+    }
+
+    setRegLoading(true);
     try {
-      const res = await fetch("/api/tournaments/register", {
+      const response = await fetch("/api/tournaments/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tournamentId: selectedTournament.id,
-          partnerUserId: selectedTournament.category.includes("doubles") ? partnerUserId : undefined,
+          tournamentId: selected.id,
+          partnerUserId: definition.doubles ? partnerUserId : null,
         }),
       });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setRegError(data.message || "Pendaftaran gagal.");
-        return;
+      const payload = (await response.json()) as { success?: boolean; message?: string };
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || "Pendaftaran gagal.");
       }
-
-      setRegSuccess(data.message);
-      setCounts((prev) => ({
-        ...prev,
-        [selectedTournament.id]: (prev[selectedTournament.id] || 0) + 1,
-      }));
-      setRegisteredIds((prev) => ({
-        ...prev,
-        [selectedTournament.id]: true,
-      }));
-      loadTournaments();
-    } catch {
-      setRegError("Terjadi kesalahan jaringan.");
+      setRegSuccess(payload.message || "Pendaftaran berhasil dikirim.");
+      setPartnerUserId("");
+      await loadTournaments();
+    } catch (err) {
+      setRegError(err instanceof Error ? err.message : "Pendaftaran gagal.");
     } finally {
       setRegLoading(false);
     }
-  }
+  };
 
   return (
     <div className="flex-1 bg-slate-50 py-8 md:py-12">
-      <div className="container mx-auto px-4 sm:px-6 space-y-8 max-w-5xl">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-matchpoin-navy bg-white border border-slate-200 px-3 py-1 rounded-full">
-              <Trophy className="w-3.5 h-3.5 text-matchpoin-tennis" />
-              <span>Kompetisi Resmi</span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <h1 className="text-3xl font-extrabold font-heading text-slate-900 tracking-tight">
-                MATCHPOIN League Q1 2027
+      <div className="container mx-auto max-w-6xl space-y-8 px-4 sm:px-6">
+        <section className="overflow-hidden rounded-3xl border border-matchpoin-navy/10 bg-gradient-to-br from-matchpoin-navy via-matchpoin-navy to-slate-900 p-6 text-white shadow-xl sm:p-9">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-3">
+              <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-matchpoin-tennis">
+                <Trophy className="h-3.5 w-3.5" />
+                Liga Resmi
+              </span>
+              <h1 className="font-heading text-3xl font-extrabold tracking-tight sm:text-4xl">
+                {league.name}
               </h1>
-              <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300 font-bold">
-                Pendaftaran Buka
-              </Badge>
+              <p className="max-w-2xl text-sm leading-relaxed text-slate-200">
+                Liga musim 1 dengan 5 kategori. Pendaftaran dibuka sampai{" "}
+                <strong className="text-white">{dateLabel(league.deadline)}</strong>. Kuota setiap
+                kategori maksimal {IKA17_QUOTA} peserta/tim dan dihitung dari pendaftar yang sudah
+                diterima admin.
+              </p>
             </div>
-            <p className="text-slate-600 text-xs sm:text-sm max-w-xl leading-relaxed">
-              Format Open Challenge: Host tantangan, jadwalkan pertandingan seimbang, dan tingkatkan rating resmi Anda.
-            </p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[420px]">
+              <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
+                <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-300">
+                  <Calendar className="h-3.5 w-3.5" /> Periode Liga
+                </p>
+                <p className="mt-2 text-sm font-bold">{dateLabel(league.start)}</p>
+                <p className="text-xs text-slate-300">s.d. {dateLabel(league.end)}</p>
+              </div>
+              <div className="rounded-2xl bg-matchpoin-tennis/90 p-4 text-matchpoin-navy">
+                <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider">
+                  <Trophy className="h-3.5 w-3.5" /> Main Event
+                </p>
+                <p className="mt-2 text-sm font-bold">{dateLabel(league.mainEventStart)}</p>
+                <p className="text-xs">s.d. {dateLabel(league.mainEventEnd)}</p>
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
 
-        {/* Modal Registration */}
-        {regOpen && selectedTournament && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-            <Card className="border-slate-200 max-w-lg w-full shadow-2xl">
-              <CardHeader className="pb-3 border-b border-slate-100">
-                <CardTitle className="text-lg">{selectedTournament.name}</CardTitle>
-                <CardDescription className="text-xs">
-                  {categoryLabel(selectedTournament.category)} · Quota: {selectedTournament.max_participants} peserta/tim
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-4 space-y-4">
-                {regError && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2.5 text-xs text-red-700">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
-                    <span>{regError}</span>
-                  </div>
-                )}
-                {regSuccess && (
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-2.5 text-xs text-emerald-800">
-                    <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
-                    <span>{regSuccess}</span>
-                  </div>
-                )}
-
-                {selectedTournament.category.includes("doubles") && !regSuccess && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700 block">Pilih Partner Tim:</label>
-                    <select
-                      value={partnerUserId}
-                      onChange={(e) => setPartnerUserId(e.target.value)}
-                      disabled={regLoading}
-                      className="w-full h-10 px-3 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:border-matchpoin-tennis"
-                    >
-                      <option value="">-- Pilih Partner --</option>
-                      {partnerOptions.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-[10px] text-slate-500">
-                      Partner harus terdaftar di MATCHPOIN dan belum terdaftar di kategori yang sama.
-                    </p>
-                  </div>
-                )}
-
-                <div className="text-xs text-slate-600 space-y-1 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                  <p><strong>Periode Pertandingan:</strong> 1 Januari – 31 Maret 2027</p>
-                  <p><strong>Aturan:</strong> Race to 8 – No Deuce</p>
-                  <p><strong>Anti-Rematch:</strong> Maksimal 1x bertemu lawan yang sama per musim</p>
-                </div>
-
-                <div className="flex gap-2 justify-end pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setRegOpen(false)}
-                    disabled={regLoading}
-                  >
-                    Tutup
-                  </Button>
-                  {!regSuccess && (
-                    <Button
-                      type="button"
-                      variant="tennis"
-                      size="sm"
-                      className="text-matchpoin-navy font-bold"
-disabled={
-                        regLoading ||
-                        (selectedTournament.category.includes("doubles") && !partnerUserId)
-                      }
-                      onClick={confirmRegistration}
-                    >
-                      {regLoading ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                          Memproses...
-                        </>
-                      ) : (
-                        "Daftar Sekarang"
-                      )}
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+        {error && (
+          <div role="alert" className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {error}
           </div>
         )}
 
-        {/* Categories Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-5">
+        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {isLoading ? (
-            <div className="col-span-full text-center py-12 text-slate-400">
-              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-matchpoin-navy" />
-              <span>Memuat data liga...</span>
+            <div className="col-span-full flex flex-col items-center py-16 text-slate-400">
+              <Loader2 className="mb-2 h-8 w-8 animate-spin text-matchpoin-navy" />
+              Memuat kategori liga...
             </div>
           ) : (
-            tournaments.map((t) => {
-              const count = counts[t.id] ?? 0;
-              const isMine = Boolean(registeredIds[t.id]);
-              const isFull = count >= t.max_participants;
+            categories.map(({ definition, row }) => {
+              if (!row) {
+                return (
+                  <Card key={definition.id} className="border-dashed border-slate-300">
+                    <CardContent className="space-y-2 p-6">
+                      <p className="font-bold text-slate-800">{definition.label}</p>
+                      <p className="text-xs text-slate-500">Kategori belum tersedia. Hubungi admin.</p>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              const accepted = row.registration_count;
+              const quota = row.max_participants || IKA17_QUOTA;
+              const isFull = accepted >= quota;
+              const deadlinePassed = Boolean(
+                row.registration_deadline &&
+                  new Date(`${row.registration_deadline}T23:59:59`) < new Date()
+              );
+              const isClosed = row.status !== "registration_open" || deadlinePassed;
+              const myStatus = row.my_status;
+              const isActive = myStatus === "pending" || myStatus === "accepted" || myStatus === "confirmed";
+              const percent = Math.min(100, Math.round((accepted / quota) * 100));
 
               return (
-                <Card key={t.id} className="border-slate-200 hover:shadow-md transition-shadow group">
+                <Card key={definition.id} className="flex flex-col border-slate-200 transition-shadow hover:shadow-md">
                   <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <CardTitle className="text-base font-bold text-slate-900">{t.name}</CardTitle>
-                      <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-800 border-emerald-300 font-bold">
-                        Buka
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-lg font-bold text-slate-900">{definition.label}</CardTitle>
+                        <p className="mt-1 text-xs text-slate-500">{definition.shortLabel}</p>
+                      </div>
+                      <Badge variant={isFull || isClosed ? "destructive" : "success"}>
+                        {isFull ? "Penuh" : isClosed ? "Ditutup" : "Dibuka"}
                       </Badge>
                     </div>
-                    <CardDescription className="text-xs">
-                      {categoryLabel(t.category)} · Season {t.season}
-                    </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Kompetisi: 1 Jan – 31 Mar 2027</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <Users className="w-3.5 h-3.5 text-slate-400" />
-                      <span>
-                        <strong>{count}</strong> / {t.max_participants} {t.category.includes("doubles") ? "tim" : "peserta"} terdaftar
-                      </span>
+                  <CardContent className="flex flex-1 flex-col gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <span className="flex items-center gap-1.5">
+                          <Users className="h-3.5 w-3.5" />
+                          Kuota diterima
+                        </span>
+                        <strong className={isFull ? "text-rose-600" : "text-slate-800"}>
+                          {accepted}/{quota} {definition.doubles ? "tim" : "peserta"}
+                        </strong>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className={`h-full rounded-full ${isFull ? "bg-rose-500" : "bg-matchpoin-tennis"}`}
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                      {row.pending_count > 0 && (
+                        <p className="text-[11px] text-amber-700">
+                          {row.pending_count} pendaftar menunggu persetujuan admin.
+                        </p>
+                      )}
                     </div>
 
-                    <div className="pt-2">
+                    <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                      <p className="flex items-start gap-1.5">
+                        <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+                        {definition.genderRule === "mixed"
+                          ? "Wajib 1 pemain putra + 1 pemain putri dalam satu tim."
+                          : definition.genderRule === "male"
+                          ? "Khusus pemain putra."
+                          : "Khusus pemain putri."}
+                      </p>
+                    </div>
+
+                    {myStatus && (
+                      <div
+                        className={`flex items-center gap-2 rounded-xl border p-3 text-xs font-semibold ${
+                          myStatus === "rejected"
+                            ? "border-rose-200 bg-rose-50 text-rose-700"
+                            : myStatus === "pending"
+                            ? "border-amber-200 bg-amber-50 text-amber-800"
+                            : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        }`}
+                      >
+                        {myStatus === "pending" ? (
+                          <Clock className="h-4 w-4" />
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4" />
+                        )}
+                        Status Anda: {statusLabel(myStatus)}
+                      </div>
+                    )}
+
+                    <div className="mt-auto">
                       {!currentUser ? (
                         <Link href="/login?redirectTo=/tournaments">
                           <Button variant="outline" size="sm" className="w-full text-xs">
                             Masuk untuk Mendaftar
                           </Button>
                         </Link>
-                      ) : isMine ? (
-                        <Button variant="outline" size="sm" className="w-full text-xs text-emerald-700 border-emerald-200 bg-emerald-50" disabled>
-                          Sudah Terdaftar
+                      ) : isActive ? (
+                        <Button variant="outline" size="sm" className="w-full text-xs" disabled>
+                          {myStatus === "pending" ? "Menunggu Persetujuan" : "Sudah Terdaftar"}
                         </Button>
                       ) : isFull ? (
                         <Button variant="secondary" size="sm" className="w-full text-xs" disabled>
-                          Kuota Penuh (12/12)
+                          Kuota Penuh ({accepted}/{quota})
+                        </Button>
+                      ) : isClosed ? (
+                        <Button variant="secondary" size="sm" className="w-full text-xs" disabled>
+                          Pendaftaran Ditutup
                         </Button>
                       ) : (
                         <Button
                           variant="tennis"
                           size="sm"
-                          className="w-full text-xs text-matchpoin-navy font-bold"
-                          onClick={() => openRegistration(t)}
+                          className="w-full text-xs font-bold text-matchpoin-navy"
+                          onClick={() => openRegistration(row)}
                         >
-                          Daftar Kategori Ini
+                          {myStatus === "rejected" ? "Daftar Ulang" : "Daftar"}
                         </Button>
                       )}
                     </div>
@@ -408,21 +398,121 @@ disabled={
               );
             })
           )}
-        </div>
+        </section>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2 text-xs text-slate-600">
-          <p className="font-bold text-slate-800 flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-matchpoin-tennis fill-matchpoin-tennis" />
-            Ketentuan MATCHPOIN League Q1 2027
-          </p>
-          <ul className="list-disc list-inside space-y-1 text-slate-500">
-            <li>Periode pendaftaran dibuka: <strong>15 November – 31 Desember 2026</strong>.</li>
-            <li>Setiap pemain hanya dapat mendaftar 1 kali per kategori (Tunggal, Ganda Putra, Ganda Campuran, Ganda Putri).</li>
-            <li>Ganda Campuran wajib 1 pemain putra dan 1 pemain putri.</li>
-            <li>Semua pertandingan menggunakan format resmi <strong>Race to 8 – No Deuce</strong>.</li>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 text-xs text-slate-600">
+          <p className="text-sm font-bold text-slate-800">Ketentuan Liga Tennis IKA17</p>
+          <ul className="mt-2 list-inside list-disc space-y-1">
+            <li>Periode liga: {dateLabel(league.start)} – {dateLabel(league.end)}.</li>
+            <li>Main event: {dateLabel(league.mainEventStart)} – {dateLabel(league.mainEventEnd)}.</li>
+            <li>Setiap kategori maksimal {IKA17_QUOTA} peserta (single) atau {IKA17_QUOTA} tim (ganda).</li>
+            <li>Kuota dihitung dari pendaftar berstatus diterima (accepted).</li>
+            <li>Pendaftaran masuk sebagai pending dan harus disetujui admin.</li>
+            <li>Ganda campuran wajib 1 pemain putra + 1 pemain putri.</li>
           </ul>
-        </div>
+        </section>
       </div>
+
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <Card className="max-h-[90vh] w-full max-w-lg overflow-y-auto">
+            <CardHeader>
+              <CardTitle className="text-lg">Daftar {ika17Category(selected.category)?.label}</CardTitle>
+              <p className="text-xs text-slate-500">
+                {selected.name} · Kuota {selected.registration_count}/{selected.max_participants || IKA17_QUOTA}
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {regSuccess ? (
+                <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{regSuccess}</span>
+                </div>
+              ) : (
+                <>
+                  {ika17Category(selected.category)?.doubles && (
+                    <div className="space-y-2">
+                      <label htmlFor="partner" className="text-sm font-semibold text-slate-800">
+                        Partner
+                      </label>
+                      <select
+                        id="partner"
+                        value={partnerUserId}
+                        onChange={(event) => setPartnerUserId(event.target.value)}
+                        disabled={partnersLoading || regLoading}
+                        className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:border-matchpoin-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+                      >
+                        <option value="">
+                          {partnersLoading ? "Memuat pemain..." : "Pilih partner"}
+                        </option>
+                        {partners.map((partner) => (
+                          <option key={partner.id} value={partner.id}>
+                            {partner.name}
+                            {partner.gender === "male" ? " (Putra)" : partner.gender === "female" ? " (Putri)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      {ika17Category(selected.category)?.genderRule === "mixed" && (
+                        <p className="text-[11px] text-slate-500">
+                          Ganda campuran wajib terdiri dari 1 pemain putra dan 1 pemain putri.
+                          {currentGender === "male"
+                            ? " Pilih partner putri."
+                            : currentGender === "female"
+                            ? " Pilih partner putra."
+                            : " Lengkapi jenis kelamin profil Anda terlebih dahulu."}
+                        </p>
+                      )}
+                      {partners.length === 0 && !partnersLoading && (
+                        <p className="text-[11px] text-amber-700">
+                          Belum ada calon partner yang sesuai. Lengkapi profil pemain lain atau hubungi admin.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                    Pendaftaran akan dikirim dengan status <strong>pending</strong>. Anda dapat
+                    melihat statusnya di kartu kategori setelah admin memproses.
+                  </div>
+                </>
+              )}
+
+              {regError && (
+                <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{regError}</span>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={closeModal} disabled={regLoading}>
+                  {regSuccess ? "Tutup" : "Batal"}
+                </Button>
+                {!regSuccess && (
+                  <Button
+                    variant="tennis"
+                    className="font-bold text-matchpoin-navy"
+                    onClick={submitRegistration}
+                    disabled={
+                      regLoading ||
+                      (ika17Category(selected.category)?.doubles && !partnerUserId)
+                    }
+                  >
+                    {regLoading ? (
+                      <>
+                        <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                        Memproses...
+                      </>
+                    ) : (
+                      "Kirim Pendaftaran"
+                    )}
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

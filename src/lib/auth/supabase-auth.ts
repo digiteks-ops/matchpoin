@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getUserRoles } from "@/lib/supabase/rbac-service";
@@ -37,7 +38,11 @@ export async function syncUserOnLogin(
   }
 }
 
-export async function getSupabaseSession(): Promise<SupabaseSession> {
+/**
+ * React-cached session lookup: layouts, pages and guards in the same request
+ * share one auth.getUser + role lookup instead of repeating it per component.
+ */
+export const getSupabaseSession = cache(async (): Promise<SupabaseSession> => {
   const supabase = createClient();
   const {
     data: { user },
@@ -77,18 +82,18 @@ export async function getSupabaseSession(): Promise<SupabaseSession> {
       authVersion,
     },
   };
-}
+});
 
-export async function getCurrentUserId(): Promise<string | null> {
+export const getCurrentUserId = async (): Promise<string | null> => {
   const session = await getSupabaseSession();
   return session.user?.id ?? null;
-}
+};
 
-export async function requireUser(): Promise<SupabaseSessionUser> {
+export const requireUser = async (): Promise<SupabaseSessionUser> => {
   const session = await getSupabaseSession();
   if (!session.user) throw new Error("Unauthenticated");
   return session.user;
-}
+};
 
 export async function requireRole(required: AppRole): Promise<SupabaseSessionUser> {
   const user = await requireUser();

@@ -247,7 +247,9 @@ export async function getAdminSettingsData(tab: string): Promise<{
   if (tab === "players" || tab === "overview") {
     const { data, error } = await supabase
       .from("public_players")
-      .select("*")
+      .select(
+        "user_id, full_name, display_name, city_name, province, current_rating, matches_played, wins, losses, profile_visibility, updated_at"
+      )
       .order("updated_at", { ascending: false })
       .limit(200);
     if (error) throw new Error(`Gagal memuat pemain: ${error.message}`);
@@ -272,7 +274,7 @@ export async function getAdminSettingsData(tab: string): Promise<{
       losses: row.losses,
       is_profile_public: true,
       profile_visibility: row.profile_visibility,
-      show_rating: Boolean(row.show_rating),
+      show_rating: Boolean((row as Record<string, unknown>).show_rating),
     }));
   }
 
@@ -319,7 +321,8 @@ export async function getAdminSettingsData(tab: string): Promise<{
       .from("tournaments")
       .select("id, name, category, season, status, max_participants, start_date, end_date, registration_deadline")
       .eq("is_league", true)
-      .order("start_date", { ascending: false });
+      .order("start_date", { ascending: false })
+      .limit(200);
     if (error) throw new Error(`Gagal memuat turnamen: ${error.message}`);
 
     const tournamentIds = (data ?? []).map((row) => row.id);

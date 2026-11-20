@@ -20,6 +20,7 @@ export function useRealtimeNotifications() {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const channelRef = useRef<any>(null);
+  const connectedRef = useRef(false);
   const supabaseRef = useRef(createClient());
 
   const fetchNotifications = useCallback(async () => {
@@ -63,13 +64,14 @@ export function useRealtimeNotifications() {
 
   useEffect(() => {
     let mounted = true;
+    const client = supabaseRef.current;
 
     const initChannel = async () => {
       try {
-        const { data: { user } } = await supabaseRef.current.auth.getUser();
+        const { data: { user } } = await client.auth.getUser();
         if (!user) return;
 
-        const channel = supabaseRef.current.channel(`user-notifications:${user.id}`, {
+        const channel = client.channel(`user-notifications:${user.id}`, {
           config: { broadcast: { self: true } },
         });
 
@@ -84,6 +86,7 @@ export function useRealtimeNotifications() {
         });
 
         channel.subscribe((status) => {
+          connectedRef.current = status === "SUBSCRIBED";
           if (mounted) setIsConnected(status === "SUBSCRIBED");
         });
 
@@ -96,14 +99,20 @@ export function useRealtimeNotifications() {
     initChannel();
     fetchNotifications();
 
-    // Fallback polling every 30 seconds
-    const pollInterval = setInterval(fetchNotifications, 30000);
+    // Fallback polling only while the realtime channel is not connected.
+    const pollInterval = setInterval(() => {
+      if (!connectedRef.current) void fetchNotifications();
+    }, 60000);
 
     return () => {
       mounted = false;
+      connectedRef.current = false;
       clearInterval(pollInterval);
       if (channelRef.current) {
-        channelRef.current.unsubscribe();
+        // Remove (not just unsubscribe) so a remount opens a fresh channel
+        // instead of reusing a stale subscribed topic.
+        client.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
     };
   }, [fetchNotifications]);

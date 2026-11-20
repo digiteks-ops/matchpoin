@@ -49,6 +49,13 @@ test("OAuth buttons are always rendered and labelled Lanjutkan", () => {
   assert.doesNotMatch(buttons, /if \(!enabled\.google && !enabled\.facebook\) return null/);
 });
 
+test("OAuth redirect shows a branded waiting overlay", () => {
+  assert.match(buttons, /Mengalihkan ke \{PROVIDER_DISPLAY\[provider\]\}/);
+  assert.match(buttons, /function GoogleLogo/);
+  assert.match(buttons, /function FacebookLogo/);
+  assert.match(buttons, /aria-live="polite"/);
+});
+
 test("README documents the Google/Meta console setup and redirect URIs", () => {
   assert.match(readme, /Google & Facebook login \(Supabase OAuth\)/);
   assert.match(readme, /auth\/v1\/callback/);

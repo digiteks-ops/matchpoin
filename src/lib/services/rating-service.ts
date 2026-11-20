@@ -188,10 +188,21 @@ async function assertParticipant(matchId: string, userId: string) {
   return supabase;
 }
 
-async function assertHost(matchId: string, userId: string) {
-  const { supabase, match } = await getMatchContext(matchId);
-  if (match.organizer_id !== userId) {
-    throw new Error("Hanya Host (penyelenggara) yang dapat mengirim hasil resmi pertandingan.");
+async function assertCanSubmitResult(matchId: string, userId: string) {
+  const { supabase, match, team1, team2 } = await getMatchContext(matchId);
+  const participantIds = [...team1, ...team2].map((participant) => participant.user_id);
+  const organizerPlays = participantIds.includes(match.organizer_id);
+
+  // Normal matches keep the host-only rule. Tournament matches created by an
+  // admin have no host participant, so a confirmed player may submit instead.
+  const allowed =
+    match.organizer_id === userId || (!organizerPlays && participantIds.includes(userId));
+  if (!allowed) {
+    throw new Error(
+      organizerPlays
+        ? "Hanya Host (penyelenggara) yang dapat mengirim hasil resmi pertandingan."
+        : "Hanya peserta terkonfirmasi yang dapat mengirim hasil pertandingan ini."
+    );
   }
   return supabase;
 }
@@ -204,7 +215,7 @@ export async function submitMatchResult(
   userId: string,
   input: SubmitMatchResultInput
 ): Promise<MatchResultView> {
-  const supabase = await assertHost(input.matchId, userId);
+  const supabase = await assertCanSubmitResult(input.matchId, userId);
 
   if (!Number.isInteger(input.team1Score) || !Number.isInteger(input.team2Score)) {
     throw new Error("Skor harus berupa bilangan bulat.");

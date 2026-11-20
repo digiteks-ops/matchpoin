@@ -197,9 +197,8 @@ export async function signAssetReadUrls(keys: string[]): Promise<string[]> {
 
 export async function signAvatarUrl(key: string | null): Promise<string | null> {
   if (!key) return null;
-  if (!key.startsWith("avatars/")) {
-    throw new Error("Invalid avatar key.");
-  }
+  if (/^https?:\/\//i.test(key)) return key;
+  if (!key.startsWith("avatars/") || key.includes("..")) return null;
   return signAssetReadUrl(key);
 }
 

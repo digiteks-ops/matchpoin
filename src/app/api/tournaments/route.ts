@@ -12,8 +12,16 @@ export async function GET() {
     return NextResponse.json({ success: true, tournaments });
   } catch (error) {
     logError("tournaments.list", error, { userId: user?.id ?? null });
+    const schemaMissing =
+      error instanceof Error &&
+      /column .* does not exist|schema cache|could not find the .* column/i.test(error.message);
     return NextResponse.json(
-      { success: false, message: "Gagal memuat daftar kompetisi." },
+      {
+        success: false,
+        message: schemaMissing
+          ? "Skema turnamen belum diperbarui. Jalankan migration 00014 di Supabase."
+          : "Gagal memuat daftar kompetisi.",
+      },
       { status: 500 }
     );
   }

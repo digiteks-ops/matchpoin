@@ -753,25 +753,23 @@ export async function cancelTournamentMatchAsAdmin(
 }
 
 const MATCH_SELECT =
-  "id, title, description, court_id, organizer_id, match_date, start_time, duration_minutes, max_players, current_players, status, metadata, created_at, tennis_courts(name, address)";
+  "id, title, description, court_id, organizer_id, match_date, start_time, duration_minutes, max_players, current_players, status, metadata, created_at, tennis_courts(name, address), match_participants(id, match_id, user_id, is_organizer, team, metadata, joined_at, confirmed_at)";
 
 async function hydrateMatches(matches: MatchRow[]): Promise<OpenMatchDetail[]> {
   if (matches.length === 0) return [];
-  const supabase = createClient();
-  const matchIds = matches.map((m) => m.id);
 
-  const { data: participants } = await supabase
-    .from("match_participants")
-    .select("id, match_id, user_id, is_organizer, team, metadata, joined_at, confirmed_at")
-    .in("match_id", matchIds);
+  // Participants arrive embedded in the match query (single round trip).
+  const participants = matches.flatMap(
+    (match) => (match.match_participants ?? []) as ParticipantRow[]
+  );
 
   const profileIds = [
-    ...(participants ?? []).map((p) => p.user_id),
+    ...participants.map((p) => p.user_id),
     ...matches.map((m) => m.organizer_id),
   ];
   const profileMap = await getProfilesForUsers(profileIds);
 
-  return matches.map((m) => buildMatchDetail(m, participants ?? [], profileMap));
+  return matches.map((m) => buildMatchDetail(m, participants, profileMap));
 }
 
 /**
@@ -862,18 +860,13 @@ export async function getMatchDetail(matchId: string): Promise<OpenMatchDetail |
   }
   if (!match) return null;
 
-  const { data: participants } = await supabase
-    .from("match_participants")
-    .select("id, match_id, user_id, is_organizer, team, metadata, joined_at, confirmed_at")
-    .eq("match_id", matchId);
+  const participants = ((match as unknown as MatchRow).match_participants ??
+    []) as ParticipantRow[];
 
-  const profileIds = [
-    ...(participants ?? []).map((p) => p.user_id),
-    match.organizer_id,
-  ];
+  const profileIds = [...participants.map((p) => p.user_id), match.organizer_id];
   const profileMap = await getProfilesForUsers(profileIds);
 
-  return buildMatchDetail(match, participants ?? [], profileMap);
+  return buildMatchDetail(match, participants, profileMap);
 }
 
 type MatchRow = {
@@ -891,6 +884,7 @@ type MatchRow = {
   metadata: unknown;
   created_at: string;
   tennis_courts: { name: string; address: string } | { name: string; address: string }[] | null;
+  match_participants?: ParticipantRow[] | null;
 };
 
 type ParticipantRow = {

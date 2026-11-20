@@ -215,6 +215,7 @@ The app uses Supabase Auth OAuth, so provider secrets are stored in the Supabase
    - Authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`
 5. Meta for Developers → Create app → Facebook Login → Settings:
    - Valid OAuth Redirect URIs: `https://<project-ref>.supabase.co/auth/v1/callback`
+   - App settings → Basic → App Domains: `<project-ref>.supabase.co` (and `matchpoin.vercel.app`)
    - Provide a Privacy Policy URL and Data Deletion URL (use your own published pages), then switch the app to **Live**.
 6. Optional environment variables for documentation/CI only (the running app does not read them): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`.
 
