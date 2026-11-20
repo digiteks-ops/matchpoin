@@ -261,6 +261,21 @@ export async function notifyPlayerJoined(
   });
 }
 
+export async function notifyOpenMatchJoined(
+  organizerId: string,
+  playerName: string,
+  matchId: string,
+  matchTitle: string
+): Promise<void> {
+  await createNotification(organizerId, {
+    type: "player_joined",
+    title: "Pemain Bergabung",
+    message: `${playerName} bergabung ke "${matchTitle}".`,
+    data: { matchId, matchTitle, playerName },
+    referenceId: matchId,
+  });
+}
+
 export async function notifyMatchCancelled(
   participantIds: string[],
   matchId: string,
@@ -333,7 +348,7 @@ export async function notifyAdminAnnouncement(
   });
 }
 
-export async function notifySuperAdminsPendingRegistration(
+export async function notifyAdminsPendingRegistration(
   tournamentId: string,
   tournamentTitle: string,
   entryId: string
@@ -342,17 +357,17 @@ export async function notifySuperAdminsPendingRegistration(
     .from("user_roles")
     .select("user_id, roles!inner(code)")
     .is("revoked_at", null)
-    .eq("roles.code", "super_admin");
+    .in("roles.code", ["admin", "super_admin"]);
   if (error) {
-    console.error("Failed to load super admins for notification:", error.message);
+    console.error("Failed to load admins for notification:", error.message);
     return;
   }
-  const superAdminIds = Array.from(
+  const adminIds = Array.from(
     new Set((data ?? []).map((row) => row.user_id as string).filter(Boolean))
   );
-  if (superAdminIds.length === 0) return;
+  if (adminIds.length === 0) return;
 
-  await createNotificationsForUsers(superAdminIds, {
+  await createNotificationsForUsers(adminIds, {
     type: "tournament_registration",
     title: "Pendaftaran Baru Menunggu Persetujuan",
     message: `Pendaftaran baru untuk "${tournamentTitle}" menunggu persetujuan Anda.`,

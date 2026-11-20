@@ -28,12 +28,75 @@ function cleanId(value) {
 /**
  * Builds the roster for a new match.
  *
- * Singles always play with 2 players (host plus one opponent). Doubles always
+ * Singles always play 1 vs 1. A private singles match selects the opponent up
+ * front; an open singles match starts with the host only and the opponent slot
+ * is filled later through join requests. Doubles always
  * play with 4 players. A private doubles match requires the full roster to be
  * selected up front, while an open doubles match starts with the host only and
  * fills the remaining slots through join requests/invitations. A player may
  * only occupy one slot per match.
  */
+/**
+ * Builds a complete team roster for administrative/tournament matches where
+ * the organizer is not one of the players. Singles require one player per
+ * side; doubles require two players per side. All players must be distinct.
+ */
+export function buildExplicitTeamRoster(input) {
+  const category = input?.category;
+  if (!VALID_CATEGORIES.has(category)) {
+    throw new MatchRosterError("Kategori pertandingan tidak valid.");
+  }
+
+  const cleanTeam = (values) =>
+    Array.isArray(values)
+      ? values.map(cleanId).filter((value) => value !== null)
+      : [];
+
+  const team1 = cleanTeam(input?.team1UserIds);
+  const team2 = cleanTeam(input?.team2UserIds);
+  const playersPerTeam = isDoublesCategory(category) ? 2 : 1;
+
+  if (team1.length !== playersPerTeam || team2.length !== playersPerTeam) {
+    throw new MatchRosterError(
+      isDoublesCategory(category)
+        ? "Pertandingan ganda wajib memiliki 2 pemain di setiap tim."
+        : "Pertandingan tunggal wajib memiliki 1 pemain di setiap sisi."
+    );
+  }
+
+  const uniquePlayers = new Set([...team1, ...team2]);
+  if (uniquePlayers.size !== playersPerTeam * 2) {
+    throw new MatchRosterError("Setiap pemain hanya boleh mengisi satu posisi.");
+  }
+
+  const participants = [
+    ...team1.map((userId, index) => ({
+      userId,
+      team: 1,
+      isOrganizer: false,
+      role: index === 0 ? "team1_captain" : "team1_partner",
+    })),
+    ...team2.map((userId, index) => ({
+      userId,
+      team: 2,
+      isOrganizer: false,
+      role: index === 0 ? "team2_captain" : "team2_partner",
+    })),
+  ];
+
+  const maxPlayers = logicalRosterSize(category);
+  return {
+    category,
+    matchType: "private",
+    isPrivate: true,
+    maxPlayers,
+    currentPlayers: participants.length,
+    status: participants.length >= maxPlayers ? "full" : "open",
+    participants,
+    playerIdsToVerify: participants.map((participant) => participant.userId),
+  };
+}
+
 export function buildMatchRoster(input) {
   const category = input?.category;
   if (!VALID_CATEGORIES.has(category)) {
@@ -51,9 +114,6 @@ export function buildMatchRoster(input) {
   if (matchType !== "open" && matchType !== "private") {
     throw new MatchRosterError("Tipe pertandingan tidak valid.");
   }
-  if (!doubles && matchType !== "private") {
-    throw new MatchRosterError("Tipe pertandingan tidak valid.");
-  }
 
   const partnerUserId = cleanId(input.partnerUserId);
   const opponentUserId = cleanId(input.opponentUserId);
@@ -66,6 +126,11 @@ export function buildMatchRoster(input) {
   if (!doubles) {
     if (partnerUserId || opponentPartnerUserId) {
       throw new MatchRosterError("Partner hanya berlaku untuk pertandingan ganda.");
+    }
+    if (matchType === "open" && opponentUserId) {
+      throw new MatchRosterError(
+        "Pertandingan tunggal terbuka tidak dapat menentukan lawan manual."
+      );
     }
     if (opponentUserId) {
       if (opponentUserId === organizerId) {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildExplicitTeamRoster,
   buildMatchRoster,
   logicalRosterSize,
   MatchRosterError,
@@ -93,15 +94,32 @@ test("singles rejects doubles-only partner slots", () => {
   );
 });
 
-test("singles cannot be created as an open match", () => {
+test("open singles starts with the host and one open opponent slot", () => {
+  const roster = buildMatchRoster({
+    category: "mens_singles",
+    matchType: "open",
+    organizerId: HOST,
+  });
+
+  assert.equal(roster.matchType, "open");
+  assert.equal(roster.isPrivate, false);
+  assert.equal(roster.maxPlayers, 2);
+  assert.equal(roster.currentPlayers, 1);
+  assert.equal(roster.status, "open");
+  assert.equal(roster.participants.length, 1);
+  assert.equal(roster.participants[0].isOrganizer, true);
+});
+
+test("open singles rejects a manually chosen opponent", () => {
   assert.throws(
     () =>
       buildMatchRoster({
         category: "mens_singles",
         matchType: "open",
         organizerId: HOST,
+        opponentUserId: OPPONENT,
       }),
-    /Tipe pertandingan tidak valid/
+    /terbuka tidak dapat menentukan lawan manual/
   );
 });
 
@@ -210,5 +228,59 @@ test("invalid category and match type are rejected", () => {
   assert.throws(
     () => buildMatchRoster({ category: "mens_singles", organizerId: "   " }),
     /Penyelenggara pertandingan tidak valid/
+  );
+});
+
+test("explicit team roster builds a full singles match without an organizer player", () => {
+  const roster = buildExplicitTeamRoster({
+    category: "mens_singles",
+    team1UserIds: [HOST],
+    team2UserIds: [OPPONENT],
+  });
+
+  assert.equal(roster.isPrivate, true);
+  assert.equal(roster.status, "full");
+  assert.deepEqual(
+    roster.participants.map((participant) => [participant.userId, participant.team]),
+    [
+      [HOST, 1],
+      [OPPONENT, 2],
+    ]
+  );
+});
+
+test("explicit team roster builds a full doubles match without an organizer player", () => {
+  const roster = buildExplicitTeamRoster({
+    category: "mixed_doubles",
+    team1UserIds: [HOST, PARTNER],
+    team2UserIds: [OPPONENT, OPPONENT_PARTNER],
+  });
+
+  assert.equal(roster.isPrivate, true);
+  assert.equal(roster.status, "full");
+  assert.deepEqual(
+    roster.participants.map((participant) => participant.team),
+    [1, 1, 2, 2]
+  );
+});
+
+test("explicit team roster rejects wrong sizes and duplicate players", () => {
+  assert.throws(
+    () =>
+      buildExplicitTeamRoster({
+        category: "mens_doubles",
+        team1UserIds: [HOST],
+        team2UserIds: [OPPONENT, OPPONENT_PARTNER],
+      }),
+    /2 pemain di setiap tim/
+  );
+  assert.throws(
+    () =>
+      buildExplicitTeamRoster({
+        category: "mens_singles",
+        team1UserIds: [HOST],
+        team2UserIds: [HOST],
+      }),
+    /satu posisi/
   );
 });

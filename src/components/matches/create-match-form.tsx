@@ -20,6 +20,13 @@ export interface CityOption {
   province: string;
 }
 
+function isGenderCompatible(category: MatchCategory, gender: string | null): boolean {
+  if (category === "mixed_doubles") return true;
+  if (category.startsWith("mens_")) return gender === "male";
+  if (category.startsWith("womens_")) return gender === "female";
+  return true;
+}
+
 interface CreateMatchFormProps {
   cities: CityOption[];
   inviteUserId?: string;
@@ -44,9 +51,10 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
   const [partnerUserId, setPartnerUserId] = useState("");
   const [opponentUserId, setOpponentUserId] = useState(inviteUserId ?? "");
   const [opponentPartnerUserId, setOpponentPartnerUserId] = useState("");
-  const [matchType, setMatchType] = useState<MatchType>("open");
-  const [partners, setPartners] = useState<{ user_id: string; display_name: string }[]>([]);
-  const [opponents, setOpponents] = useState<{ user_id: string; display_name: string }[]>([]);
+  const [matchType, setMatchType] = useState<MatchType>("private");
+  const [singlesMode, setSinglesMode] = useState<MatchType>("private");
+  const [partners, setPartners] = useState<{ user_id: string; display_name: string; gender: string | null }[]>([]);
+  const [opponents, setOpponents] = useState<{ user_id: string; display_name: string; gender: string | null }[]>([]);
   const [partnersLoading, setPartnersLoading] = useState(false);
   const [opponentsLoading, setOpponentsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -59,7 +67,11 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
   const isDoubles = category.includes("doubles");
   const categoryName = MATCH_CATEGORY_LABELS[category].split(" (")[0];
   const requiredDoublesPlayers = [partnerUserId, opponentUserId, opponentPartnerUserId].filter(Boolean).length;
-  const formProgress = isDoubles ? `${requiredDoublesPlayers + 1}/4 pemain` : "1/2 pemain";
+  const formProgress = isDoubles
+    ? `${requiredDoublesPlayers + 1}/4 pemain`
+    : opponentUserId
+    ? "2/2 pemain"
+    : "1/2 pemain";
 
   const provinceOptions = useMemo(
     () => Array.from(new Set(cities.map((c) => c.province).filter(Boolean))).sort(),
@@ -94,10 +106,13 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
   useEffect(() => {
     if (!isDoubles) {
       setPartnerUserId("");
-      setOpponentUserId("");
       setOpponentPartnerUserId("");
+      setMatchType("private");
       return;
     }
+  }, [isDoubles]);
+
+  useEffect(() => {
     let cancelled = false;
     async function loadPlayers() {
       setPartnersLoading(true);
@@ -105,17 +120,21 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
       try {
         const supabase = createClient();
         const { data } = await supabase
-          .from("player_profiles")
-          .select("user_id, display_name")
-          .eq("is_profile_public", true)
+          .from("public_players")
+          .select("user_id, display_name, gender")
           .neq("user_id", currentUserId)
           .order("display_name", { ascending: true })
           .limit(200);
         if (cancelled) return;
-        const rows = (data ?? []) as { user_id: string; display_name: string | null }[];
+        const rows = (data ?? []) as {
+          user_id: string;
+          display_name: string | null;
+          gender: string | null;
+        }[];
         const availablePlayers = rows.map((player) => ({
           user_id: player.user_id,
           display_name: player.display_name || "Pemain MATCHPOIN",
+          gender: player.gender ?? null,
         }));
         setPartners(availablePlayers);
         setOpponents(availablePlayers);
@@ -135,32 +154,57 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
     return () => {
       cancelled = true;
     };
-  }, [isDoubles, currentUserId]);
+  }, [currentUserId]);
+
+
 
   const today = new Date().toISOString().slice(0, 10);
 
   const partnerOptions = useMemo(
-    () => partners.filter((player) => player.user_id !== inviteUserId && player.user_id !== opponentUserId && player.user_id !== opponentPartnerUserId),
-    [inviteUserId, opponentPartnerUserId, opponentUserId, partners]
+    () =>
+      partners.filter(
+        (player) =>
+          isGenderCompatible(category, player.gender) &&
+          player.user_id !== inviteUserId &&
+          player.user_id !== opponentUserId &&
+          player.user_id !== opponentPartnerUserId
+      ),
+    [category, inviteUserId, opponentPartnerUserId, opponentUserId, partners]
   );
 
   const opponentOptions = useMemo(
-    () => opponents.filter((player) => player.user_id !== partnerUserId && player.user_id !== opponentPartnerUserId),
-    [opponentPartnerUserId, opponents, partnerUserId]
+    () =>
+      opponents.filter(
+        (player) =>
+          isGenderCompatible(category, player.gender) &&
+          player.user_id !== partnerUserId &&
+          player.user_id !== opponentPartnerUserId
+      ),
+    [category, opponentPartnerUserId, opponents, partnerUserId]
   );
 
   const opponentPartnerOptions = useMemo(
-    () => opponents.filter((player) => player.user_id !== partnerUserId && player.user_id !== opponentUserId),
-    [opponentUserId, opponents, partnerUserId]
+    () =>
+      opponents.filter(
+        (player) =>
+          isGenderCompatible(category, player.gender) &&
+          player.user_id !== partnerUserId &&
+          player.user_id !== opponentUserId
+      ),
+    [category, opponentUserId, opponents, partnerUserId]
   );
 
   const handleCategoryChange = (next: MatchCategory) => {
     setCategory(next);
     if (!next.includes("doubles")) {
       setPartnerUserId("");
-      setOpponentUserId("");
       setOpponentPartnerUserId("");
       setMatchType("private");
+      if (singlesMode === "open") {
+        setOpponentUserId("");
+      } else if (inviteUserId) {
+        setOpponentUserId(inviteUserId);
+      }
     }
   };
 
@@ -210,6 +254,10 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
       setError("Setiap pemain hanya boleh mengisi satu posisi.");
       return;
     }
+    if (!isDoubles && singlesMode === "private" && !opponentUserId) {
+      setError("Pilih lawan untuk pertandingan tunggal (1 vs 1).");
+      return;
+    }
 
     if (matchDate || startTime) {
       const startsAt = toPlatformIsoString(matchDate, startTime);
@@ -246,9 +294,15 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
           raceToScore: RACE_TO_SCORE,
           courtSwitchAt: COURT_SWITCH_AT,
           partnerUserId: isDoubles && matchType === "private" ? partnerUserId : undefined,
-          opponentUserId: isDoubles && matchType === "private" ? opponentUserId : undefined,
+          opponentUserId: isDoubles
+            ? matchType === "private"
+              ? opponentUserId
+              : undefined
+            : singlesMode === "private"
+            ? opponentUserId
+            : undefined,
           opponentPartnerUserId: isDoubles && matchType === "private" ? opponentPartnerUserId : undefined,
-          matchType: isDoubles ? matchType : undefined,
+          matchType: isDoubles ? matchType : singlesMode,
         }),
       });
 
@@ -266,7 +320,7 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
       }
 
       let invited = false;
-      if (inviteUserId && !isDoubles) {
+      if (inviteUserId && !isDoubles && singlesMode === "private" && opponentUserId !== inviteUserId) {
         try {
           const inviteRes = await fetch(`/api/matches/${json.matchId}/invite`, {
             method: "POST",
@@ -415,6 +469,84 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
               {isDoubles ? "Format ganda membutuhkan 4 pemain: 2 pemain di Team A dan 2 pemain di Team B." : "Format tunggal membutuhkan 2 pemain."}
             </p>
           </div>
+
+          {!isDoubles && (
+            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
+              <div>
+                <p className="text-sm font-bold text-slate-900">Susunan pemain tunggal</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                  Pertandingan tunggal dimainkan 1 vs 1. Anda berada di sisi A, lawan di sisi B.
+                  Pada mode Open Match, slot lawan dibiarkan terbuka untuk pemain lain.
+                </p>
+              </div>
+              <div className="space-y-3">
+                <Label className="text-xs font-semibold text-slate-700">Mode Lawan</Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {([
+                    { id: "private", label: "Pilih Lawan", desc: "Tentukan lawan sekarang" },
+                    { id: "open", label: "Open Match", desc: "Pemain lain bisa bergabung" },
+                  ] as { id: MatchType; label: string; desc: string }[]).map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => {
+                        setSinglesMode(mode.id);
+                        if (mode.id === "open") setOpponentUserId("");
+                      }}
+                      disabled={isSubmitting}
+                      className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-all ${
+                        singlesMode === mode.id
+                          ? "border-matchpoin-navy bg-matchpoin-navy/[0.05] text-matchpoin-navy shadow-sm"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                      }`}
+                    >
+                      <span className="text-xs font-bold">{mode.label}</span>
+                      <span className="text-[10px] text-slate-400">{mode.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {singlesMode === "private" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="singlesOpponent">Lawan</Label>
+                  <select
+                    id="singlesOpponent"
+                    value={opponentUserId}
+                    onChange={(event) => handleOpponentChange(event.target.value)}
+                    disabled={isSubmitting || opponentsLoading}
+                    className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:border-matchpoin-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+                  >
+                    <option value="">
+                      {opponentsLoading ? "Memuat pemain..." : "Pilih lawan"}
+                    </option>
+                    {opponentOptions.map((player) => (
+                      <option key={player.user_id} value={player.user_id}>
+                        {player.display_name}
+                      </option>
+                    ))}
+                  </select>
+                  {inviteName && inviteUserId && opponentUserId === inviteUserId ? (
+                    <p className="text-[11px] text-emerald-700">
+                      {inviteName} sudah dipilih sebagai lawan dari halaman profil.
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">
+                      Pilih pemain yang sudah memiliki profil publik di MATCHPOIN.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+                  <p className="font-semibold">Slot lawan terbuka</p>
+                  <p className="mt-1 leading-relaxed">
+                    Pertandingan tampil sebagai Open Match. Pemain lain dapat bergabung
+                    mengambil slot lawan. Anda tidak dapat bergabung ke match sendiri.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {isDoubles && (
             <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
@@ -822,13 +954,24 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
                 ? `Lengkapi ${3 - requiredDoublesPlayers} pemain lagi untuk membuat match ganda privat.`
                 : isDoubles && matchType === "open"
                   ? "Match ganda terbuka: 3 slot akan dibuka untuk pemain lain."
-                  : "Semua data utama sudah siap. Periksa kembali sebelum menyimpan."}
+                  : !isDoubles && singlesMode === "open"
+                    ? "Match tunggal terbuka: slot lawan menunggu pemain lain bergabung."
+                    : !isDoubles && !opponentUserId
+                      ? "Pilih lawan untuk membuat pertandingan tunggal 1 vs 1."
+                      : "Semua data utama sudah siap. Periksa kembali sebelum menyimpan."}
             </p>
             <div className="flex justify-end">
               <Button
                 type="submit"
                 variant="tennis"
-                disabled={isSubmitting || !province || !cityName || !courtName.trim() || (isDoubles && matchType === "private" && (!partnerUserId || !opponentUserId || !opponentPartnerUserId))}
+                disabled={
+                  isSubmitting ||
+                  !province ||
+                  !cityName ||
+                  !courtName.trim() ||
+                  (!isDoubles && singlesMode === "private" && !opponentUserId) ||
+                  (isDoubles && matchType === "private" && (!partnerUserId || !opponentUserId || !opponentPartnerUserId))
+                }
                 className="w-full text-matchpoin-navy font-bold gap-2 sm:w-auto"
               >
                 {isSubmitting ? (
@@ -839,7 +982,7 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
                 ) : (
                   <>
                     <CalendarPlus className="w-4 h-4" />
-                    {isDoubles ? "Buat Match Ganda" : "Buat Pertandingan"}
+                    {isDoubles ? "Buat Match Ganda" : singlesMode === "open" ? "Buat Open Match" : "Buat Pertandingan"}
                   </>
                 )}
               </Button>
