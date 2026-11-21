@@ -44,3 +44,8 @@ matchpoin-v2-foundation/
 
 # supabase CLI cache
 supabase/.temp/
+# playwright
+.env.test.local
+playwright-report/
+test-results/
+
