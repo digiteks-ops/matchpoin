@@ -23,9 +23,8 @@ ORDER BY policy_count ASC, t.tablename;
 -- 3. Policies still using bare auth.uid() (should be zero after 00022).
 SELECT schemaname, tablename, policyname
 FROM pg_policies
-WHERE (COALESCE(qual, '') || ' ' || COALESCE(with_check, '')) LIKE '%auth.uid()%'
-  AND (COALESCE(qual, '') || ' ' || COALESCE(with_check, '')) NOT LIKE '%( SELECT auth.uid()%'
-  AND (COALESCE(qual, '') || ' ' || COALESCE(with_check, '')) NOT LIKE '%(select auth.uid()%'
+WHERE lower(COALESCE(qual, '') || ' ' || COALESCE(with_check, '')) LIKE '%auth.uid()%'
+  AND lower(COALESCE(qual, '') || ' ' || COALESCE(with_check, '')) NOT LIKE '%(select auth.uid()%'
 ORDER BY schemaname, tablename, policyname;
 
 -- 4. SECURITY DEFINER functions without a pinned search_path.
@@ -53,7 +52,7 @@ WHERE n.nspname = 'public' AND p.proname = 'admin_reject_registration';
 
 -- 6. Role self-escalation guard exists and is NOT security definer.
 --    Expected: two rows (users + profiles trigger when present), definer = false.
-SELECT t.tablename, tr.tgname, p.prosecdef AS definer
+SELECT t.relname AS tablename, tr.tgname, p.prosecdef AS definer
 FROM pg_trigger tr
 JOIN pg_class t ON t.oid = tr.tgrelid
 JOIN pg_namespace n ON n.oid = t.relnamespace
