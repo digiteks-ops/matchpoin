@@ -37,3 +37,17 @@ test("profile loader cannot re-trigger itself and overwrite user input", () => {
   assert.doesNotMatch(profilePage, /\}, \[cityId/);
   assert.match(profilePage, /savedCity/);
 });
+const nextConfig = await read("next.config.mjs");
+const createForm = await read("src/components/matches/create-match-form.tsx");
+
+test("OAuth avatar hosts are allowed by next/image", () => {
+  assert.match(nextConfig, /platform-lookaside\.fbsbx\.com/);
+  assert.match(nextConfig, /fbcdn\.net/);
+  assert.match(nextConfig, /googleusercontent\.com/);
+});
+
+test("create match navigates without a cancelling router.refresh", () => {
+  assert.match(createForm, /router\.push\(`\/matches\/\$\{json\.matchId\}/);
+  const executable = createForm.replace(/\/\/.*$/gm, "");
+  assert.doesNotMatch(executable, /router\.refresh\(\)/);
+});

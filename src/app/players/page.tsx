@@ -136,7 +136,8 @@ export default function PlayersDirectoryPage() {
               email: null, // STRICT PRIVACY: NEVER expose email to other players
               fullName: p.full_name || p.display_name || "Pemain Tenis",
               displayName: p.display_name || "Pemain MATCHPOIN",
-              avatarUrl: p.avatar_url || null,
+              avatarUrl:
+                p.avatar_url && /^https?:\/\//i.test(p.avatar_url) ? p.avatar_url : null,
               gender: p.gender || null,
               cityId: p.city_id || null,
               cityName: p.city_name || "Lokasi belum diisi",

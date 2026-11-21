@@ -12,6 +12,10 @@ const nextConfig = {
         protocol: "https",
         hostname: "images.unsplash.com",
       },
+      // OAuth provider avatars (Google, Facebook) are stored as remote URLs.
+      { protocol: "https", hostname: "*.googleusercontent.com" },
+      { protocol: "https", hostname: "platform-lookaside.fbsbx.com" },
+      { protocol: "https", hostname: "*.fbcdn.net" },
     ],
   },
   async redirects() {
