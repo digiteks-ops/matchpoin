@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
-import { uploadAvatar, calculateProfileCompletion } from "@/lib/services/player-service";
+import { uploadAvatar } from "@/lib/services/player-service";
 import {
   ArrowLeft,
   Camera,
@@ -178,56 +178,34 @@ const loadProfile = useCallback(async () => {
     setSuccessMessage(null);
 
     try {
-      const supabase = createClient();
-
-      // 1. Update public.users
-      const { error: userError } = await supabase
-        .from("users")
-        .update({
-          full_name: fullName.trim(),
+      // Persist through the server route: it uses the authenticated server
+      // session, validates input and updates users + player_profiles in one
+      // place. Direct browser writes silently affected 0 rows under RLS.
+      const response = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: fullName.trim(),
           phone: phone.trim() || null,
           gender: (gender as Gender) || null,
-          city_id: cityId || null,
-        })
-        .eq("id", userId);
-
-      if (userError) throw userError;
-
-      // 2. Compute completion
-      const partialUser = { full_name: fullName, city_id: cityId, avatar_url: avatarUrl, gender: (gender as Gender) };
-      const partialProfile = {
-        bio,
-        preferred_hand: preferredHand,
-        play_frequency: playFrequency,
-        self_assessed_level: selfAssessedLevel,
-        preferred_times: preferredTimes,
-        preferred_categories: preferredCategories,
-      };
-      const completion = calculateProfileCompletion(partialUser, partialProfile);
-
-      // 3. Update public.player_profiles
-      const { error: profileError } = await supabase
-        .from("player_profiles")
-        .upsert(
-          {
-            user_id: userId,
-            display_name: fullName.trim(),
-            bio: bio.trim() || null,
-            playing_since: playingSince.trim() || null,
-            preferred_hand: preferredHand,
-            backhand: backhand,
-            play_frequency: playFrequency,
-            self_assessed_level: selfAssessedLevel,
-            profile_visibility: profileVisibility,
-            is_profile_public: profileVisibility === "public",
-            preferred_categories: preferredCategories,
-            preferred_times: preferredTimes,
-            completion_score: completion.percentage,
-          },
-          { onConflict: "user_id" }
-        );
-
-      if (profileError) throw profileError;
+          cityId: cityId || null,
+          bio: bio.trim() || null,
+          playingSince: playingSince.trim() || null,
+          preferredHand,
+          backhand,
+          playFrequency,
+          selfAssessedLevel,
+          profileVisibility,
+          preferredCategories,
+          preferredTimes,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { success?: boolean; message?: string }
+        | null;
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.message || "Gagal menyimpan perubahan profil.");
+      }
 
       setSuccessMessage("Profil Anda berhasil disimpan!");
       setTimeout(() => {
@@ -264,7 +242,7 @@ const loadProfile = useCallback(async () => {
             <ArrowLeft className="w-3.5 h-3.5" />
             Kembali ke Profil Saya
           </Link>
-          <span className="text-xs text-slate-400">Tahap 3 • Pengaturan Profil</span>
+          <span className="text-xs text-slate-400">Tahap 3 â€¢ Pengaturan Profil</span>
         </div>
 
         <form onSubmit={handleSave} className="space-y-6">
@@ -336,7 +314,7 @@ const loadProfile = useCallback(async () => {
                   <h4 className="text-xs font-bold text-slate-800">Foto Profil</h4>
                   <p className="text-[11px] text-slate-500">
                     Format JPG, PNG, atau WEBP. Maksimal 10 MB. Foto dikompres otomatis
-                    (512 px, ≤300 KB) sebelum diunggah.
+                    (512 px, â‰¤300 KB) sebelum diunggah.
                   </p>
                   {photoStage && (
                     <p className="text-[11px] font-semibold text-matchpoin-navy">{photoStage}</p>
@@ -362,6 +340,7 @@ const loadProfile = useCallback(async () => {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     required
+                    maxLength={50}
                     placeholder="Contoh: Andi Pratama"
                   />
                 </div>
@@ -545,9 +524,9 @@ const loadProfile = useCallback(async () => {
                 <Label>Waktu Bermain Pilihan</Label>
                 <div className="flex flex-wrap gap-2">
                   {[
-                    { id: "pagi", label: "Pagi (06:00 – 09:00)" },
-                    { id: "sore", label: "Sore (15:30 – 18:00)" },
-                    { id: "malam", label: "Malam (19:00 – 22:00)" },
+                    { id: "pagi", label: "Pagi (06:00 â€“ 09:00)" },
+                    { id: "sore", label: "Sore (15:30 â€“ 18:00)" },
+                    { id: "malam", label: "Malam (19:00 â€“ 22:00)" },
                     { id: "weekend", label: "Akhir Pekan (Sabtu/Minggu)" },
                   ].map((time) => {
                     const isSelected = preferredTimes.includes(time.id);

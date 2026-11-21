@@ -36,6 +36,8 @@ test("second account joins the open slot", async ({ page, browser }) => {
   const player = playerCreds();
   const player2 = player2Creds();
   test.skip(!player2.email || !player2.password, "BLOCKED: TEST_PLAYER2_* is not configured");
+  const player2Id = await userIdByEmail(player2.email);
+  test.skip(!player2Id, "BLOCKED: TEST_PLAYER2 account does not exist in this Supabase project");
 
   await login(page, player.email, player.password);
   await createOpenMatchViaUi(page, `${PREFIX} joinable`);
@@ -57,6 +59,8 @@ test("three concurrent joins on one slot: exactly one succeeds", async ({ page, 
   const player = playerCreds();
   const player2 = player2Creds();
   test.skip(!player2.email || !player2.password, "BLOCKED: TEST_PLAYER2_* is not configured");
+  const existingPlayer2Id = await userIdByEmail(player2.email);
+  test.skip(!existingPlayer2Id, "BLOCKED: TEST_PLAYER2 account does not exist in this Supabase project");
 
   await login(page, player.email, player.password);
   await createOpenMatchViaUi(page, `${PREFIX} race`);

@@ -66,20 +66,29 @@ export async function ensurePlayerRecordsWithClient(
 
   const cityId = cityData?.id ?? null;
 
-  const { error: userError } = await supabase.from("users").upsert(
-    {
+  // Never overwrite an existing account: full_name and city_id are editable in
+  // the profile form. The old upsert reset them to auth metadata on every load.
+  const { data: existingUser, error: existingUserError } = await supabase
+    .from("users")
+    .select("id")
+    .eq("id", userId)
+    .maybeSingle();
+  if (existingUserError) {
+    throw new Error(`Gagal menyiapkan data pemain: ${existingUserError.message}`);
+  }
+
+  if (!existingUser) {
+    const { error: userError } = await supabase.from("users").insert({
       id: userId,
       email,
       full_name: fullName || email.split("@")[0],
       city_id: cityId,
       timezone: "Asia/Makassar",
       locale: "id",
-    },
-    { onConflict: "id" }
-  );
-
-  if (userError) {
-    throw new Error(`Gagal menyiapkan data pemain: ${userError.message}`);
+    });
+    if (userError) {
+      throw new Error(`Gagal menyiapkan data pemain: ${userError.message}`);
+    }
   }
 
   const { data: existingProfile } = await supabase

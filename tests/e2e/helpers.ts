@@ -55,9 +55,14 @@ export function requireEnv(testInstance: typeof base, keys: string[], reason: st
 
 export async function login(page: Page, email: string, password: string) {
   await page.goto("/login");
-  await page.getByLabel(/email/i).fill(email);
-  await page.getByLabel(/kata sandi|password/i).fill(password);
-  await page.getByRole("button", { name: /masuk/i }).click();
+  // Stable ids: getByLabel(/kata sandi/i) also matches the show-password button.
+  await page.locator("#email").fill(email);
+  await page.locator("#password").fill(password);
+  // The navbar also has a "Masuk" button; submit the form inside <main>.
+  await page.getByRole("main").getByRole("button", { name: /^masuk$/i }).click();
+  // Wait until the session cookie is written and the app navigates away;
+  // otherwise the next page.goto() can race ahead as a guest.
+  await page.waitForURL(/\/(dashboard|admin)/, { timeout: 25_000 });
 }
 
 export async function serviceRest(pathname: string, init: RequestInit = {}) {
@@ -107,11 +112,19 @@ export async function userIdByEmail(email: string): Promise<string | null> {
   return Array.isArray(body) && body[0]?.id ? body[0].id : null;
 }
 
-export async function openLeagueId(): Promise<string | null> {
+export async function openLeagueId(category?: string): Promise<string | null> {
+  const filter = category ? `&category=eq.${encodeURIComponent(category)}` : "";
   const { body } = await serviceRest(
-    "tournaments?select=id,category,status,max_participants&is_league=eq.true&status=eq.registration_open&limit=1"
+    `tournaments?select=id,category,status,max_participants&is_league=eq.true&status=eq.registration_open${filter}&limit=1`
   );
   return Array.isArray(body) && body[0]?.id ? body[0].id : null;
+}
+
+export async function playerGender(email: string): Promise<string | null> {
+  const id = await userIdByEmail(email);
+  if (!id) return null;
+  const { body } = await serviceRest(`users?select=gender&id=eq.${id}`);
+  return Array.isArray(body) ? body[0]?.gender ?? null : null;
 }
 
 export async function acceptedEntryCount(tournamentId: string): Promise<number> {
@@ -125,12 +138,16 @@ export async function acceptedEntryCount(tournamentId: string): Promise<number> 
 export async function createOpenMatchViaUi(page: Page, title: string) {
   await page.goto("/matches/new");
   await page.getByRole("button", { name: /open match/i }).click();
-  await page.getByLabel(/judul/i).fill(title);
+  await page.locator("#title").fill(title);
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  await page.getByLabel(/tanggal/i).fill(tomorrow);
-  const time = page.getByLabel(/waktu|jam/i);
-  if (await time.count()) await time.first().fill("18:00");
-  const venue = page.getByLabel(/lapangan|venue|lokasi/i);
-  if (await venue.count()) await venue.first().fill("E2E Court");
+  await page.locator("#matchDate").fill(tomorrow);
+  await page.locator("#startTime").fill("18:00");
+  await page.locator("#courtName").fill("E2E Court");
+  // Province and city are required before the submit button is enabled.
+  await page.locator("#province").selectOption({ index: 1 });
+  await page
+    .waitForFunction(() => document.querySelectorAll("#cityName option").length > 1)
+    .catch(() => undefined);
+  await page.locator("#cityName").selectOption({ index: 1 });
   await page.getByRole("button", { name: /buat open match/i }).click();
 }

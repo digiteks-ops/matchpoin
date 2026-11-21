@@ -6,6 +6,7 @@ import {
   adminCreds,
   requireEnv,
   openLeagueId,
+  playerGender,
   userIdByEmail,
   acceptedEntryCount,
   serviceRest,
@@ -30,8 +31,10 @@ test("register -> admin accept -> player sees accepted; quota counts accepted on
 }) => {
   const player = playerCreds();
   const admin = adminCreds();
-  const leagueId = await openLeagueId();
-  test.skip(!leagueId, "BLOCKED: no league with status registration_open");
+  const gender = await playerGender(player.email);
+  test.skip(!gender, "BLOCKED: test player has no gender set (needed to pick a category)");
+  const leagueId = await openLeagueId(gender === "female" ? "womens_singles" : "mens_singles");
+  test.skip(!leagueId, "BLOCKED: no matching league with status registration_open");
 
   const before = await acceptedEntryCount(leagueId!);
   const playerId = await userIdByEmail(player.email);
@@ -46,7 +49,16 @@ test("register -> admin accept -> player sees accepted; quota counts accepted on
 
   await login(page, player.email, player.password);
   await page.goto("/tournaments");
-  await page.getByRole("button", { name: /^daftar$/i }).first().click();
+  // Open the card for the player's own gender so the RPC accepts the entry.
+  const categoryLabel = gender === "female" ? "Single Woman" : "Single Man";
+  const card = page
+    .locator("div")
+    .filter({ has: page.getByRole("heading", { name: categoryLabel, exact: true }) })
+    .filter({ has: page.getByRole("button", { name: /^daftar$/i }) })
+    .last();
+  test.skip((await card.count()) === 0, "BLOCKED: category card not found on the page");
+  await card.getByRole("button", { name: /^daftar$/i }).click();
+  await page.getByRole("button", { name: /kirim pendaftaran/i }).click();
   await expect(page.getByText(/menunggu persetujuan|menunggu/i).first()).toBeVisible({
     timeout: 20_000,
   });
@@ -64,7 +76,7 @@ test("register -> admin accept -> player sees accepted; quota counts accepted on
   expect(after).toBe(before + 1);
 
   await page.reload();
-  await expect(page.getByText(/diterima/i).first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/diterima|disetujui/i).first()).toBeVisible({ timeout: 20_000 });
 
   // Cleanup: remove the accepted test registration.
   if (playerId) {

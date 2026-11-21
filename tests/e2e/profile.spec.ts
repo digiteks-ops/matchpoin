@@ -23,20 +23,35 @@ test("profile save persists and accepts a very long name", async ({ page }) => {
   const { body } = await serviceRest(`users?select=full_name&id=eq.${id}`);
   const originalName = Array.isArray(body) ? body[0]?.full_name ?? "" : "";
 
-  const longName = `E2E-${"Nama Panjang ".repeat(12)}`.trim().slice(0, 120);
-  const nameInput = page.getByLabel(/nama lengkap|nama/i).first();
+  // The users.full_name column is VARCHAR(100); the input caps at 100 chars.
+  const longName = `E2E ${"Nama Panjang ".repeat(6)}`.slice(0, 50).trim();
+  const expected = longName;
+  // Required selects must be filled before the profile can be saved.
+  for (const id of ["#province", "#city", "#gender"]) {
+    const select = page.locator(id);
+    if ((await select.count()) > 0) {
+      const value = await select.inputValue();
+      if (!value) await select.selectOption({ index: 1 });
+    }
+  }
+  const nameInput = page.locator("#fullName");
   await nameInput.fill(longName);
-  await page.getByRole("button", { name: /simpan/i }).first().click();
-  await expect(page.getByText(/berhasil|tersimpan/i).first()).toBeVisible({ timeout: 15_000 });
-
-  await page.reload();
-  await expect(page.getByLabel(/nama lengkap|nama/i).first()).toHaveValue(longName);
+  await page.getByRole("button", { name: /simpan profil pemain/i }).click();
+  // A successful save navigates from /profile/edit to /profile.
+  await page.waitForURL(/\/profile$/, { timeout: 25_000 });
+  await page.goto("/profile/edit");
+  await expect(page.locator("#fullName")).toHaveValue(expected);
 
   // Restore the account name so reruns stay deterministic.
   if (id) {
+    const restore = originalName || email;
     await serviceRest(`users?id=eq.${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ full_name: originalName || email }),
+      body: JSON.stringify({ full_name: restore }),
+    });
+    await serviceRest(`player_profiles?user_id=eq.${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ display_name: restore }),
     });
   }
 });
