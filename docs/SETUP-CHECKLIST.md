@@ -7,7 +7,7 @@ Run every command from the repository root on `refactor/supabase-lean`.
 
 ## 1. Fix local environment keys
 Supabase Dashboard → project → **Settings → API**:
-- `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
+- `Project URL` → `NEXT_PUBLIC_SUPABASE_URL` (**base URL only**, e.g. `https://xxxx.supabase.co`; do **not** append `/rest/v1`)
 - `anon public` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `service_role secret` → `SUPABASE_SERVICE_ROLE_KEY` (server only)
 

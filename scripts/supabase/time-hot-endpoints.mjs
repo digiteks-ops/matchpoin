@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Measures wall-clock timings of the hot MATCHPOIN read paths over PostgREST.
  *
  * Uses the service-role client, so it works before/after indexes are applied
@@ -120,19 +120,25 @@ const checks = [
   },
 ];
 
-console.log(`MATCHPOIN REST timings — ${new Date().toISOString()}\n`);
+console.log(`MATCHPOIN REST timings â€” ${new Date().toISOString()}\n`);
 const results = [];
+let failed = 0;
 for (const check of checks) {
   try {
     const { ms, rows } = await median(check.run);
     results.push({ label: check.label, medianMs: ms, rows });
-    console.log(`• ${check.label}: ${ms} ms${rows === null ? "" : ` (${rows} rows)`}`);
+    console.log(`â€¢ ${check.label}: ${ms} ms${rows === null ? "" : ` (${rows} rows)`}`);
   } catch (error) {
+    failed += 1;
     results.push({ label: check.label, error: error.message });
-    console.log(`✗ ${check.label}: ${error.message}`);
+    console.log(`âœ— ${check.label}: ${error.message}`);
   }
 }
 
 if (process.argv.includes("--json")) {
   console.log("\n" + JSON.stringify(results, null, 2));
 }
+
+process.exit(failed ? 1 : 0);
+
+

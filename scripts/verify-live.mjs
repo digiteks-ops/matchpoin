@@ -22,7 +22,10 @@ function loadEnv(file) {
 for (const file of [".env", ".env.local", ".env.test.local"]) loadEnv(file);
 
 const env = (name) => (process.env[name] ?? "").trim();
-const SUPABASE_URL = env("NEXT_PUBLIC_SUPABASE_URL");
+const RAW_SUPABASE_URL = env("NEXT_PUBLIC_SUPABASE_URL");
+// supabase-js expects the project base URL; a /rest/v1 suffix double-paths
+// every request (404) and is a common .env mistake.
+const SUPABASE_URL = RAW_SUPABASE_URL.replace(/\/rest\/v1\/?$/i, "").replace(/\/$/, "");
 const ANON = env("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 const SERVICE = env("SUPABASE_SERVICE_ROLE_KEY");
 const APP_URL = env("LIGHTHOUSE_BASE_URL") || env("PLAYWRIGHT_BASE_URL") || env("NEXT_PUBLIC_APP_URL");
@@ -67,6 +70,13 @@ async function rpc(name, args = {}, key = SERVICE) {
 async function checkEnv() {
   if (!SUPABASE_URL) return add("env: NEXT_PUBLIC_SUPABASE_URL", "FAIL", "missing");
   add("env: NEXT_PUBLIC_SUPABASE_URL", "PASS", SUPABASE_URL);
+  if (RAW_SUPABASE_URL !== SUPABASE_URL) {
+    add(
+      "env: URL format",
+      "FAIL",
+      "NEXT_PUBLIC_SUPABASE_URL must not include /rest/v1 — use the project base URL"
+    );
+  }
 
   if (!ANON) add("env: anon key", "FAIL", "missing");
   else {
@@ -211,12 +221,28 @@ function checkLighthouse() {
 }
 
 function checkScripts() {
+  const envOk = results
+    .filter((row) => row.step.startsWith("env:"))
+    .every((row) => row.status === "PASS");
+
+  if (!envOk) {
+    add("db:time", "BLOCKED", "fix Supabase keys/URL first");
+    add("db:explain", "BLOCKED", "fix Supabase keys/URL first");
+    return;
+  }
+
   for (const [label, script] of [
     ["db:time", "db:time"],
     ["db:explain", "db:explain"],
   ]) {
     const result = run("npm", ["run", script]);
-    add(label, result.status === 0 ? "PASS" : "FAIL", result.status === 0 ? "timings collected" : tail(result));
+    const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+    const ok = result.status === 0 && !/[✗×]/.test(output) && /[•]/.test(output);
+    add(
+      label,
+      ok ? "PASS" : "FAIL",
+      ok ? "timings collected" : output.trim().split(/\r?\n/).slice(-2).join(" | ").slice(0, 240)
+    );
   }
 }
 

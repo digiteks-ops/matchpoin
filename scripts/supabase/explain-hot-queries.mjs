@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Measures the hot MATCHPOIN queries with EXPLAIN ANALYZE.
  *
  * Requires migration 00020 (admin_explain) applied and the service role key.
@@ -83,8 +83,9 @@ function summarize(plan) {
   };
 }
 
-console.log(`MATCHPOIN query timings — ${new Date().toISOString()}\n`);
+console.log(`MATCHPOIN query timings â€” ${new Date().toISOString()}\n`);
 const results = [];
+let failed = 0;
 
 for (const query of QUERIES) {
   const { data, error } = await supabase.rpc("admin_explain", {
@@ -92,14 +93,15 @@ for (const query of QUERIES) {
     p_analyze: true,
   });
   if (error) {
-    console.log(`✗ ${query.label}: ${error.message}`);
+    console.log(`âœ— ${query.label}: ${error.message}`);
+    failed += 1;
     results.push({ label: query.label, error: error.message });
     continue;
   }
   const summary = summarize(data);
   results.push({ label: query.label, ...summary });
   console.log(
-    `• ${query.label}: ${summary.executionMs} ms (plan ${summary.planningMs} ms, ` +
+    `â€¢ ${query.label}: ${summary.executionMs} ms (plan ${summary.planningMs} ms, ` +
       `${summary.topNode}${summary.seqScan ? ", SEQ SCAN" : ""})`
   );
 }
@@ -107,3 +109,7 @@ for (const query of QUERIES) {
 if (process.argv.includes("--json")) {
   console.log("\n" + JSON.stringify(results, null, 2));
 }
+
+process.exit(failed ? 1 : 0);
+
+
