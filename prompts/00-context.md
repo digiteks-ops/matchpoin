@@ -20,7 +20,8 @@ Rotasi service key DITOLAK user — risiko diterima, key tidak pernah masuk repo
 
 E2E: playwright.config.ts sudah punya webServer (auto-start dev saat baseURL localhost).
 Kegagalan terakhir (13 FAIL) = ERR_CONNECTION_REFUSED karena server mati, BUKAN bug kode.
-Dengan server hidup: 11 pass, hanya tests/e2e/profile.spec.ts merah.
+Dengan server hidup sebelumnya: 11 pass; sisa merah hanya tests/e2e/profile.spec.ts.
+Jangan jalankan perintah destruktif (hapus .next/node_modules) tanpa izin user.
 
 Penting: bedakan kegagalan ENV (server/key/akun) dari bug KODE. Jangan klaim PASS tanpa bukti.
 Model guidance: Plan=reasoning tinggi; Implement=coding kuat variant high; Verify=keluarga model berbeda.
