@@ -1,6 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createPublicClient } from "@/lib/supabase/public";
 
 export interface PublicPlayer {
   userId: string;
@@ -127,8 +128,10 @@ const PUBLIC_PLAYER_COLUMNS =
   "user_id, display_name, full_name, avatar_url, gender, city_id, city_name, province, bio, preferred_hand, backhand, play_frequency, preferred_categories, preferred_times, self_assessed_level, playing_since, completion_score, allow_invites, show_rating, current_rating, peak_rating, matches_played, wins, losses, draws, is_verified_player";
 
 function client() {
-  const supabase = createAdminClient();
-  if (!supabase) throw new Error("Supabase service role is not configured.");
+  // Public data (players view + active cities) is readable with the anon key.
+  // Fall back so /players and /leaderboard still work without a service key.
+  const supabase = createAdminClient() ?? createPublicClient();
+  if (!supabase) throw new Error("Supabase belum dikonfigurasi (URL/anon key).");
   return supabase;
 }
 
