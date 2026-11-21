@@ -95,7 +95,7 @@ Or install the Chrome Lighthouse extension and audit `/`, `/login`,
 ## Google / Facebook login — 5 manual steps (cannot be automated)
 1. Supabase → Authentication → Providers → Google/Facebook: paste Client ID/Secret.
 2. Google Cloud Console → OAuth Client (Web): redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`; origins `http://localhost:3000`, `https://matchpoin.vercel.app`.
-3. Meta for Developers → Facebook Login: same callback as Valid OAuth Redirect URI; App Domains `<project-ref>.supabase.co` + `matchpoin.vercel.app`; fill Privacy/Data Deletion URLs; switch app to Live.
+3. Meta for Developers → Facebook Login: same callback as Valid OAuth Redirect URI; App Domains `<project-ref>.supabase.co` + `matchpoin.vercel.app`; Privacy Policy URL `https://matchpoin.vercel.app/privacy`; Data Deletion URL `https://matchpoin.vercel.app/privacy#hapus-data`; switch app to Live.
 4. Supabase → Authentication → URL Configuration: Site URL `https://matchpoin.vercel.app`; redirect URLs `https://matchpoin.vercel.app/auth/callback`, `http://localhost:3000/auth/callback`.
 5. Test on production: Google new account, Facebook new account, cancel consent (must show the Indonesian message), Facebook without email (must be asked to use Google/email).
 

@@ -99,8 +99,17 @@ export async function Footer() {
           <p>
             &copy; {new Date().getFullYear()} MATCHPOIN. Seluruh hak cipta dilindungi.
           </p>
-          <div className="flex items-center gap-1">
-            <span>Connect. Compete. Improve.</span>
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+            <Link href="/privacy" className="hover:text-matchpoin-tennis transition-colors">
+              Kebijakan Privasi
+            </Link>
+            <Link href="/terms" className="hover:text-matchpoin-tennis transition-colors">
+              Ketentuan Layanan
+            </Link>
+            <Link href="/privacy#hapus-data" className="hover:text-matchpoin-tennis transition-colors">
+              Hapus Data
+            </Link>
+            <span className="hidden sm:inline text-slate-600">Connect. Compete. Improve.</span>
           </div>
         </div>
       </div>

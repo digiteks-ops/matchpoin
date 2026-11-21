@@ -37,7 +37,7 @@
     "test:supabase-perf": "node --test scripts/supabase/perf-audit.test.mjs",
     "test:supabase-frontend-perf": "node --test scripts/supabase/frontend-perf.test.mjs",
     "test:supabase-rls": "node --test scripts/supabase/rls-hardening.test.mjs",
-    "test:unit": "node --test scripts/unit/security.test.mjs",
+    "test:unit": "node --test scripts/unit",
     "audit:rls": "node scripts/supabase/rls-audit.mjs",
     "test:e2e:playwright": "playwright test",
     "verify:live": "node scripts/verify-live.mjs",
