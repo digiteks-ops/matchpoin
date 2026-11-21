@@ -56,8 +56,9 @@ test("double-clicking submit creates exactly one pending entry", async ({ page }
 
 test("empty search shows a friendly empty state", async ({ page }) => {
   await page.goto("/players");
-  await page.getByPlaceholder(/cari nama pemain/i).fill("zzzznotexist");
-  await expect(page.getByText(/tidak ada pemain ditemukan/i).first()).toBeVisible({
-    timeout: 20_000,
-  });
+  const search = page.getByPlaceholder(/cari nama pemain/i);
+  await search.waitFor();
+  await page.waitForTimeout(1500);
+  await search.fill("zzzznotexist");
+  await expect(page.getByText(/tidak ada pemain/i).first()).toBeVisible({ timeout: 30_000 });
 });

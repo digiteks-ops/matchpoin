@@ -32,3 +32,8 @@ test("notifications migration adds and backfills the message column", () => {
   assert.match(notificationsMigration, /SET message = COALESCE\(NULLIF\(message, ''\), body, ''\)/);
   assert.match(notificationsMigration, /sync_notification_message/);
 });
+test("profile loader cannot re-trigger itself and overwrite user input", () => {
+  assert.match(profilePage, /\}, \[router\]\);/);
+  assert.doesNotMatch(profilePage, /\}, \[cityId/);
+  assert.match(profilePage, /savedCity/);
+});

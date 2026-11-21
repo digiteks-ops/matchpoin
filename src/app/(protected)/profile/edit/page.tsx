@@ -88,11 +88,7 @@ const loadProfile = useCallback(async () => {
         ).sort();
         setProvinceOptions(provinces);
 
-        // Pre-select province when a city is already saved
-        if (cityId) {
-          const selectedCity = (citiesData as City[]).find((c) => c.id === cityId);
-          if (selectedCity) setProvince(selectedCity.province);
-        }
+        // Pre-select province after the user record is loaded (kept below).
       }
 
       // Fetch user record
@@ -108,6 +104,12 @@ const loadProfile = useCallback(async () => {
         setAvatarUrl(userData.avatar_url || null);
         setGender(userData.gender || "");
         setCityId(userData.city_id || "");
+        // Preselect the province from the saved city (no state dependency, so
+        // this loader cannot re-trigger itself and overwrite user input).
+        if (userData.city_id) {
+          const savedCity = (citiesData as City[] | null)?.find((c) => c.id === userData.city_id);
+          if (savedCity) setProvince(savedCity.province);
+        }
       }
 
       // Fetch profile record
@@ -133,7 +135,7 @@ const loadProfile = useCallback(async () => {
     } finally {
       setIsLoading(false);
     }
-  }, [cityId, router]);
+  }, [router]);
 
     useEffect(() => {
     loadProfile();

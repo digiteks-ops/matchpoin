@@ -144,10 +144,16 @@ export async function createOpenMatchViaUi(page: Page, title: string) {
   await page.locator("#startTime").fill("18:00");
   await page.locator("#courtName").fill("E2E Court");
   // Province and city are required before the submit button is enabled.
-  await page.locator("#province").selectOption({ index: 1 });
+  const provinceSelect = page.locator("#province");
+  await provinceSelect
+    .selectOption({ label: "Sulawesi Selatan" })
+    .catch(async () => provinceSelect.selectOption({ index: 1 }));
   await page
     .waitForFunction(() => document.querySelectorAll("#cityName option").length > 1)
     .catch(() => undefined);
-  await page.locator("#cityName").selectOption({ index: 1 });
+  const citySelect = page.locator("#cityName");
+  await citySelect
+    .selectOption({ label: "Makassar" })
+    .catch(async () => citySelect.selectOption({ index: 1 }));
   await page.getByRole("button", { name: /buat open match/i }).click();
 }
