@@ -11,10 +11,11 @@ Stack: Next.js 14 App Router + TS + Supabase + Vercel.
 Baca: docs/PROGRESS.md, docs/FINAL_REPORT.md, docs/SETUP-CHECKLIST.md.
 Aturan: migrasi idempotent, UI Bahasa Indonesia, tanpa secret, jangan hapus fitur, 1 commit per fix, jangan ulang Phase 0-4.
 Status kode: 17 suite + unit 18 PASS; build 55/55.
-Akun uji: player=aabdiar@gmail.com · player2=rizky.tennis@makassar.id (SUDAH ADA) · admin=matchpoin.id@gmail.com (role=admin).
+Akun uji: player=aabdiar@gmail.com · player2=rizky.tennis@makassar.id (SUDAH ADA) · admin=matchpoin.id@gmail.com (role=admin, password terverifikasi).
+Sudah diterapkan: migrasi 00023_notifications_message.sql (diverifikasi lewat db:time).
 E2E terakhir: 13 FAIL = ERR_CONNECTION_REFUSED (server mati, BUKAN bug), 2 skip, 5 pass. Dengan server hidup: 11 pass, hanya profile.spec merah.
-Pending: migrasi 00023_notifications_message.sql belum dijalankan; TEST_ADMIN_PASSWORD belum diverifikasi.
-Penting: sebelum Playwright nyalakan app (http://localhost:3000) atau pakai webServer; pisahkan kegagalan ENV dari bug KODE.
+Pending: TEST_PLAYER2_PASSWORD belum diverifikasi. Rotasi service key DITOLAK user (risiko diterima; key tidak pernah masuk repo).
+Penting: sebelum Playwright nyalakan app (atau andalkan webServer); pisahkan kegagalan ENV dari bug KODE.
 Model guidance: Plan=reasoning tinggi; Implement=coding kuat variant high; Verify=keluarga model berbeda dari Implement.
 ```
 
@@ -27,12 +28,10 @@ Output tabel P0/P1/P2: masalah, file:line, dampak, fix, test, risiko. Wajib menc
 
 ## Prompt B — Implement
 ```
-MODE: IMPLEMENT. Urut, stop jika konteks habis.
-0) playwright.config.ts: webServer hanya saat baseURL localhost (command npm run dev -p <port>, reuseExistingServer, timeout 120s).
-1) npx playwright test --reporter=line; ERR_CONNECTION_REFUSED = konfigurasi, bukan tes.
-2) Root-cause profile.spec (PUT /api/profile 200+DB terbukti); perbaiki spec/kode + bukti.
-3) GET /api/notifications tidak boleh 500 bila kolom message belum ada; fallback body; migrasi 00023 tetap.
-Setiap fix: regression test + commit sendiri. Akhir: typecheck, lint, test:unit, build; ringkas 10 baris.
+MODE: IMPLEMENT. Baca docs/HANDOFF.md.
+Root-cause profile.spec: reproduksi via npx playwright test tests/e2e/profile.spec.ts --reporter=line (webServer otomatis). Bukti PUT /api/profile + DB. Perbaiki spec ATAU kode; 1 commit + regression test.
+Jangan sentuh notifikasi (00023 sudah diverifikasi).
+Akhir: typecheck, lint, test:unit, build. Ringkas 10 baris.
 ```
 
 ## Prompt C — Verify/finalize
@@ -45,8 +44,7 @@ MODE: VERIFY. Jangan refactor/tambah fitur.
 Akhir: tabel PASS/FAIL/BLOCKED, commit list, 5 langkah manual tersisa.
 ```
 
-## Manual prerequisites (cannot be automated)
-1. SQL Editor: run `supabase/migrations/00023_notifications_message.sql`.
-2. `.env.test.local`: verify `TEST_ADMIN_PASSWORD` and `TEST_PLAYER2_PASSWORD`.
-3. Rotate the exposed service-role key; update `.env.local`, `.env.test.local`, Vercel.
-4. Merge PR / redeploy Vercel with final env vars.
+## Manual prerequisites
+1. `.env.test.local`: verify `TEST_PLAYER2_PASSWORD` (account exists).
+2. Service key: rotation declined by the user; risk accepted, key never committed. Do not ask again.
+3. Merge PR / redeploy Vercel with final env vars.
