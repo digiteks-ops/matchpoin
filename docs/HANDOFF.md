@@ -14,7 +14,8 @@ Status kode: 17 suite + unit 18 PASS; build 55/55.
 Akun uji: player=aabdiar@gmail.com · player2=rizky.tennis@makassar.id (SUDAH ADA) · admin=matchpoin.id@gmail.com (role=admin, password terverifikasi).
 Sudah diterapkan: migrasi 00023_notifications_message.sql (diverifikasi lewat db:time).
 E2E terakhir: 13 FAIL = ERR_CONNECTION_REFUSED (server mati, BUKAN bug), 2 skip, 5 pass. Dengan server hidup: 11 pass, hanya profile.spec merah.
-Pending: TEST_PLAYER2_PASSWORD belum diverifikasi. Rotasi service key DITOLAK user (risiko diterima; key tidak pernah masuk repo).
+Pending: tidak ada cek password akun; ketiga akun sudah benar. Rotasi service key DITOLAK user (risiko diterima; key tidak pernah masuk repo).
+Template prompt per model ada di `prompts/`.
 Penting: sebelum Playwright nyalakan app (atau andalkan webServer); pisahkan kegagalan ENV dari bug KODE.
 Model guidance: Plan=reasoning tinggi; Implement=coding kuat variant high; Verify=keluarga model berbeda dari Implement.
 ```
@@ -45,6 +46,5 @@ Akhir: tabel PASS/FAIL/BLOCKED, commit list, 5 langkah manual tersisa.
 ```
 
 ## Manual prerequisites
-1. `.env.test.local`: verify `TEST_PLAYER2_PASSWORD` (account exists).
-2. Service key: rotation declined by the user; risk accepted, key never committed. Do not ask again.
-3. Merge PR / redeploy Vercel with final env vars.
+1. Service key: rotation declined by the user; risk accepted, key never committed. Do not ask again.
+2. Merge PR / redeploy Vercel with final env vars.
