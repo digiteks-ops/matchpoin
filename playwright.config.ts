@@ -10,6 +10,16 @@ import { defineConfig, devices } from "@playwright/test";
  *   cp .env.test.local.example .env.test.local   # then fill values
  *   npm run test:e2e:playwright
  */
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
+const isLocalBaseUrl = /^https?:\/\/(localhost|127\.0\.0\.1)/i.test(baseURL);
+const localPort = (() => {
+  try {
+    return new URL(baseURL).port || "3000";
+  } catch {
+    return "3000";
+  }
+})();
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
@@ -20,10 +30,20 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000",
+    baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "off",
   },
+  // Start the app automatically for local runs so specs never fail with
+  // ERR_CONNECTION_REFUSED. A remote baseURL (Vercel) is never started here.
+  webServer: isLocalBaseUrl
+    ? {
+        command: `npm run dev -- -p ${localPort}`,
+        url: baseURL,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+      }
+    : undefined,
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 });
