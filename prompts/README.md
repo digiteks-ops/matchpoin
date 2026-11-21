@@ -24,9 +24,11 @@ Setiap sesi model baru: tempel `00-context.md` dulu, baru file tahapnya.
 - Jangan asumsikan nama provider = kualitas; pilih model+varian sesuai peran.
 
 ## Prasyarat manual
-1. `TEST_PLAYER2_PASSWORD` di `.env.test.local` (akun existing).
-2. Merge PR + env Vercel + redeploy sebelum `04` dijalankan pada produksi.
-3. Rotasi service key: ditolak user (risiko diterima). Jangan minta lagi.
+1. Merge PR + set env Vercel + redeploy sebelum `04` dijalankan pada produksi.
+2. Rotasi service key: ditolak user (risiko diterima). Jangan minta lagi.
+
+> Akun uji sudah benar dan **tidak perlu cek password**:
+> `aabdiar@gmail.com`, `rizky.tennis@makassar.id`, `matchpoin.id@gmail.com` (admin).
 
 ## Definition of done
 - `typecheck`, `lint`, `test:unit`, `build` hijau.
