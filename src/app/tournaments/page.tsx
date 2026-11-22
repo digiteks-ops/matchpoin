@@ -436,9 +436,9 @@ export default function TournamentsPage() {
             <li>Main event: {dateLabel(league.mainEventStart)} – {dateLabel(league.mainEventEnd)}.</li>
             <li>
               <strong className="text-rose-700">
-                Peserta dilarang pernah mengikuti PORDA, PORPROV, atau PON.
-              </strong>{" "}
-              Pemain yang pernah tampil di ajang tersebut tidak eligible untuk mengikuti liga ini.
+                Pemain yang pernah mengikuti PORDA, PORPROV, atau PON tidak diperbolehkan pada
+                turnamen ini.
+              </strong>
             </li>
             <li>
               <strong className="text-slate-800">
