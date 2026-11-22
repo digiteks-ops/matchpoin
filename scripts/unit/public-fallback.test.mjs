@@ -14,7 +14,7 @@ test("public reads fall back to the anon client when the service key is absent",
   assert.match(publicClient, /persistSession: false/);
   const executable = publicClient.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
   assert.doesNotMatch(executable, /cookies|next\/headers/);
-  assert.match(publicPlayers, /createAdminClient\(\) \?\? createPublicClient\(\)/);
+  assert.match(publicPlayers, /createPublicClient\(\) \?\? createAdminClient\(\)/);
 });
 
 test("cities remain publicly readable so the fallback works under RLS", () => {
