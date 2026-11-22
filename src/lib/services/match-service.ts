@@ -431,7 +431,7 @@ export async function createOpenMatch(
       match_date: input.matchDate,
       start_time: startTime,
       duration_minutes: duration,
-      max_players: maxParticipantRows(input.category),
+      max_players: roster.maxPlayers,
       current_players: 0,
       status: roster.status,
       is_private: roster.isPrivate,
