@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TournamentLeaderboard } from "@/components/tournaments/tournament-leaderboard";
 import { AlertCircle, Calendar, CheckCircle2, Clock, Loader2, MapPin, Trophy, Users } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { formatIndonesianDate } from "@/lib/utils";
@@ -404,6 +405,8 @@ export default function TournamentsPage() {
             })
           )}
         </section>
+
+        <TournamentLeaderboard />
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 text-xs text-slate-600">
           <p className="text-sm font-bold text-slate-800">Ketentuan Liga Tennis IKA17</p>

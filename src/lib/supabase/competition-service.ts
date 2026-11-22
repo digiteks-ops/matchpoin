@@ -62,6 +62,8 @@ export interface LeagueOverview {
     gameDiff: number;
     rank: number;
     needsTiebreak: boolean;
+    level: string | null;
+    rating: number | null;
   }>;
 }
 
@@ -264,7 +266,7 @@ export async function getLeagueOverview(category: string): Promise<LeagueOvervie
   const { data: players } = userIds.length
     ? await supabase
         .from("public_players")
-        .select("user_id, display_name, full_name, avatar_url, province, city_name")
+        .select("user_id, display_name, full_name, avatar_url, province, city_name, self_assessed_level, current_rating")
         .in("user_id", userIds)
     : { data: [] as Array<Record<string, unknown>> };
   const playerById = new Map(
@@ -277,6 +279,8 @@ export async function getLeagueOverview(category: string): Promise<LeagueOvervie
         avatar_url: string | null;
         province: string | null;
         city_name: string | null;
+        self_assessed_level: string | null;
+        current_rating: number | string | null;
       },
     ])
   );
@@ -336,6 +340,11 @@ export async function getLeagueOverview(category: string): Promise<LeagueOvervie
       gameDiff: Number(values?.game_diff ?? 0),
       rank: Number(values?.position && values.position > 0 ? values.position : fallbackRank),
       needsTiebreak: Boolean(values?.needs_tiebreak),
+      level: first?.self_assessed_level ?? null,
+      rating:
+        first?.current_rating === null || first?.current_rating === undefined
+          ? null
+          : Number(first.current_rating),
     };
   };
 
