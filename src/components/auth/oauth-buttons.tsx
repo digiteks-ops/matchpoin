@@ -31,9 +31,9 @@ function mapOAuthError(provider: Provider, message: string): string {
   return `Gagal memulai proses masuk dengan ${PROVIDER_LABEL[provider]}. Silakan coba lagi.`;
 }
 
-function GoogleLogo({ className = "w-5 h-5" }: { className?: string }) {
+function GoogleLogo({ className = "h-5 w-5 shrink-0" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
+    <svg viewBox="0 0 48 48" width="20" height="20" className={className} aria-hidden="true">
       <path
         fill="#FFC107"
         d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"
@@ -54,9 +54,9 @@ function GoogleLogo({ className = "w-5 h-5" }: { className?: string }) {
   );
 }
 
-function FacebookLogo({ className = "w-5 h-5" }: { className?: string }) {
+function FacebookLogo({ className = "h-5 w-5 shrink-0" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="20" height="20" className={className} aria-hidden="true">
       <path
         fill="#1877F2"
         d="M24 12a12 12 0 1 0-13.9 11.9v-8.4H7.1V12h3V9.4c0-3 1.8-4.6 4.5-4.6 1.3 0 2.6.2 2.6.2v2.9h-1.5c-1.5 0-1.9.9-1.9 1.8V12h3.3l-.5 3.5h-2.8v8.4A12 12 0 0 0 24 12z"
@@ -84,7 +84,7 @@ function OAuthRedirectOverlay({ provider }: { provider: Provider }) {
     >
       <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-2xl">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50">
-          {provider === "google" ? <GoogleLogo className="h-7 w-7" /> : <FacebookLogo className="h-7 w-7" />}
+          {provider === "google" ? <GoogleLogo className="h-7 w-7 shrink-0" /> : <FacebookLogo className="h-7 w-7 shrink-0" />}
         </div>
         <h2 className="mt-4 text-base font-bold text-slate-900">
           Mengalihkan ke {PROVIDER_DISPLAY[provider]}...
