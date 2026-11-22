@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Users, UserCheck, UserX, ShieldCheck, AlertTriangle, Database, Wifi, Server, Activity, MoreHorizontal, Edit, Trash2, Eye } from "lucide-react";
 import { formatIndonesianDate, formatIndonesianTime } from "@/lib/utils";
+
+const VALID_TABS = ["overview", "users", "players", "matches", "tournaments"];
+
+function resolveTab(value: string): string {
+  return VALID_TABS.includes(value) ? value : "overview";
+}
 
 interface UserRow {
   id: string;
@@ -88,6 +95,18 @@ export default function AdminSettingsClient({
   initialTournaments,
   initialSystemHealth,
 }: AdminSettingsClientProps) {
+  const router = useRouter();
+  const [tab, setTab] = useState(resolveTab(activeTab));
+
+  useEffect(() => {
+    setTab(resolveTab(activeTab));
+  }, [activeTab]);
+
+  const handleTabChange = (value: string) => {
+    setTab(value);
+    router.replace(`/admin/settings?tab=${value}`);
+  };
+
   const [users, setUsers] = useState(initialUsers);
   const [players, setPlayers] = useState(initialPlayers);
   const [matches, setMatches] = useState(initialMatches);
@@ -151,7 +170,7 @@ export default function AdminSettingsClient({
           </div>
         </div>
 
-        <Tabs defaultValue={activeTab} className="space-y-6">
+        <Tabs value={tab} onValueChange={handleTabChange} className="space-y-6">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview">Ringkasan Sistem</TabsTrigger>
             <TabsTrigger value="users">Manajemen Pengguna</TabsTrigger>

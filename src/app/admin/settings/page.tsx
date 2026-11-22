@@ -29,7 +29,7 @@ export default async function AdminSettingsPage({
   } as Awaited<ReturnType<typeof getAdminSettingsData>>;
 
   try {
-    data = await getAdminSettingsData(activeTab);
+    data = await getAdminSettingsData("all");
   } catch (error) {
     logError("admin.settings.page", error);
     data = {

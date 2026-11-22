@@ -37,3 +37,25 @@ test("admin sees the admin shell and registration tools", async ({ page }) => {
   await page.goto("/admin/tournaments");
   await expect(page.getByRole("heading", { name: /manajemen turnamen/i })).toBeVisible();
 });
+
+test("admin settings tabs load the section selected by the URL", async ({ page }) => {
+  const admin = adminCreds();
+  await login(page, admin.email, admin.password);
+
+  const sections: Array<[string, RegExp]> = [
+    ["overview", /statistik cepat/i],
+    ["users", /daftar pengguna & role/i],
+    ["players", /direktori pemain publik/i],
+    ["matches", /daftar pertandingan/i],
+    ["tournaments", /turnamen liga \(liga tennis ika 17\)/i],
+  ];
+
+  for (const [tab, section] of sections) {
+    await page.goto(`/admin/settings?tab=${tab}`);
+    await expect(page.getByText(section).first()).toBeVisible({ timeout: 20_000 });
+  }
+
+  await page.getByRole("tab", { name: /manajemen pengguna/i }).click();
+  await expect(page).toHaveURL(/tab=users/);
+  await expect(page.getByText(/daftar pengguna & role/i).first()).toBeVisible();
+});

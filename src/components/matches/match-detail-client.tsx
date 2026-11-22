@@ -31,6 +31,7 @@ import {
   XCircle,
   Check,
   Camera,
+  Swords,
 } from "lucide-react";
 
 export interface ViewerInfo {
@@ -114,6 +115,15 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
   const hostId = match.organizerId;
   const hostStoredTeam: 1 | 2 = 1;
   const side2Team: 1 | 2 = 2;
+  const activeRoster = [
+    ...match.participants,
+    ...match.pendingRequests,
+    ...match.invitedPlayers,
+  ];
+  const team1Active = activeRoster.filter((player) => (player.team ?? 1) === 1).length;
+  const team2Active = activeRoster.filter((player) => player.team === 2).length;
+  const hostTeamAvailable = team1Active < playersPerTeam;
+  const opponentTeamAvailable = team2Active < playersPerTeam;
 
   const sortTeamMembers = (members: typeof match.participants) =>
     [...members].sort((a, b) => {
@@ -204,10 +214,13 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
     }
   };
 
-  const handleJoin = async () => {
-    const json = await callApi(`/api/matches/${match.id}/join`);
+  const handleJoin = async (team?: 1 | 2) => {
+    const json = await callApi(
+      `/api/matches/${match.id}/join`,
+      team ? { team } : undefined
+    );
     if (json) {
-      setNotice("Permohonan terkirim.");
+      setNotice(team === 1 ? "Permohonan bergabung ke tim host terkirim." : "Permohonan lawan terkirim.");
       router.refresh();
     }
   };
@@ -534,7 +547,9 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                     <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100">
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-semibold text-slate-800 truncate">{p.fullName}</p>
-                        <p className="text-[10px] text-slate-400">Rating {p.rating.toFixed(2)}</p>
+                        <p className="text-[10px] text-slate-400">
+                          Rating {p.rating.toFixed(2)} · {p.team === 2 ? "Tim Lawan" : "Tim Host"}
+                        </p>
                       </div>
                       <Button
                         size="sm"
@@ -920,19 +935,55 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                 )}
 
                 {viewer.id && !viewer.isParticipant && !viewer.isPending && !viewer.isInvited && match.status === "open" && !isFull && (
-                  <Button variant="tennis" className="w-full text-matchpoin-navy font-bold" disabled={isBusy} onClick={handleJoin}>
-                  {isBusy ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
-                      Memproses...
-                    </>
+                  isSinglesMatch ? (
+                    <Button variant="tennis" className="w-full text-matchpoin-navy font-bold" disabled={isBusy} onClick={() => handleJoin()}>
+                      {isBusy ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                          Memproses...
+                        </>
+                      ) : (
+                        <>
+                          <Users className="w-4 h-4 mr-2" />
+                          Ajukan Slot
+                        </>
+                      )}
+                    </Button>
                   ) : (
-                    <>
-                      <Users className="w-4 h-4 mr-2" />
-                      Ajukan Slot
-                    </>
-                  )}
-                </Button>
+                    <div className="space-y-2">
+                      <Button
+                        variant="tennis"
+                        className="w-full text-matchpoin-navy font-bold"
+                        disabled={isBusy || !hostTeamAvailable}
+                        onClick={() => handleJoin(1)}
+                      >
+                        {isBusy ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                        ) : (
+                          <Users className="w-4 h-4 mr-2" />
+                        )}
+                        Gabung Tim Host
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full font-bold"
+                        disabled={isBusy || !opponentTeamAvailable}
+                        onClick={() => handleJoin(2)}
+                      >
+                        {isBusy ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                        ) : (
+                          <Swords className="w-4 h-4 mr-2" />
+                        )}
+                        Ajukan sebagai Lawan
+                      </Button>
+                      <p className="text-[10px] leading-relaxed text-slate-500">
+                        {hostTeamAvailable
+                          ? "Pilih menjadi partner host atau pemain lawan. Host tetap harus menyetujui."
+                          : "Tim host sudah penuh. Anda dapat mengajukan diri sebagai lawan."}
+                      </p>
+                    </div>
+                  )
                 )}
 
                 {viewer.id && viewer.isPending && (
