@@ -773,18 +773,28 @@ const MATCH_SELECT =
 async function hydrateMatches(matches: MatchRow[]): Promise<OpenMatchDetail[]> {
   if (matches.length === 0) return [];
 
-  // Participants arrive embedded in the match query (single round trip).
-  const participants = matches.flatMap(
-    (match) => (match.match_participants ?? []) as ParticipantRow[]
-  );
+  // Participants arrive embedded in the match query (single round trip). Group
+  // them per match so a card only counts and shows its own roster.
+  const participantsByMatch = new Map<string, ParticipantRow[]>();
+  const allParticipants: ParticipantRow[] = [];
+
+  for (const match of matches) {
+    const roster = ((match.match_participants ?? []) as ParticipantRow[]).filter(
+      (participant) => participant.match_id === match.id
+    );
+    participantsByMatch.set(match.id, roster);
+    allParticipants.push(...roster);
+  }
 
   const profileIds = [
-    ...participants.map((p) => p.user_id),
+    ...allParticipants.map((p) => p.user_id),
     ...matches.map((m) => m.organizer_id),
   ];
   const profileMap = await getProfilesForUsers(profileIds);
 
-  return matches.map((m) => buildMatchDetail(m, participants, profileMap));
+  return matches.map((m) =>
+    buildMatchDetail(m, participantsByMatch.get(m.id) ?? [], profileMap)
+  );
 }
 
 /**
@@ -976,7 +986,11 @@ function buildMatchDetail(
   const confirmed = all.filter((p) => p.status === "confirmed");
   const pending = all.filter((p) => p.status === "pending");
   const invited = all.filter((p) => p.status === "invited");
-  const organizerParticipant = all.find((p) => p.isOrganizer) ?? confirmed.find((p) => p.userId === match.organizer_id);
+  // The host shown on the card must be the match creator, never a participant
+  // from another match or a player who merely joined.
+  const organizerParticipant =
+    all.find((p) => p.userId === match.organizer_id) ??
+    confirmed.find((p) => p.userId === match.organizer_id);
   const organizerProfile = profileMap.get(match.organizer_id);
   const resolvedOrganizerName =
     (organizerParticipant?.fullName && organizerParticipant.fullName !== "Pemain"
