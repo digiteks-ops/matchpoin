@@ -156,4 +156,6 @@ export async function createOpenMatchViaUi(page: Page, title: string) {
     .selectOption({ label: "Makassar" })
     .catch(async () => citySelect.selectOption({ index: 1 }));
   await page.getByRole("button", { name: /buat open match/i }).click();
+  // Wait for the redirect to the new match so callers can read its id.
+  await page.waitForURL(/\/matches\/[0-9a-f-]{36}/, { timeout: 25_000 });
 }
