@@ -1,86 +1,100 @@
 // Simulasi kualifikasi Main Event — Single Putra (Liga Tennis IKA17).
-// Data sintetis deterministik. Tidak menulis apa pun ke database.
-// Jalankan: node scripts/simulate-qualification.mjs
+// Peringkat berbasis rating (menang/kalah memengaruhi rating). Tidak menulis ke database.
+// Versi UI ada di /admin/simulasi. Jalankan: node scripts/simulate-qualification.mjs
 
 const MIN_MATCHES = 17;
 const QUOTA_PER_LEVEL = 2;
 
 const players = [
-  // Beginner
-  { name: "Andi Pratama", level: "beginner", matches: 20, wins: 15, losses: 5, points: 45, rating: 3.6 },
-  { name: "Budi Santoso", level: "beginner", matches: 18, wins: 13, losses: 5, points: 40, rating: 3.4 },
-  { name: "Cakra Wijaya", level: "beginner", matches: 17, wins: 12, losses: 5, points: 36, rating: 3.2 },
-  { name: "Dedi Kurnia", level: "beginner", matches: 19, wins: 10, losses: 9, points: 30, rating: 3.0 },
-  { name: "Eko Saputra", level: "beginner", matches: 12, wins: 8, losses: 4, points: 24, rating: 2.9 },
-  { name: "Fajar Ramadhan", level: "beginner", matches: 9, wins: 6, losses: 3, points: 18, rating: 2.7 },
-  // Intermediate
-  { name: "Gilang Permana", level: "intermediate", matches: 22, wins: 17, losses: 5, points: 51, rating: 4.9 },
-  { name: "Hadi Susanto", level: "intermediate", matches: 19, wins: 14, losses: 5, points: 42, rating: 4.6 },
-  { name: "Irfan Maulana", level: "intermediate", matches: 18, wins: 13, losses: 5, points: 39, rating: 4.4 },
-  { name: "Joko Prasetyo", level: "intermediate", matches: 17, wins: 11, losses: 6, points: 33, rating: 4.1 },
-  { name: "Kiki Ardiansyah", level: "intermediate", matches: 15, wins: 9, losses: 6, points: 27, rating: 4.0 },
-  { name: "Lukman Hakim", level: "intermediate", matches: 8, wins: 5, losses: 3, points: 15, rating: 3.8 },
+  { name: "Andi Pratama", level: "beginner", start: 3.2, wins: 15, losses: 5 },
+  { name: "Budi Santoso", level: "beginner", start: 3.1, wins: 13, losses: 5 },
+  { name: "Cakra Wijaya", level: "beginner", start: 3.0, wins: 12, losses: 5 },
+  { name: "Dedi Kurnia", level: "beginner", start: 2.9, wins: 10, losses: 9 },
+  { name: "Eko Saputra", level: "beginner", start: 2.8, wins: 8, losses: 4 },
+  { name: "Fajar Ramadhan", level: "beginner", start: 2.7, wins: 6, losses: 3 },
+  { name: "Gilang Permana", level: "intermediate", start: 4.5, wins: 17, losses: 5 },
+  { name: "Hadi Susanto", level: "intermediate", start: 4.4, wins: 14, losses: 5 },
+  { name: "Irfan Maulana", level: "intermediate", start: 4.3, wins: 13, losses: 5 },
+  { name: "Joko Prasetyo", level: "intermediate", start: 4.2, wins: 11, losses: 6 },
+  { name: "Kiki Ardiansyah", level: "intermediate", start: 4.1, wins: 9, losses: 6 },
+  { name: "Lukman Hakim", level: "intermediate", start: 4.0, wins: 5, losses: 3 },
 ];
 
-const gameDiff = (p) => p.wins - p.losses;
-const compare = (a, b) =>
-  b.points - a.points ||
-  b.wins - a.wins ||
-  gameDiff(b) - gameDiff(a) ||
-  b.rating - a.rating ||
-  a.name.localeCompare(b.name);
+const round2 = (value) => Math.round(value * 100) / 100;
+const finalRating = (player) =>
+  round2(Math.max(1, player.start + player.wins * 0.04 - player.losses * 0.035));
+const matches = (player) => player.wins + player.losses;
+
+const rankedByLevel = (level) =>
+  players
+    .filter((player) => player.level === level)
+    .map((player) => ({ ...player, rating: finalRating(player), played: matches(player) }))
+    .sort(
+      (a, b) =>
+        b.rating - a.rating || b.wins - a.wins || b.played - a.played || a.name.localeCompare(b.name)
+    );
 
 const pad = (value, width) => String(value).padEnd(width);
 const padStart = (value, width) => String(value).padStart(width);
 
 function printGroup(level) {
   const label = level === "beginner" ? "BEGINNER" : "INTERMEDIATE";
-  const ranked = players.filter((p) => p.level === level).sort(compare);
-
+  const ranked = rankedByLevel(level);
   console.log(`\n${label}`);
-  console.log(`${pad("#", 3)}${pad("Pemain", 20)}${padStart("Main", 6)}${padStart("W", 4)}${padStart("L", 4)}${padStart("Poin", 6)}${padStart("Rating", 8)}  Status`);
-  console.log("-".repeat(82));
+  console.log(
+    `${pad("#", 3)}${pad("Pemain", 20)}${padStart("Main", 6)}${padStart("W", 4)}${padStart("L", 4)}${padStart("Awal", 7)}${padStart("Akhir", 7)}  Status`
+  );
+  console.log("-".repeat(88));
 
-  ranked.forEach((p, index) => {
+  ranked.forEach((player, index) => {
     const rank = index + 1;
-    const remaining = Math.max(0, MIN_MATCHES - p.matches);
+    const remaining = Math.max(0, MIN_MATCHES - player.played);
     let status;
-    if (rank <= QUOTA_PER_LEVEL && p.matches >= MIN_MATCHES) {
-      status = `Juara ${rank} ${label === "BEGINNER" ? "Beginner" : "Intermediate"} — LOLOS`;
+    if (rank <= QUOTA_PER_LEVEL && player.played >= MIN_MATCHES) {
+      status = `Juara ${rank} ${label} — LOLOS`;
     } else if (rank <= QUOTA_PER_LEVEL) {
       status = `Kandidat Juara ${rank} — butuh ${remaining} match lagi`;
-    } else if (p.matches < MIN_MATCHES) {
+    } else if (player.played < MIN_MATCHES) {
       status = `Belum lolos — butuh ${remaining} match lagi`;
     } else {
-      status = "Belum lolos — peringkat di luar kuota";
+      status = "Belum lolos — di luar kuota";
     }
     console.log(
-      `${pad(rank, 3)}${pad(p.name, 20)}${padStart(p.matches, 6)}${padStart(p.wins, 4)}${padStart(
-        p.losses,
+      `${pad(rank, 3)}${pad(player.name, 20)}${padStart(player.played, 6)}${padStart(
+        player.wins,
         4
-      )}${padStart(p.points, 6)}${padStart(p.rating.toFixed(2), 8)}  ${status}`
+      )}${padStart(player.losses, 4)}${padStart(player.start.toFixed(2), 7)}${padStart(
+        player.rating.toFixed(2),
+        7
+      )}  ${status}`
     );
   });
 
-  const winners = ranked
-    .filter((p) => p.matches >= MIN_MATCHES)
-    .slice(0, QUOTA_PER_LEVEL);
-  return winners.map((p, index) => ({ ...p, juara: index + 1 }));
+  return ranked
+    .filter((player) => player.played >= MIN_MATCHES)
+    .slice(0, QUOTA_PER_LEVEL)
+    .map((player, index) => ({ ...player, juara: index + 1 }));
 }
 
 console.log("SIMULASI KUALIFIKASI MAIN EVENT — SINGLE PUTRA");
 console.log("Liga Tennis IKA17 · Musim 1 2027");
-console.log(`Aturan: minimal ${MIN_MATCHES} pertandingan; Juara 1 & 2 Beginner dan Juara 1 & 2 Intermediate lolos.`);
-console.log("Data ini SINTETIS untuk simulasi. Tidak ada data production yang diubah.");
+console.log(
+  `Aturan: peringkat berdasarkan rating; menang/kalah memengaruhi rating; minimal ${MIN_MATCHES} pertandingan.`
+);
+console.log("Data SINTETIS. Versi UI: /admin/simulasi.");
 
 const beginnerWinners = printGroup("beginner");
 const intermediateWinners = printGroup("intermediate");
 
 console.log("\nRINGKASAN LOLOS KE MAIN EVENT");
 for (const winner of beginnerWinners) {
-  console.log(`- Juara ${winner.juara} Beginner: ${winner.name} (${winner.matches} match, ${winner.points} poin)`);
+  console.log(
+    `- Juara ${winner.juara} Beginner: ${winner.name} (rating ${winner.start.toFixed(2)} → ${winner.rating.toFixed(2)}, ${winner.played} match)`
+  );
 }
 for (const winner of intermediateWinners) {
-  console.log(`- Juara ${winner.juara} Intermediate: ${winner.name} (${winner.matches} match, ${winner.points} poin)`);
+  console.log(
+    `- Juara ${winner.juara} Intermediate: ${winner.name} (rating ${winner.start.toFixed(2)} → ${winner.rating.toFixed(2)}, ${winner.played} match)`
+  );
 }
 console.log(`\nTotal lolos: ${beginnerWinners.length + intermediateWinners.length} pemain.`);

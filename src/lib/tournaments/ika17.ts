@@ -27,22 +27,6 @@ export interface Ika17Category {
 
 export const IKA17_CATEGORIES: Ika17Category[] = [
   {
-    id: "womens_singles",
-    label: "Single Woman",
-    shortLabel: "Tunggal Putri",
-    doubles: false,
-    genderRule: "female",
-    slug: "league-q1-2027-womens-singles",
-  },
-  {
-    id: "womens_doubles",
-    label: "Double Woman",
-    shortLabel: "Ganda Putri",
-    doubles: true,
-    genderRule: "female",
-    slug: "league-q1-2027-womens-doubles",
-  },
-  {
     id: "mens_singles",
     label: "Single Man",
     shortLabel: "Tunggal Putra",
@@ -51,12 +35,28 @@ export const IKA17_CATEGORIES: Ika17Category[] = [
     slug: "league-q1-2027-mens-singles",
   },
   {
+    id: "womens_singles",
+    label: "Single Woman",
+    shortLabel: "Tunggal Putri",
+    doubles: false,
+    genderRule: "female",
+    slug: "league-q1-2027-womens-singles",
+  },
+  {
     id: "mens_doubles",
     label: "Double Man",
     shortLabel: "Ganda Putra",
     doubles: true,
     genderRule: "male",
     slug: "league-q1-2027-mens-doubles",
+  },
+  {
+    id: "womens_doubles",
+    label: "Double Woman",
+    shortLabel: "Ganda Putri",
+    doubles: true,
+    genderRule: "female",
+    slug: "league-q1-2027-womens-doubles",
   },
   {
     id: "mixed_doubles",

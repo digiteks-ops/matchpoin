@@ -40,10 +40,9 @@ function levelOf(standing: Standing): "beginner" | "intermediate" | "advanced" |
 function sortStandings(rows: Standing[]): Standing[] {
   return [...rows].sort(
     (a, b) =>
-      b.points - a.points ||
-      b.wins - a.wins ||
-      b.gameDiff - a.gameDiff ||
       (b.rating ?? 0) - (a.rating ?? 0) ||
+      b.wins - a.wins ||
+      b.matchesPlayed - a.matchesPlayed ||
       a.name.localeCompare(b.name)
   );
 }
@@ -191,7 +190,7 @@ export function TournamentLeaderboard() {
                   <th className="pb-2 pr-2">#</th>
                   <th className="pb-2 pr-2">Pemain / Tim</th>
                   <th className="pb-2 pr-2 text-center">Main</th>
-                  <th className="pb-2 pr-2 text-right">Poin</th>
+                  <th className="pb-2 pr-2 text-center">M-K</th>
                   <th className="pb-2 pr-2 text-right">Rating</th>
                   <th className="pb-2 text-right">Status Main Event</th>
                 </tr>
@@ -222,10 +221,10 @@ export function TournamentLeaderboard() {
                       <td className="py-2.5 pr-2 text-center text-xs text-slate-600">
                         {row.matchesPlayed}
                       </td>
-                      <td className="py-2.5 pr-2 text-right font-bold text-slate-800">
-                        {row.points}
+                      <td className="py-2.5 pr-2 text-center text-xs text-slate-600">
+                        {row.wins}-{row.losses}
                       </td>
-                      <td className="py-2.5 pr-2 text-right text-xs text-slate-600">
+                      <td className="py-2.5 pr-2 text-right font-bold text-slate-800">
                         {row.rating === null ? "-" : row.rating.toFixed(2)}
                       </td>
                       <td className="py-2.5 text-right">
@@ -256,9 +255,9 @@ export function TournamentLeaderboard() {
         )}
 
         <p className="text-[11px] leading-relaxed text-slate-500">
-          Juara ditentukan dari peringkat tertinggi tiap level (Beginner dan Intermediate) per
-          kategori. Pemain wajib menyelesaikan minimal {IKA17_MIN_MATCHES} pertandingan selama
-          periode liga agar dinyatakan lolos ke Main Event.
+          Juara ditentukan dari rating tertinggi tiap level (Beginner dan Intermediate) per
+          kategori. Menang/kalah memengaruhi rating. Pemain wajib menyelesaikan minimal{" "}
+          {IKA17_MIN_MATCHES} pertandingan selama periode liga agar dinyatakan lolos ke Main Event.
         </p>
       </CardContent>
     </Card>
