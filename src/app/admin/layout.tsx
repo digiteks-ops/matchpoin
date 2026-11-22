@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { requirePageRole } from "@/lib/auth/guards";
-import { ShieldCheck, LayoutDashboard, Trophy, Settings, ArrowLeft, Calendar, PlusCircle } from "lucide-react";
+import { ShieldCheck, LayoutDashboard, Trophy, Settings, ArrowLeft, Calendar, PlusCircle, FlaskConical } from "lucide-react";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   // Server-side gate for the whole admin area. Every admin page also calls
@@ -11,6 +11,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const navItems = [
     { href: "/admin", label: "Ringkasan", icon: LayoutDashboard },
     { href: "/admin/tournaments", label: "Turnamen", icon: Trophy },
+    { href: "/admin/simulasi", label: "Simulasi", icon: FlaskConical },
     { href: "/matches", label: "Pertandingan", icon: Calendar },
     { href: "/matches/new", label: "Buat Match", icon: PlusCircle },
     { href: "/admin/settings", label: "Pengaturan", icon: Settings },

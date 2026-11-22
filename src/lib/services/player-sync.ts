@@ -89,8 +89,8 @@ export async function ensurePlayerRecords(
   if (!existingRating) {
     const { error: ratingError } = await admin.from("player_ratings").insert({
       user_id: userId,
-      current_rating: 1,
-      peak_rating: 1,
+      current_rating: 1000,
+      peak_rating: 1000,
       matches_played: 0,
       wins: 0,
       losses: 0,

@@ -575,7 +575,7 @@ async function applyMySqlVerifiedRatings(
   }
   return {
     success: true,
-    message: "MATCHPOIN Rating berhasil diperbarui dan dicatat dalam histori pertandingan.",
+    message: "DTR berhasil diperbarui dan dicatat dalam histori pertandingan.",
     isDuplicate: false,
     results: ratingChanges.map((item) => ({
       userId: item.change.userId,

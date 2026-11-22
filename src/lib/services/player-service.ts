@@ -123,8 +123,8 @@ export async function ensurePlayerRecordsWithClient(
   if (!existingRating) {
     const { error: ratingError } = await supabase.from("player_ratings").insert({
       user_id: userId,
-      current_rating: 1.0,
-      peak_rating: 1.0,
+      current_rating: 1000,
+      peak_rating: 1000,
       matches_played: 0,
       wins: 0,
       losses: 0,

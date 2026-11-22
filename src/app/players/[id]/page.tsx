@@ -201,15 +201,14 @@ export default function PublicPlayerProfilePage() {
     );
   }
 
-  const currentRating = Number(rating?.current_rating ?? 1);
+  const currentRating = Number(rating?.current_rating ?? 1000);
   const isSelf = currentUser?.id === playerId;
   const displayName = profile.display_name || "Pemain MATCHPOIN";
 
   const getRatingCategory = (r: number) => {
-    if (r >= 8.5) return "Advanced";
-    if (r >= 6.5) return "Upper Intermediate";
-    if (r >= 4.5) return "Low Intermediate";
-    if (r >= 3.0) return "Upper Beginner";
+    if (r >= 2500) return "Expert";
+    if (r >= 2000) return "Advanced";
+    if (r >= 1500) return "Intermediate";
     return "Beginner";
   };
 
@@ -288,11 +287,11 @@ export default function PublicPlayerProfilePage() {
               <Card className="border-slate-200">
                 <CardHeader className="pb-2">
                   <CardDescription className="text-xs uppercase font-bold text-slate-500">
-                    MATCHPOIN Rating
+                    DTR Rating
                   </CardDescription>
                   <div className="flex items-baseline justify-between mt-1">
                     <div className="text-4xl font-extrabold font-heading text-matchpoin-navy">
-                      {currentRating.toFixed(2)}
+                      {Math.round(currentRating)}
                     </div>
                     <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300 font-bold">
                       {getRatingCategory(currentRating)}

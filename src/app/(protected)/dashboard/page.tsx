@@ -37,10 +37,9 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function ratingCategory(rating: number) {
-  if (rating >= 8.5) return "Advanced";
-  if (rating >= 6.5) return "Upper Intermediate";
-  if (rating >= 4.5) return "Low Intermediate";
-  if (rating >= 3.0) return "Upper Beginner";
+  if (rating >= 2500) return "Expert";
+  if (rating >= 2000) return "Advanced";
+  if (rating >= 1500) return "Intermediate";
   return "Beginner";
 }
 
@@ -96,7 +95,7 @@ export default async function DashboardPage() {
     | Pick<PlayerRating, "current_rating" | "peak_rating" | "matches_played" | "wins" | "losses">
     | null;
 
-  const currentRating = Number(rating?.current_rating ?? 1);
+  const currentRating = Number(rating?.current_rating ?? 1000);
   const matchesPlayed = rating?.matches_played ?? stats?.totalMatches ?? 0;
   const matchesWon = rating?.wins ?? stats?.wins ?? 0;
   const winRate = matchesPlayed > 0 ? Math.round((matchesWon / matchesPlayed) * 100) : 0;
@@ -143,7 +142,7 @@ export default async function DashboardPage() {
                 )}
               </div>
               <p className="mt-1 text-2xl font-extrabold font-heading text-matchpoin-navy">
-                {currentRating.toFixed(2)}
+                {Math.round(currentRating)}
               </p>
               <p className="text-[11px] text-slate-500">{ratingCategory(currentRating)}</p>
             </CardContent>
@@ -163,7 +162,7 @@ export default async function DashboardPage() {
             <CardContent className="p-4">
               <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Win Rate</span>
               <p className="mt-1 text-2xl font-extrabold font-heading text-emerald-600">{winRate}%</p>
-              <p className="text-[11px] text-slate-500">Peak {Number(rating?.peak_rating ?? currentRating).toFixed(2)}</p>
+              <p className="text-[11px] text-slate-500">Peak {Math.round(Number(rating?.peak_rating ?? currentRating))}</p>
             </CardContent>
           </Card>
         </div>

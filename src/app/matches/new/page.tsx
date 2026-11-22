@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getUserRoles } from "@/lib/supabase/rbac-service";
+import { hasRole } from "@/lib/auth/roles";
 import { CreateMatchForm, type CityOption } from "@/components/matches/create-match-form";
 import { ArrowLeft } from "lucide-react";
 
@@ -38,6 +40,15 @@ export default async function NewMatchPage({
     province: c.province,
   }));
 
+  let isAdmin = false;
+  if (user?.id) {
+    try {
+      isAdmin = hasRole(await getUserRoles(user.id), "admin");
+    } catch {
+      isAdmin = false;
+    }
+  }
+
   return (
     <div className="flex-1 bg-slate-50 py-8 md:py-12">
       <div className="container mx-auto px-4 sm:px-6 max-w-3xl space-y-6">
@@ -68,6 +79,7 @@ export default async function NewMatchPage({
           inviteUserId={inviteUserId}
           inviteName={inviteName}
           currentUserId={user?.id ?? ""}
+          isAdmin={isAdmin}
         />
       </div>
     </div>

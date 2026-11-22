@@ -11,7 +11,7 @@ const visibilities = new Set(["public", "friends_only", "private"]);
 const hands = new Set(["right", "left"]);
 const backhands = new Set(["one_handed", "two_handed"]);
 const frequencies = new Set(["daily", "weekly", "biweekly", "monthly", "occasional"]);
-const levels = new Set(["beginner", "intermediate", "advanced"]);
+const levels = new Set(["beginner", "intermediate", "advanced", "expert"]);
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");

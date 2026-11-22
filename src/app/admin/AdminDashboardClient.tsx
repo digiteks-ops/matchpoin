@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users, Trophy, Calendar, Clock, AlertTriangle, CheckCircle2, XCircle, Activity } from "lucide-react";
+import { Users, Trophy, Calendar, Clock, AlertTriangle, CheckCircle2, XCircle, Activity, FlaskConical } from "lucide-react";
 import { formatIndonesianDate, formatIndonesianTime } from "@/lib/utils";
 
 interface StatCardProps {
@@ -235,6 +235,11 @@ export default function AdminDashboardClient({ initialStats, initialActivity, er
                 <Trophy className="w-8 h-8 text-purple-600 mx-auto mb-2" />
                 <p className="font-semibold text-slate-900">Persetujuan Turnamen</p>
                 <p className="text-xs text-slate-500 mt-1">Setujui/tolak pendaftaran</p>
+              </Link>
+              <Link href="/admin/simulasi" className="p-4 rounded-xl border border-slate-200 hover:border-matchpoin-tense hover:shadow-sm transition-all text-center">
+                <FlaskConical className="w-8 h-8 text-rose-600 mx-auto mb-2" />
+                <p className="font-semibold text-slate-900">Simulasi Kualifikasi</p>
+                <p className="text-xs text-slate-500 mt-1">Prediksi juara &amp; rating</p>
               </Link>
             </div>
           </CardContent>

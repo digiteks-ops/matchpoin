@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -47,8 +47,8 @@ function mapMySqlPlayer(player: MySqlPublicPlayer): FullPlayerProfile {
     playingSince: player.playingSince,
     preferredCategories: player.preferredCategories,
     preferredTimes: player.preferredTimes,
-    currentRating: player.currentRating ?? 1,
-    peakRating: player.peakRating ?? player.currentRating ?? 1,
+    currentRating: player.currentRating ?? 1000,
+    peakRating: player.peakRating ?? player.currentRating ?? 1000000,
     isProvisional: matchesPlayed === 0,
     matchesPlayed,
     wins,
@@ -159,8 +159,8 @@ export default function PlayersDirectoryPage() {
               playingSince: p.playing_since,
               preferredCategories: p.preferred_categories ?? [],
               preferredTimes: p.preferred_times ?? [],
-              currentRating: Number(p.current_rating ?? 1),
-              peakRating: Number(p.peak_rating ?? p.current_rating ?? 1),
+              currentRating: Number(p.current_rating ?? 1000),
+              peakRating: Number(p.peak_rating ?? p.current_rating ?? 1000),
               isProvisional: matchesPlayed === 0,
               matchesPlayed,
               wins,
@@ -449,7 +449,7 @@ export default function PlayersDirectoryPage() {
             <div className="space-y-1 text-center sm:text-left">
               <h3 className="text-base font-bold font-heading">Ingin mengundang pemain bertanding?</h3>
               <p className="text-xs text-slate-300 max-w-lg leading-relaxed">
-                Buat akun gratis untuk mengirim undangan, membuat pertandingan terbuka, dan meningkatkan MATCHPOIN Rating.
+                Buat akun gratis untuk mengirim undangan, membuat pertandingan terbuka, dan meningkatkan DTR (Dynamic Tennis Rating).
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">

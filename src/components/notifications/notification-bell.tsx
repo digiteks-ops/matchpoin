@@ -65,7 +65,7 @@ function NotificationItem({
   return (
     <Button
       variant={notification.isRead ? "ghost" : "outline"}
-      className={`w-full justify-start gap-3 p-3 text-left transition-colors ${
+      className={`h-auto w-full items-start justify-start gap-3 whitespace-normal rounded-lg p-3 text-left transition-colors ${
         notification.isRead ? "bg-white" : "bg-blue-50 border-blue-100"
       }`}
       onClick={handleClick}
@@ -73,23 +73,31 @@ function NotificationItem({
       <div className="flex-shrink-0 mt-0.5">{getIcon(notification.type)}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <p className={`font-medium text-sm ${notification.isRead ? "text-slate-700" : "text-slate-900"}`}>
+          <p
+            className={`min-w-0 break-words text-sm font-medium leading-snug ${
+              notification.isRead ? "text-slate-700" : "text-slate-900"
+            }`}
+          >
             {notification.title}
           </p>
-          <time className="text-xs text-slate-400 whitespace-nowrap">
+          <time className="shrink-0 whitespace-nowrap text-[11px] text-slate-400">
             {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true, locale: id })}
           </time>
         </div>
-        <p className="mt-1 text-xs text-slate-600 line-clamp-2">{notification.message}</p>
+        <p className="mt-1 break-words text-xs leading-relaxed text-slate-600 line-clamp-2">
+          {notification.message}
+        </p>
         {notification.referenceId && (
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-[10px] text-slate-400 font-mono">{notification.referenceId.slice(0, 8)}…</span>
-            <ExternalLink className="w-3 h-3 text-slate-400" />
+          <div className="mt-2 flex min-w-0 items-center gap-2">
+            <span className="truncate font-mono text-[10px] text-slate-400">
+              {notification.referenceId.slice(0, 8)}…
+            </span>
+            <ExternalLink className="h-3 w-3 shrink-0 text-slate-400" />
           </div>
         )}
       </div>
       {!notification.isRead && (
-        <span className="w-2 h-2 bg-matchpoin-navy rounded-full flex-shrink-0 mt-2" />
+        <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-matchpoin-navy" />
       )}
     </Button>
   );
@@ -146,7 +154,7 @@ export function NotificationBell() {
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="absolute right-0 mt-2 w-96 origin-top-right rounded-xl border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5 animate-in fade-in-0 zoom-in-95 transition-all duration-150"
+          className="absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm origin-top-right overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5 animate-in fade-in-0 zoom-in-95 transition-all duration-150 sm:w-96"
           role="menu"
         >
           <CardHeader className="px-4 py-3 border-b border-slate-100">

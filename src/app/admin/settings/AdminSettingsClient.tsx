@@ -382,7 +382,7 @@ export default function AdminSettingsClient({
                           </td>
                           <td className="py-3">
                             {player.show_rating && player.current_rating !== null ? (
-                              <span className="font-bold text-matchpoin-navy">{Number(player.current_rating).toFixed(2)}</span>
+                              <span className="font-bold text-matchpoin-navy">{Math.round(Number(player.current_rating))}</span>
                             ) : (
                               <span className="text-slate-400 text-xs">Disembunyikan</span>
                             )}

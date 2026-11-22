@@ -470,10 +470,15 @@ const loadProfile = useCallback(async () => {
                     onChange={(e) => setSelfAssessedLevel(e.target.value as SkillLevel)}
                     className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
                   >
-                    <option value="beginner">Pemula (Beginner: Rating 1.00 - 2.99)</option>
-                    <option value="intermediate">Menengah (Intermediate: Rating 3.00 - 6.49)</option>
-                    <option value="advanced">Mahir (Advanced: Rating 6.50+)</option>
+                    <option value="beginner">Pemula (Beginner: DTR 1000 – 1499)</option>
+                    <option value="intermediate">Menengah (Intermediate: DTR 1500 – 1999)</option>
+                    <option value="advanced">Mahir (Advanced: DTR 2000 – 2499)</option>
+                    <option value="expert">Ahli (Expert: DTR 2500+)</option>
                   </select>
+                  <p className="text-[11px] text-slate-500">
+                    Level ini menentukan rating awal DTR sebelum pertandingan pertama. Setelah
+                    bertanding, kategori mengikuti rating terbaru secara otomatis.
+                  </p>
                 </div>
 
                 <div className="space-y-2">

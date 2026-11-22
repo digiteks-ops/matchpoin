@@ -22,13 +22,13 @@ export function calculatePlayerCompatibility(
 ): MatchmakingRecommendation {
   let score = 0;
 
-  // 1. Rating delta evaluation (max 40 pts)
+  // 1. DTR delta evaluation (max 40 pts)
   const ratingDiff = Math.abs(currentUser.currentRating - candidate.currentRating);
-  if (ratingDiff <= 0.5) {
+  if (ratingDiff <= 50) {
     score += 40;
-  } else if (ratingDiff <= 1.0) {
+  } else if (ratingDiff <= 100) {
     score += 25;
-  } else if (ratingDiff <= 1.5) {
+  } else if (ratingDiff <= 200) {
     score += 10;
   } else {
     score += 0;
@@ -72,7 +72,7 @@ export function calculatePlayerCompatibility(
     player: candidate,
     score,
     label,
-    ratingDiff: Math.round(ratingDiff * 100) / 100,
+    ratingDiff: Math.round(ratingDiff),
     isSameCity,
     sharedFormats,
     sharedTimes,

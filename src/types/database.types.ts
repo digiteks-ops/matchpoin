@@ -10,7 +10,7 @@ export type Gender = 'male' | 'female' | 'other' | 'prefer_not_to_say';
 export type PreferredHand = 'right' | 'left';
 export type BackhandStyle = 'one_handed' | 'two_handed';
 export type PlayFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'occasional';
-export type SkillLevel = 'beginner' | 'intermediate' | 'advanced';
+export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
 export type ProfileVisibility = 'public' | 'friends_only' | 'private';
 
 export interface Database {

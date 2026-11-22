@@ -154,8 +154,8 @@ async function ensurePublicUser(user) {
   if (!rating) {
     const { error } = await supabase.from("player_ratings").insert({
       user_id: user.id,
-      current_rating: 1,
-      peak_rating: 1,
+      current_rating: 1000,
+      peak_rating: 1000,
       matches_played: 0,
       wins: 0,
       losses: 0,

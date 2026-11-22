@@ -100,9 +100,11 @@ Invites are stored as `match_participants` rows with `metadata.status = 'invited
 4. On confirmation, `applyVerifiedMatchRatings` computes ratings from the current `player_ratings` rows and persists them through `apply_match_rating_change` (SECURITY DEFINER), then marks the match `completed`.
 
 ### Rating
-- Logistic expected score, K-factor 0.32 (established) / 0.64 (provisional, first 5 matches).
-- Ratings clamped to `1.00–10.00`.
-- Doubles use team averages.
+- DTR (Dynamic Tennis Rating): Modified Elo with a fixed K-factor of 30.
+- Expected score: `1 / (1 + 10 ^ ((opponentRating - playerRating) / 400))`.
+- Ratings use the 1000+ scale (minimum 1000): Beginner 1000–1499, Intermediate 1500–1999, Advanced 2000–2499, Expert 2500+.
+- Singles and Doubles share one combined rating; doubles use team averages and both teammates receive the same adjustment.
+- Walkovers and cancelled matches do not change ratings.
 - `rating_history` is unique per `(match_id, user_id)` to prevent duplicate application.
 
 ---

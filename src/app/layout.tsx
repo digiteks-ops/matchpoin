@@ -13,7 +13,7 @@ const fontSans = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "MATCHPOIN — Tennis Matchmaking & Player Rating Platform",
   description:
-    "Connect. Compete. Improve. Temukan lawan tanding tenis seimbang, jadwalkan pertandingan, dan tingkatkan MATCHPOIN Rating Anda di Makassar.",
+    "Connect. Compete. Improve. Temukan lawan tanding tenis seimbang, jadwalkan pertandingan, dan tingkatkan DTR (Dynamic Tennis Rating) Anda di Makassar.",
   keywords: [
     "tennis",
     "makassar",

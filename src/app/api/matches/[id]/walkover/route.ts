@@ -118,17 +118,10 @@ export async function POST(
       logError("walkover.status", statusError, { matchId: params.id });
     }
 
-    const { error: ratingError } = await admin.rpc("apply_match_rating_change", {
-      p_match_id: params.id,
-    });
-
-    if (ratingError) {
-      logError("walkover.rating", ratingError, { matchId: params.id });
-    }
-
+    // DTR only uses real win/loss results. Walkover (WO) must not change rating.
     return NextResponse.json({
       success: true,
-      message: `WO dicatat. Tim ${payload.winnerTeam} menang 8–0.`,
+      message: `WO dicatat. Tim ${payload.winnerTeam} menang 8–0. Rating tidak berubah.`,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal mencatat WO.";
