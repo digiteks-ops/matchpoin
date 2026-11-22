@@ -223,8 +223,8 @@ export async function notifyMatchChallenge(
 ): Promise<void> {
   await createNotification(opponentId, {
     type: "match_challenge",
-    title: "New Match Challenge",
-    message: `${challengerId} challenged you to "${matchTitle}"`,
+    title: "Tantangan Pertandingan Baru",
+    message: `Anda mendapat tantangan baru untuk "${matchTitle}".`,
     data: { challengerId, matchId, matchTitle },
     referenceId: matchId,
   });
@@ -237,10 +237,10 @@ export async function notifyChallengeResponse(
 ): Promise<void> {
   await createNotification(opponentId, {
     type: accepted ? "challenge_accepted" : "challenge_rejected",
-    title: accepted ? "Challenge Accepted" : "Challenge Rejected",
+    title: accepted ? "Tantangan Diterima" : "Tantangan Ditolak",
     message: accepted
-      ? "Your match challenge was accepted"
-      : "Your match challenge was rejected",
+      ? "Tantangan pertandingan Anda telah diterima."
+      : "Tantangan pertandingan Anda ditolak.",
     data: { matchId, accepted },
     referenceId: matchId,
   });
@@ -254,8 +254,8 @@ export async function notifyPlayerJoined(
 ): Promise<void> {
   await createNotification(organizerId, {
     type: "player_joined",
-    title: "Player Joined Match",
-    message: `${playerId} joined "${matchTitle}"`,
+    title: "Pemain Bergabung",
+    message: `Seorang pemain bergabung ke "${matchTitle}".`,
     data: { playerId, matchId, matchTitle },
     referenceId: matchId,
   });
@@ -284,8 +284,8 @@ export async function notifyMatchCancelled(
 ): Promise<void> {
   await createNotificationsForUsers(participantIds, {
     type: "match_cancelled",
-    title: "Match Cancelled",
-    message: `"${matchTitle}" was cancelled: ${reason}`,
+    title: "Pertandingan Dibatalkan",
+    message: `"${matchTitle}" dibatalkan: ${reason}`,
     data: { matchId, matchTitle, reason },
     referenceId: matchId,
   });
@@ -298,8 +298,8 @@ export async function notifyResultConfirmed(
 ): Promise<void> {
   await createNotificationsForUsers(participantIds, {
     type: "result_confirmed",
-    title: "Result Confirmed",
-    message: `Result for "${matchTitle}" has been confirmed`,
+    title: "Hasil Dikonfirmasi",
+    message: `Hasil pertandingan "${matchTitle}" telah dikonfirmasi.`,
     data: { matchId, matchTitle },
     referenceId: matchId,
   });
@@ -313,8 +313,8 @@ export async function notifyResultDisputed(
 ): Promise<void> {
   await createNotification(organizerId, {
     type: "result_disputed",
-    title: "Result Disputed",
-    message: `Result for "${matchTitle}" was disputed: ${reason}`,
+    title: "Hasil Disengketakan",
+    message: `Hasil pertandingan "${matchTitle}" disengketakan: ${reason}`,
     data: { matchId, matchTitle, reason },
     referenceId: matchId,
   });
@@ -327,8 +327,8 @@ export async function notifyTournamentRegistration(
 ): Promise<void> {
   await createNotification(userId, {
     type: "tournament_registration",
-    title: "Tournament Registration",
-    message: `You have been registered for "${tournamentTitle}"`,
+    title: "Pendaftaran Turnamen",
+    message: `Anda telah terdaftar pada "${tournamentTitle}".`,
     data: { tournamentId, tournamentTitle },
     referenceId: tournamentId,
   });
