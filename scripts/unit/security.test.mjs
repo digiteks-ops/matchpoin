@@ -59,3 +59,14 @@ test("registration rejection status stays 'rejected'", async () => {
     assert.doesNotMatch(source, /['"]declined['"]/);
   }
 });
+const ratingService = await read("src/lib/services/rating-service.ts");
+const adminResultRoute = await read("src/app/api/admin/matches/[id]/result/route.ts");
+const adminResultPage = await read("src/app/admin/matches/[id]/result/page.tsx");
+
+test("admin result path skips photos and confirms immediately", () => {
+  assert.match(ratingService, /options: \{ asAdmin\?: boolean \}/);
+  assert.match(ratingService, /if \(!asAdmin && photos\.length === 0\)/);
+  assert.match(ratingService, /status: asAdmin \? "confirmed" : "pending"/);
+  assert.match(adminResultRoute, /requireApiRole\("admin"\)/);
+  assert.match(adminResultPage, /requirePageRole\("admin"/);
+});

@@ -213,9 +213,15 @@ async function assertCanSubmitResult(matchId: string, userId: string) {
  */
 export async function submitMatchResult(
   userId: string,
-  input: SubmitMatchResultInput
+  input: SubmitMatchResultInput,
+  options: { asAdmin?: boolean } = {}
 ): Promise<MatchResultView> {
-  const supabase = await assertCanSubmitResult(input.matchId, userId);
+  const asAdmin = Boolean(options.asAdmin);
+  const adminClient = asAdmin ? createAdminClient() : null;
+  if (asAdmin && !adminClient) {
+    throw new Error("Konfigurasi server admin belum lengkap.");
+  }
+  const supabase = asAdmin ? adminClient! : await assertCanSubmitResult(input.matchId, userId);
 
   if (!Number.isInteger(input.team1Score) || !Number.isInteger(input.team2Score)) {
     throw new Error("Skor harus berupa bilangan bulat.");
@@ -266,7 +272,7 @@ export async function submitMatchResult(
     .map((url) => (typeof url === "string" ? url.trim() : ""))
     .filter((url) => url.length > 0);
 
-  if (photos.length === 0) {
+  if (!asAdmin && photos.length === 0) {
     throw new Error("Foto bukti hasil pertandingan wajib diunggah sebelum mengirim hasil.");
   }
 
@@ -275,7 +281,7 @@ export async function submitMatchResult(
     if (existing.status === "confirmed") {
       throw new Error("Hasil pertandingan ini sudah dikonfirmasi.");
     }
-    if (existing.submitted_by !== userId) {
+    if (!asAdmin && existing.submitted_by !== userId) {
       throw new Error("Hasil pertandingan sudah dikirim oleh pihak lain.");
     }
     if (existing.status === "under_review") {
@@ -296,9 +302,9 @@ export async function submitMatchResult(
         team1_score: input.team1Score,
         team2_score: input.team2Score,
         winner_team: input.winnerTeam,
-        status: "pending",
+        status: asAdmin ? "confirmed" : "pending",
         submitted_at: now.toISOString(),
-        confirmed_at: null,
+        confirmed_at: asAdmin ? now.toISOString() : null,
         disputed_at: null,
         metadata: nextMetadata,
       })
@@ -314,13 +320,17 @@ export async function submitMatchResult(
   const { error: statusError } = await (admin ?? supabase)
     .from("matches")
     .update({
-      status: "in_progress",
+      status: asAdmin ? "completed" : "in_progress",
       result_submitted_at: now.toISOString(),
     })
     .eq("id", input.matchId);
 
   if (statusError) {
     logError("result.status", statusError, { matchId: input.matchId });
+  }
+
+  if (asAdmin) {
+    await applyVerifiedMatchRatings(input.matchId, supabase);
   }
 
   return toMatchResultView(data as MatchResultRow);
@@ -337,8 +347,9 @@ export async function submitMatchResult(
       team2_score: input.team2Score,
       winner_team: input.winnerTeam,
       submitted_by: userId,
-      status: "pending",
+      status: asAdmin ? "confirmed" : "pending",
       submitted_at: now.toISOString(),
+      confirmed_at: asAdmin ? now.toISOString() : null,
       metadata: {
         dispute_deadline: deadline.toISOString(),
         photo_urls: photos,
@@ -355,13 +366,17 @@ export async function submitMatchResult(
   const { error: statusError } = await (admin ?? supabase)
     .from("matches")
     .update({
-      status: "in_progress",
+      status: asAdmin ? "completed" : "in_progress",
       result_submitted_at: now.toISOString(),
     })
     .eq("id", input.matchId);
 
   if (statusError) {
     logError("result.status", statusError, { matchId: input.matchId });
+  }
+
+  if (asAdmin) {
+    await applyVerifiedMatchRatings(input.matchId, supabase);
   }
 
   return toMatchResultView(data as MatchResultRow);
@@ -491,9 +506,10 @@ export async function syncMatchResultStatus(matchId: string): Promise<void> {
  * Applies rating changes for a confirmed match. Must only be called after confirmation.
  */
 export async function applyVerifiedMatchRatings(
-  matchId: string
+  matchId: string,
+  client?: ReturnType<typeof createClient>
 ): Promise<ApplyRatingResponse> {
-  const supabase = createClient();
+  const supabase = client ?? createClient();
 
   const { supabase: _s, match, meta, category, team1, team2 } = await getMatchContext(matchId);
 
