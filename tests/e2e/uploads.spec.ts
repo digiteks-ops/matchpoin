@@ -26,6 +26,11 @@ test("avatar upload replaces the old file", async ({ page }) => {
   const player = playerCreds();
   await login(page, player.email, player.password);
   await page.goto("/profile/edit");
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .waitFor({ timeout: 30_000 })
+    .catch(() => undefined);
 
   const input = page.locator('input[type="file"]').first();
   test.skip((await input.count()) === 0, "BLOCKED: avatar file input not found");
