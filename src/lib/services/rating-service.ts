@@ -7,6 +7,7 @@ import {
   type PlayerRatingState,
   type RatingChangeResult,
 } from "@/lib/rating/rating-engine";
+import { DTR_DEFAULT_RATING } from "@/lib/rating/dtr-core.mjs";
 
 export type MatchFormat = "singles" | "doubles" | "mixed_doubles";
 
@@ -29,6 +30,7 @@ export interface MatchResultRow {
   submitted_at: string | null;
   confirmed_at: string | null;
   disputed_at: string | null;
+  is_walkover?: boolean | null;
   metadata: Record<string, unknown> | null;
   created_at?: string;
   updated_at?: string;
@@ -520,8 +522,18 @@ export async function applyVerifiedMatchRatings(
   const result = await getResult(matchId);
   if (!result || result.status !== "confirmed") {
     throw new Error(
-      "Integritas Rating: hanya pertandingan dengan status 'confirmed' yang dapat mengubah MATCHPOIN Rating."
+      "Integritas Rating: hanya pertandingan dengan status 'confirmed' yang dapat mengubah DTR."
     );
+  }
+
+  // DTR only uses real win/loss results. Walkovers never change rating.
+  if (result.is_walkover === true || metadataObject(result.metadata).is_walkover === true) {
+    return {
+      success: true,
+      message: "Walkover (WO) tidak mengubah rating DTR.",
+      isDuplicate: true,
+      results: [],
+    };
   }
 
   const { data: existingHistory } = await supabase
@@ -555,12 +567,12 @@ export async function applyVerifiedMatchRatings(
     (ratingRows ?? []).map((r) => [
       r.user_id,
       {
-        currentRating: Number(r.current_rating ?? 1),
+        currentRating: Number(r.current_rating ?? DTR_DEFAULT_RATING),
         matchesPlayed: Number(r.matches_played ?? 0),
         wins: Number(r.wins ?? 0),
         losses: Number(r.losses ?? 0),
         draws: Number(r.draws ?? 0),
-        peakRating: Number(r.peak_rating ?? r.current_rating ?? 1),
+        peakRating: Number(r.peak_rating ?? r.current_rating ?? DTR_DEFAULT_RATING),
       },
     ])
   );
@@ -575,8 +587,8 @@ export async function applyVerifiedMatchRatings(
       .insert(
         missingRatings.map((id) => ({
           user_id: id,
-          current_rating: 1,
-          peak_rating: 1,
+          current_rating: DTR_DEFAULT_RATING,
+          peak_rating: DTR_DEFAULT_RATING,
         }))
       );
 
@@ -600,7 +612,7 @@ export async function applyVerifiedMatchRatings(
     const r = ratingMap.get(p.user_id);
     return {
       userId: p.user_id,
-      currentRating: r?.currentRating ?? 1,
+      currentRating: r?.currentRating ?? DTR_DEFAULT_RATING,
       matchesPlayed: r?.matchesPlayed ?? 0,
     };
   };
@@ -670,7 +682,7 @@ export async function applyVerifiedMatchRatings(
     const current = ratingMap.get(item.result.userId);
     const oldRating = current?.currentRating ?? item.result.oldRating;
     const newRating = item.result.newRating;
-    const delta = Math.round((newRating - oldRating) * 100) / 100;
+    const delta = Math.round(newRating - oldRating);
     const matchesPlayed = (current?.matchesPlayed ?? 0) + 1;
     const wins = (current?.wins ?? 0) + (item.matchOutcome === "win" ? 1 : 0);
     const losses = (current?.losses ?? 0) + (item.matchOutcome === "loss" ? 1 : 0);
@@ -707,12 +719,11 @@ export async function applyVerifiedMatchRatings(
         match_id: matchId,
         old_rating: oldRating,
         new_rating: newRating,
-        rating_change: delta,
         change_reason: truncateReason(item.result.changeReason),
         match_result: item.matchOutcome,
         opponent_id: item.opponentId,
         opponent_rating: item.opponentRating,
-        algorithm_version: 1,
+        algorithm_version: 2,
       });
 
       if (historyError) {
@@ -761,7 +772,7 @@ export async function applyVerifiedMatchRatings(
 
   return {
     success: true,
-    message: "MATCHPOIN Rating berhasil diperbarui dan dicatat dalam histori pertandingan.",
+    message: "DTR berhasil diperbarui dan dicatat dalam histori pertandingan.",
     isDuplicate: false,
     results: resultsToPersist.map((r) => ({
       userId: r.result.userId,

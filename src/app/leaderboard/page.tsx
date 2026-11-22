@@ -69,8 +69,8 @@ function leaderboardRow(player: LeaderboardPlayerData): LeaderboardRow {
   return {
     userId: player.userId,
     name: player.fullName || player.displayName || "Pemain MATCHPOIN",
-    rating: player.currentRating ?? 1,
-    peakRating: player.peakRating ?? player.currentRating ?? 1,
+    rating: player.currentRating ?? 1000,
+    peakRating: player.peakRating ?? player.currentRating ?? 1000000,
     matchesPlayed,
     wins,
     losses: player.losses ?? 0,
@@ -198,7 +198,7 @@ export default function LeaderboardPage() {
               </Badge>
             </div>
             <p className="text-slate-600 text-xs sm:text-sm max-w-xl leading-relaxed">
-              Peringkat berdasarkan MATCHPOIN Rating dari pertandingan yang telah dikonfirmasi.
+              Peringkat berdasarkan DTR (Dynamic Tennis Rating) dari pertandingan yang telah dikonfirmasi.
             </p>
           </div>
           <div className="flex gap-2">
@@ -310,7 +310,7 @@ export default function LeaderboardPage() {
                         Rating
                       </p>
                       <p className={`text-2xl font-extrabold font-heading ${index === 0 ? "text-matchpoin-tennis" : "text-matchpoin-navy"}`}>
-                        {p.rating.toFixed(2)}
+                        {Math.round(p.rating)}
                       </p>
                     </div>
                     <div className="text-right text-xs">
@@ -369,7 +369,7 @@ export default function LeaderboardPage() {
                   </div>
                   <div className="col-span-4 hidden sm:block sm:col-span-2 text-xs text-slate-500">{p.cityName}</div>
                   <div className="col-span-4 sm:col-span-2 text-right">
-                    <span className="font-extrabold font-heading text-matchpoin-navy">{p.rating.toFixed(2)}</span>
+                    <span className="font-extrabold font-heading text-matchpoin-navy">{Math.round(p.rating)}</span>
                   </div>
                   <div className="col-span-8 sm:col-span-2 text-right text-xs text-slate-600">
                     <span className="font-bold text-emerald-600">{p.wins}W</span>

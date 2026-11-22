@@ -266,8 +266,8 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats> {
     doublesMatches: doubles.length,
     doublesWins: doubles.filter((m) => m.result === "win").length,
     doublesLosses: doubles.filter((m) => m.result === "loss").length,
-    currentRating: Number(rating?.current_rating ?? 1),
-    bestRating: Number(rating?.peak_rating ?? rating?.current_rating ?? 1),
+    currentRating: Number(rating?.current_rating ?? 1000),
+    bestRating: Number(rating?.peak_rating ?? rating?.current_rating ?? 1000000),
     recentMatches: history.slice(0, 5),
   };
 }

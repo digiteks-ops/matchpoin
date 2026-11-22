@@ -460,7 +460,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
             <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
               <Badge variant="secondary">{match.umpireOption === "dengan_wasit" ? "Dengan Wasit" : "Tanpa Wasit"}</Badge>
               {match.umpireName && <Badge variant="secondary">Wasit: {match.umpireName}</Badge>}
-              <Badge variant="secondary">Rating {match.minRating.toFixed(2)} – {match.maxRating.toFixed(2)}</Badge>
+              <Badge variant="secondary">Rating DTR {Math.round(match.minRating)}+</Badge>
               <Badge variant="secondary">Race to {raceTo}</Badge>
               <Badge variant="secondary">Court change di {switchAt} poin</Badge>
               {match.status !== "cancelled" && (
@@ -523,7 +523,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-xs font-semibold text-slate-800">{participant.fullName}</p>
                                 <p className="mt-0.5 text-[10px] text-slate-400">
-                                  {participant.userId === hostId || participant.isOrganizer ? "Host / Organizer" : team === 1 ? "Host's Partner" : isSinglesMatch ? "Lawan" : "Opponent Side"} · Rating {participant.rating.toFixed(2)}
+                                  {participant.userId === hostId || participant.isOrganizer ? "Host / Organizer" : team === 1 ? "Host's Partner" : isSinglesMatch ? "Lawan" : "Opponent Side"} · Rating {Math.round(participant.rating)}
                                 </p>
                               </div>
                             </div>
@@ -548,7 +548,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-semibold text-slate-800 truncate">{p.fullName}</p>
                         <p className="text-[10px] text-slate-400">
-                          Rating {p.rating.toFixed(2)} · {p.team === 2 ? "Tim Lawan" : "Tim Host"}
+                          Rating {Math.round(p.rating)} · {p.team === 2 ? "Tim Lawan" : "Tim Host"}
                         </p>
                       </div>
                       <Button
@@ -596,7 +596,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                     <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100">
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-semibold text-slate-800 truncate">{p.fullName}</p>
-                        <p className="text-[10px] text-slate-400">Rating {p.rating.toFixed(2)}</p>
+                        <p className="text-[10px] text-slate-400">Rating {Math.round(p.rating)}</p>
                       </div>
                       <Button
                         size="sm"
@@ -708,7 +708,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                         <p className="text-amber-700">Alasan sanggahan: {result.disputeReason}</p>
                       )}
                       {result.status === "confirmed" && (
-                        <p className="text-emerald-700">Hasil terkonfirmasi. MATCHPOIN Rating telah diperbarui.</p>
+                        <p className="text-emerald-700">Hasil terkonfirmasi. DTR telah diperbarui.</p>
                       )}
                     </div>
 

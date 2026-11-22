@@ -1,48 +1,48 @@
 /**
- * MATCHPOIN Rating Engine
- * Independent tennis matchmaking & rating engine.
- * Computes objective rating adjustments for Singles, Doubles, and Mixed Doubles.
+ * DTR — Dynamic Tennis Rating engine (Modified Elo).
+ * Thin typed wrapper around the shared dtr-core module so the Supabase app,
+ * the admin simulation, and CLI scripts all use the same formula.
  */
 
+import {
+  DTR_CATEGORIES,
+  DTR_DEFAULT_RATING,
+  DTR_MIN_RATING,
+  calculateDtrSingles,
+  calculateDtrDoubles,
+  dtrCategoryLabel,
+  dtrKFactor,
+  dtrStartingRating,
+} from "./dtr-core.mjs";
+
+export { DTR_CATEGORIES, DTR_DEFAULT_RATING, DTR_MIN_RATING, dtrCategoryLabel, dtrKFactor, dtrStartingRating };
+
+export type DtrCategory = "Beginner" | "Intermediate" | "Advanced" | "Expert";
+
 export interface RatingCategoryInfo {
-  category: 'Beginner' | 'Upper Beginner' | 'Low Intermediate' | 'Upper Intermediate' | 'Advanced';
+  category: DtrCategory;
   minRating: number;
   maxRating: number;
   description: string;
 }
 
-export const RATING_CATEGORIES: RatingCategoryInfo[] = [
-  {
-    category: 'Beginner',
-    minRating: 1.0,
-    maxRating: 2.99,
-    description: 'Pemain pemula, membiasakan pukulan dasar dan servis.',
-  },
-  {
-    category: 'Upper Beginner',
-    minRating: 3.0,
-    maxRating: 4.49,
-    description: 'Rally stabil dengan tempo sedang, pemahaman penempatan lapangan dasar.',
-  },
-  {
-    category: 'Low Intermediate',
-    minRating: 4.5,
-    maxRating: 6.49,
-    description: 'Kontrol bola terarah, variasi spin, dan pengalaman tanding terstruktur.',
-  },
-  {
-    category: 'Upper Intermediate',
-    minRating: 6.5,
-    maxRating: 8.49,
-    description: 'Pukulan kuat, antisipasi taktis tinggi, dan performa kompetisi matang.',
-  },
-  {
-    category: 'Advanced',
-    minRating: 8.5,
-    maxRating: 10.0,
-    description: 'Pemain turnamen tingkat tinggi dengan konsistensi dan strategi eksekusi tinggi.',
-  },
-];
+const CATEGORY_DESCRIPTIONS: Record<string, string> = {
+  beginner:
+    "Pemain pemula, membiasakan pukulan dasar, servis, dan konsistensi rally.",
+  intermediate:
+    "Rally stabil dengan tempo sedang, pemahaman penempatan lapangan, dan pengalaman tanding.",
+  advanced:
+    "Pukulan kuat, antisipasi taktis tinggi, dan performa kompetisi yang matang.",
+  expert:
+    "Pemain turnamen tingkat tinggi dengan konsistensi dan strategi eksekusi tinggi.",
+};
+
+export const RATING_CATEGORIES: RatingCategoryInfo[] = DTR_CATEGORIES.map((category) => ({
+  category: category.label as DtrCategory,
+  minRating: category.minRating,
+  maxRating: category.maxRating ?? Number.MAX_SAFE_INTEGER,
+  description: CATEGORY_DESCRIPTIONS[category.key] ?? "",
+}));
 
 export interface RatingEngineConfig {
   kFactorStandard: number;
@@ -54,12 +54,12 @@ export interface RatingEngineConfig {
 }
 
 export const DEFAULT_RATING_CONFIG: RatingEngineConfig = {
-  kFactorStandard: 0.32,
-  kFactorProvisional: 0.64,
-  provisionalMatchThreshold: 5,
-  logisticDivisor: 2.0,
-  minRating: 1.0,
-  maxRating: 10.0, // Matches the database check constraint and public rating scale
+  kFactorStandard: 30,
+  kFactorProvisional: 30,
+  provisionalMatchThreshold: 11,
+  logisticDivisor: 400,
+  minRating: DTR_MIN_RATING,
+  maxRating: Number.MAX_SAFE_INTEGER,
 };
 
 export interface PlayerRatingState {
@@ -79,34 +79,29 @@ export interface RatingChangeResult {
   isProvisional: boolean;
   isUpset: boolean;
   changeReason: string;
+  kFactor: number;
 }
 
 /**
- * Returns the rating category for a given rating value.
+ * Returns the DTR rating category for a given rating value.
  */
-export function getRatingCategory(rating: number): RatingCategoryInfo['category'] {
-  if (rating >= 8.5) return 'Advanced';
-  if (rating >= 6.5) return 'Upper Intermediate';
-  if (rating >= 4.5) return 'Low Intermediate';
-  if (rating >= 3.0) return 'Upper Beginner';
-  return 'Beginner';
+export function getRatingCategory(rating: number): DtrCategory {
+  return dtrCategoryLabel(rating) as DtrCategory;
 }
 
 /**
- * Computes expected win probability for player A against player B using logistic curve.
- * E_A = 1 / (1 + 10 ^ ((R_B - R_A) / logisticDivisor))
+ * E = 1 / (1 + 10 ^ ((Opponent Rating - Player Rating) / 400))
  */
 export function calculateExpectedScore(
   ratingA: number,
   ratingB: number,
-  logisticDivisor: number = DEFAULT_RATING_CONFIG.logisticDivisor
+  logisticDivisor: number = 400
 ): number {
-  const exponent = (ratingB - ratingA) / logisticDivisor;
-  return 1 / (1 + Math.pow(10, exponent));
+  return 1 / (1 + Math.pow(10, (ratingB - ratingA) / (logisticDivisor || 400)));
 }
 
 /**
- * Generates clear, human-readable Indonesian explanation for rating changes.
+ * Generates a clear Indonesian explanation for a DTR rating change.
  */
 export function generateIndonesianRatingReason(
   isWinner: boolean,
@@ -116,103 +111,117 @@ export function generateIndonesianRatingReason(
   isProvisional: boolean
 ): string {
   const ratingDiff = opponentRating - playerRating;
-  const isOpponentStronger = ratingDiff >= 0.3;
-  const isOpponentWeaker = ratingDiff <= -0.3;
-  const sign = ratingDelta >= 0 ? `+${ratingDelta.toFixed(2)}` : ratingDelta.toFixed(2);
+  const isOpponentStronger = ratingDiff >= 30;
+  const isOpponentWeaker = ratingDiff <= -30;
+  const sign = ratingDelta >= 0 ? `+${Math.round(ratingDelta)}` : `${Math.round(ratingDelta)}`;
 
   if (isWinner) {
     if (isProvisional) {
-      return `Penyesuaian rating provisori pemain baru setelah menang (${sign}).`;
+      return `Penyesuaian DTR pemain baru setelah menang (${sign}).`;
     }
     if (isOpponentStronger) {
-      return `Kemenangan mengejutkan melawan pemain dengan rating lebih tinggi (${sign}).`;
+      return `Kemenangan melawan lawan berating lebih tinggi (${sign}).`;
     }
     if (isOpponentWeaker) {
-      return `Kemenangan sesuai prediksi atas lawan dengan rating lebih rendah (${sign}).`;
+      return `Kemenangan atas lawan berating lebih rendah (${sign}).`;
     }
-    return `Kemenangan imbang kompetitif melawan lawan selevel (${sign}).`;
-  } else {
-    if (isProvisional) {
-      return `Penyesuaian rating provisori pemain baru setelah pertandingan (${sign}).`;
-    }
-    if (isOpponentWeaker) {
-      return `Kekalahan tidak terduga dari lawan dengan rating lebih rendah (${sign}).`;
-    }
-    if (isOpponentStronger) {
-      return `Kekalahan kompetitif melawan pemain unggulan berating lebih tinggi (${sign}).`;
-    }
-    return `Kekalahan tipis dalam duel seimbang (${sign}).`;
+    return `Kemenangan imbang melawan lawan selevel (${sign}).`;
   }
+
+  if (isProvisional) {
+    return `Penyesuaian DTR pemain baru setelah kalah (${sign}).`;
+  }
+  if (isOpponentWeaker) {
+    return `Kekalahan dari lawan berating lebih rendah (${sign}).`;
+  }
+  if (isOpponentStronger) {
+    return `Kekalahan dari lawan berating lebih tinggi (${sign}).`;
+  }
+  return `Kekalahan tipis dalam duel seimbang (${sign}).`;
+}
+
+function isProvisional(matchesPlayed: number): boolean {
+  return (matchesPlayed ?? 0) <= 10;
 }
 
 /**
- * Calculates rating adjustment for a Singles Tennis Match.
+ * Calculates DTR adjustment for a Singles match.
  */
 export function calculateSinglesMatchRating(
   playerA: PlayerRatingState,
   playerB: PlayerRatingState,
-  winner: 'A' | 'B' | 'DRAW',
+  winner: "A" | "B" | "DRAW",
   config: RatingEngineConfig = DEFAULT_RATING_CONFIG
 ): { playerA: RatingChangeResult; playerB: RatingChangeResult } {
-  const isProvisionalA = (playerA.matchesPlayed ?? 0) < config.provisionalMatchThreshold;
-  const isProvisionalB = (playerB.matchesPlayed ?? 0) < config.provisionalMatchThreshold;
+  void config;
 
-  const kA = isProvisionalA ? config.kFactorProvisional : config.kFactorStandard;
-  const kB = isProvisionalB ? config.kFactorProvisional : config.kFactorStandard;
+  const calc = calculateDtrSingles(
+    {
+      userId: playerA.userId,
+      rating: playerA.currentRating,
+      matchesPlayed: playerA.matchesPlayed ?? 0,
+    },
+    {
+      userId: playerB.userId,
+      rating: playerB.currentRating,
+      matchesPlayed: playerB.matchesPlayed ?? 0,
+    },
+    winner
+  );
 
-  const expectedA = calculateExpectedScore(playerA.currentRating, playerB.currentRating, config.logisticDivisor);
-  const expectedB = 1 - expectedA;
-
-  const scoreA = winner === 'A' ? 1.0 : winner === 'B' ? 0.0 : 0.5;
-  const scoreB = 1 - scoreA;
-
-  const rawDeltaA = kA * (scoreA - expectedA);
-  const rawDeltaB = kB * (scoreB - expectedB);
-
-  // Round to 2 decimal places
-  const deltaA = Math.round(rawDeltaA * 100) / 100;
-  const deltaB = Math.round(rawDeltaB * 100) / 100;
-
-  const newRatingA = Math.max(config.minRating, Math.min(config.maxRating, Math.round((playerA.currentRating + deltaA) * 100) / 100));
-  const newRatingB = Math.max(config.minRating, Math.min(config.maxRating, Math.round((playerB.currentRating + deltaB) * 100) / 100));
-
-  const isUpsetA = winner === 'A' && playerB.currentRating - playerA.currentRating >= 0.3;
-  const isUpsetB = winner === 'B' && playerA.currentRating - playerB.currentRating >= 0.3;
+  const provisionalA = isProvisional(playerA.matchesPlayed);
+  const provisionalB = isProvisional(playerB.matchesPlayed);
 
   return {
     playerA: {
-      userId: playerA.userId,
-      oldRating: playerA.currentRating,
-      newRating: newRatingA,
-      ratingDelta: deltaA,
-      expectedScore: Math.round(expectedA * 1000) / 1000,
-      actualScore: scoreA,
-      isProvisional: isProvisionalA,
-      isUpset: isUpsetA,
-      changeReason: generateIndonesianRatingReason(scoreA > scoreB, deltaA, playerA.currentRating, playerB.currentRating, isProvisionalA),
+      userId: calc.playerA.userId,
+      oldRating: calc.playerA.oldRating,
+      newRating: calc.playerA.newRating,
+      ratingDelta: calc.playerA.delta,
+      expectedScore: calc.playerA.expected,
+      actualScore: calc.playerA.actual,
+      isProvisional: provisionalA,
+      isUpset:
+        winner === "A" && playerB.currentRating - playerA.currentRating >= 30,
+      changeReason: generateIndonesianRatingReason(
+        winner === "A",
+        calc.playerA.delta,
+        calc.playerA.oldRating,
+        calc.playerB.oldRating,
+        provisionalA
+      ),
+      kFactor: calc.playerA.kFactor,
     },
     playerB: {
-      userId: playerB.userId,
-      oldRating: playerB.currentRating,
-      newRating: newRatingB,
-      ratingDelta: deltaB,
-      expectedScore: Math.round(expectedB * 1000) / 1000,
-      actualScore: scoreB,
-      isProvisional: isProvisionalB,
-      isUpset: isUpsetB,
-      changeReason: generateIndonesianRatingReason(scoreB > scoreA, deltaB, playerB.currentRating, playerA.currentRating, isProvisionalB),
+      userId: calc.playerB.userId,
+      oldRating: calc.playerB.oldRating,
+      newRating: calc.playerB.newRating,
+      ratingDelta: calc.playerB.delta,
+      expectedScore: calc.playerB.expected,
+      actualScore: calc.playerB.actual,
+      isProvisional: provisionalB,
+      isUpset:
+        winner === "B" && playerA.currentRating - playerB.currentRating >= 30,
+      changeReason: generateIndonesianRatingReason(
+        winner === "B",
+        calc.playerB.delta,
+        calc.playerB.oldRating,
+        calc.playerA.oldRating,
+        provisionalB
+      ),
+      kFactor: calc.playerB.kFactor,
     },
   };
 }
 
 /**
- * Calculates rating adjustment for Doubles or Mixed Doubles Match.
- * Evaluates team average ratings, expected team win rate, and distributes adjustments.
+ * Calculates DTR adjustment for a Doubles or Mixed Doubles match.
+ * Team rating is the average of the pair; Match K is the average of all four.
  */
 export function calculateDoublesMatchRating(
   team1: [PlayerRatingState, PlayerRatingState],
   team2: [PlayerRatingState, PlayerRatingState],
-  winnerTeam: 1 | 2 | 'DRAW',
+  winnerTeam: 1 | 2 | "DRAW",
   config: RatingEngineConfig = DEFAULT_RATING_CONFIG
 ): {
   team1Avg: number;
@@ -220,46 +229,72 @@ export function calculateDoublesMatchRating(
   team1Results: [RatingChangeResult, RatingChangeResult];
   team2Results: [RatingChangeResult, RatingChangeResult];
 } {
-  const team1Avg = Math.round(((team1[0].currentRating + team1[1].currentRating) / 2) * 100) / 100;
-  const team2Avg = Math.round(((team2[0].currentRating + team2[1].currentRating) / 2) * 100) / 100;
+  void config;
 
-  const expectedTeam1 = calculateExpectedScore(team1Avg, team2Avg, config.logisticDivisor);
-  const expectedTeam2 = 1 - expectedTeam1;
+  const normalizedWinner: 1 | 2 = winnerTeam === 2 ? 2 : 1;
 
-  const scoreTeam1 = winnerTeam === 1 ? 1.0 : winnerTeam === 2 ? 0.0 : 0.5;
-  const scoreTeam2 = 1 - scoreTeam1;
+  const calc = calculateDtrDoubles(
+    [
+      {
+        userId: team1[0].userId,
+        rating: team1[0].currentRating,
+        matchesPlayed: team1[0].matchesPlayed ?? 0,
+      },
+      {
+        userId: team1[1].userId,
+        rating: team1[1].currentRating,
+        matchesPlayed: team1[1].matchesPlayed ?? 0,
+      },
+    ],
+    [
+      {
+        userId: team2[0].userId,
+        rating: team2[0].currentRating,
+        matchesPlayed: team2[0].matchesPlayed ?? 0,
+      },
+      {
+        userId: team2[1].userId,
+        rating: team2[1].currentRating,
+        matchesPlayed: team2[1].matchesPlayed ?? 0,
+      },
+    ],
+    normalizedWinner
+  );
 
-  function processPlayer(player: PlayerRatingState, expected: number, actual: number, opponentTeamAvg: number) {
-    const isProvisional = (player.matchesPlayed ?? 0) < config.provisionalMatchThreshold;
-    const k = isProvisional ? config.kFactorProvisional : config.kFactorStandard;
-    const rawDelta = k * (actual - expected);
-    const delta = Math.round(rawDelta * 100) / 100;
-    const newRating = Math.max(config.minRating, Math.min(config.maxRating, Math.round((player.currentRating + delta) * 100) / 100));
-    const isUpset = actual > 0.5 && opponentTeamAvg - player.currentRating >= 0.3;
-
-    return {
-      userId: player.userId,
-      oldRating: player.currentRating,
-      newRating,
-      ratingDelta: delta,
-      expectedScore: Math.round(expected * 1000) / 1000,
-      actualScore: actual,
-      isProvisional,
-      isUpset,
-      changeReason: generateIndonesianRatingReason(actual > 0.5, delta, player.currentRating, opponentTeamAvg, isProvisional),
-    };
-  }
+  const toResult = (
+    player: PlayerRatingState,
+    result: typeof calc.team1Results[number],
+    opponentTeamAvg: number
+  ): RatingChangeResult => ({
+    userId: result.userId,
+    oldRating: result.oldRating,
+    newRating: result.newRating,
+    ratingDelta: result.delta,
+    expectedScore: result.expected,
+    actualScore: result.actual,
+    isProvisional: isProvisional(player.matchesPlayed),
+    isUpset:
+      result.actual > 0.5 && opponentTeamAvg - player.currentRating >= 30,
+    changeReason: generateIndonesianRatingReason(
+      result.actual > 0.5,
+      result.delta,
+      result.oldRating,
+      opponentTeamAvg,
+      isProvisional(player.matchesPlayed)
+    ),
+    kFactor: result.kFactor,
+  });
 
   return {
-    team1Avg,
-    team2Avg,
+    team1Avg: calc.team1Avg,
+    team2Avg: calc.team2Avg,
     team1Results: [
-      processPlayer(team1[0], expectedTeam1, scoreTeam1, team2Avg),
-      processPlayer(team1[1], expectedTeam1, scoreTeam1, team2Avg),
+      toResult(team1[0], calc.team1Results[0], calc.team2Avg),
+      toResult(team1[1], calc.team1Results[1], calc.team2Avg),
     ],
     team2Results: [
-      processPlayer(team2[0], expectedTeam2, scoreTeam2, team1Avg),
-      processPlayer(team2[1], expectedTeam2, scoreTeam2, team1Avg),
+      toResult(team2[0], calc.team2Results[0], calc.team1Avg),
+      toResult(team2[1], calc.team2Results[1], calc.team1Avg),
     ],
   };
 }

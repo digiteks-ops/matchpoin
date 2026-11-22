@@ -203,7 +203,7 @@ async function getProfilesForUsers(userIds: string[]) {
       full_name: row.full_name ?? row.display_name ?? "Pemain",
       avatar_url: row.avatar_url ?? null,
       gender: null,
-      rating: Number(row.current_rating ?? 1),
+      rating: Number(row.current_rating ?? 1000),
     });
   });
 
@@ -216,13 +216,13 @@ async function getProfilesForUsers(userIds: string[]) {
       supabase.from("player_ratings").select("user_id, current_rating").in("user_id", missing),
     ]);
     const ratingMap = new Map<string, number>();
-    (ratings ?? []).forEach((r) => ratingMap.set(r.user_id, Number(r.current_rating ?? 1)));
+    (ratings ?? []).forEach((r) => ratingMap.set(r.user_id, Number(r.current_rating ?? 1000)));
     (usersData ?? []).forEach((u) => {
       profileMap.set(u.id, {
         full_name: u.full_name ?? "Pemain",
         avatar_url: u.avatar_url ?? null,
         gender: null,
-        rating: ratingMap.get(u.id) ?? 1,
+        rating: ratingMap.get(u.id) ?? 1000,
       });
     });
   }
@@ -405,8 +405,8 @@ export async function createOpenMatch(
     tournament_id: tournamentId,
     umpire_option: input.umpireOption,
     umpire_name: input.umpireName || null,
-    min_rating: input.minRating ?? 1.0,
-    max_rating: input.maxRating ?? 10.0,
+    min_rating: input.minRating ?? 1000,
+    max_rating: input.maxRating ?? 9999,
     level: input.level ?? "all",
     reclub_link: input.reclubLink || null,
     race_to: input.raceToScore ?? 8,
@@ -947,7 +947,7 @@ function buildMatchDetail(
         fullName: profile?.full_name || "Pemain",
         avatarUrl: profile?.avatar_url ?? null,
         gender: profile?.gender ?? null,
-        rating: profile?.rating ?? 1,
+        rating: profile?.rating ?? 1000,
         isOrganizer,
         status:
           participantMeta.status === "pending"
@@ -1045,8 +1045,8 @@ function buildMatchDetail(
     categoryLabel: MATCH_CATEGORY_LABELS[category],
     umpireOption: meta.umpire_option === "dengan_wasit" ? "dengan_wasit" : "tanpa_wasit",
     umpireName: meta.umpire_name ?? null,
-    minRating: Number(meta.min_rating ?? 1),
-    maxRating: Number(meta.max_rating ?? 10),
+    minRating: Number(meta.min_rating ?? 1000),
+    maxRating: Number(meta.max_rating ?? 9999),
     maxPlayers,
     currentPlayers,
     availableSlots,

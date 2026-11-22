@@ -17,18 +17,16 @@ interface PlayerCardProps {
 
 export function PlayerCard({ player, onInvite, isInviting = false }: PlayerCardProps) {
   const getRatingBadgeColor = (rating: number) => {
-    if (rating >= 8.5) return "bg-rose-100 text-rose-800 border-rose-300";
-    if (rating >= 6.5) return "bg-purple-100 text-purple-800 border-purple-300";
-    if (rating >= 4.5) return "bg-amber-100 text-amber-800 border-amber-300";
-    if (rating >= 3.0) return "bg-emerald-100 text-emerald-800 border-emerald-300";
+    if (rating >= 2500) return "bg-rose-100 text-rose-800 border-rose-300";
+    if (rating >= 2000) return "bg-purple-100 text-purple-800 border-purple-300";
+    if (rating >= 1500) return "bg-amber-100 text-amber-800 border-amber-300";
     return "bg-blue-100 text-blue-800 border-blue-300";
   };
 
   const getRatingTier = (rating: number) => {
-    if (rating >= 8.5) return "Advanced";
-    if (rating >= 6.5) return "Upper Intermediate";
-    if (rating >= 4.5) return "Low Intermediate";
-    if (rating >= 3.0) return "Upper Beginner";
+    if (rating >= 2500) return "Expert";
+    if (rating >= 2000) return "Advanced";
+    if (rating >= 1500) return "Intermediate";
     return "Beginner";
   };
 
@@ -38,7 +36,9 @@ export function PlayerCard({ player, onInvite, isInviting = false }: PlayerCardP
       : "Kanan (Right)";
 
   const levelLabel =
-    player.selfAssessedLevel === "advanced"
+    player.selfAssessedLevel === "expert"
+      ? "Ahli (Expert)"
+      : player.selfAssessedLevel === "advanced"
       ? "Mahir (Advanced)"
       : player.selfAssessedLevel === "intermediate"
       ? "Menengah (Intermediate)"
@@ -89,7 +89,7 @@ export function PlayerCard({ player, onInvite, isInviting = false }: PlayerCardP
                   player.currentRating
                 )}`}
               >
-                {player.currentRating.toFixed(2)}
+                {Math.round(player.currentRating)}
                 {player.isProvisional && (
                   <span className="ml-1 text-[9px] font-normal text-amber-700">(P)</span>
                 )}

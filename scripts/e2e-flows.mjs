@@ -89,7 +89,7 @@ async function createUser(label, withRecords = true) {
   await j(`${SUPA}/rest/v1/player_ratings`, {
     method: "POST",
     headers: { ...admin, "Content-Type": "application/json", Prefer: "return=minimal" },
-    body: JSON.stringify({ user_id: user.id, current_rating: 5, peak_rating: 5 }),
+    body: JSON.stringify({ user_id: user.id, current_rating: 1500, peak_rating: 1500 }),
   });
 
   const session = await j(`${SUPA}/auth/v1/token?grant_type=password`, {

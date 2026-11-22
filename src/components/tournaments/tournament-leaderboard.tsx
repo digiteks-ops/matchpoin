@@ -27,12 +27,13 @@ const LEVEL_LABEL: Record<string, string> = {
   beginner: "Beginner",
   intermediate: "Intermediate",
   advanced: "Advanced",
+  expert: "Expert",
   unknown: "Level belum diisi",
 };
 
 function levelOf(standing: Standing): "beginner" | "intermediate" | "advanced" | "unknown" {
   if (standing.level === "intermediate") return "intermediate";
-  if (standing.level === "advanced") return "advanced";
+  if (standing.level === "advanced" || standing.level === "expert") return "advanced";
   if (standing.level === "beginner") return "beginner";
   return "unknown";
 }
@@ -225,7 +226,7 @@ export function TournamentLeaderboard() {
                         {row.wins}-{row.losses}
                       </td>
                       <td className="py-2.5 pr-2 text-right font-bold text-slate-800">
-                        {row.rating === null ? "-" : row.rating.toFixed(2)}
+                        {row.rating === null ? "-" : Math.round(row.rating)}
                       </td>
                       <td className="py-2.5 text-right">
                         {winner ? (
@@ -255,7 +256,7 @@ export function TournamentLeaderboard() {
         )}
 
         <p className="text-[11px] leading-relaxed text-slate-500">
-          Juara ditentukan dari rating tertinggi tiap level (Beginner dan Intermediate) per
+          Juara ditentukan dari DTR tertinggi tiap level (Beginner dan Intermediate) per
           kategori. Menang/kalah memengaruhi rating. Pemain wajib menyelesaikan minimal{" "}
           {IKA17_MIN_MATCHES} pertandingan selama periode liga agar dinyatakan lolos ke Main Event.
         </p>

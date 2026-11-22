@@ -20,31 +20,25 @@ export default function HomePage() {
   const ratingLevels = [
     {
       category: "Beginner",
-      range: "1.00 – 2.99",
+      range: "1000 – 1499",
       desc: "Baru memulai olahraga tenis, membiasakan teknik pukulan dasar dan servis.",
       color: "bg-blue-50 text-blue-800 border-blue-200",
     },
     {
-      category: "Upper Beginner",
-      range: "3.00 – 4.49",
+      category: "Intermediate",
+      range: "1500 – 1999",
       desc: "Konsisten melakukan rally pukulan sedang, memahami penempatan posisi lapangan.",
       color: "bg-emerald-50 text-emerald-800 border-emerald-200",
     },
     {
-      category: "Low Intermediate",
-      range: "4.50 – 6.49",
+      category: "Advanced",
+      range: "2000 – 2499",
       desc: "Menguasai variasi spin, kontrol kedalaman bola, serta ritme pertandingan kompetitif.",
       color: "bg-amber-50 text-amber-800 border-amber-200",
     },
     {
-      category: "Upper Intermediate",
-      range: "6.50 – 8.49",
-      desc: "Pemain berpengalaman dengan kekuatan, antisipasi tinggi, dan taktik matang.",
-      color: "bg-purple-50 text-purple-800 border-purple-200",
-    },
-    {
-      category: "Advanced",
-      range: "8.50+",
+      category: "Expert",
+      range: "2500+",
       desc: "Pemain turnamen tingkat tinggi dengan konsistensi luar biasa dan strategi level lanjut.",
       color: "bg-rose-50 text-rose-800 border-rose-200",
     },
@@ -164,7 +158,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* MATCHPOIN Rating System Explanation */}
+      {/* DTR (Dynamic Tennis Rating) System Explanation */}
       <section className="py-16 md:py-24 bg-slate-50">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-3xl mb-12">
@@ -172,7 +166,7 @@ export default function HomePage() {
               Transparan & Adil
             </Badge>
             <h2 className="text-2xl sm:text-3xl font-bold font-heading text-slate-900">
-              Kategori MATCHPOIN Rating
+              Kategori DTR (Dynamic Tennis Rating)
             </h2>
             <p className="text-slate-600 mt-2 text-sm sm:text-base">
               Sistem rating MATCHPOIN adalah metrik independen internal yang objektif. Rating awal pemain baru berstatus provisori hingga terverifikasi melalui pertandingan resmi.

@@ -1,127 +1,88 @@
-// Simulasi kualifikasi Main Event — Single Putra (Liga Tennis IKA17).
-// Peringkat berbasis rating (menang/kalah memengaruhi rating). Tidak menulis ke database.
-// Versi UI ada di /admin/simulasi. Jalankan: node scripts/simulate-qualification.mjs
+import {
+  simulateCategory,
+  SIMULATION_QUALIFIERS,
+  SIMULATION_ROUNDS,
+  SIMULATION_START_RATING,
+} from "../src/lib/tournaments/simulation-core.mjs";
 
-const MIN_MATCHES = 17;
-const QUOTA_PER_LEVEL = 2;
-
-const players = [
-  { name: "Andi Pratama", level: "beginner", start: 3.2, wins: 15, losses: 5 },
-  { name: "Budi Santoso", level: "beginner", start: 3.1, wins: 13, losses: 5 },
-  { name: "Cakra Wijaya", level: "beginner", start: 3.0, wins: 12, losses: 5 },
-  { name: "Dedi Kurnia", level: "beginner", start: 2.9, wins: 10, losses: 9 },
-  { name: "Eko Saputra", level: "beginner", start: 2.8, wins: 8, losses: 4 },
-  { name: "Fajar Ramadhan", level: "beginner", start: 2.7, wins: 6, losses: 3 },
-  { name: "Gilang Permana", level: "intermediate", start: 4.5, wins: 17, losses: 5 },
-  { name: "Hadi Susanto", level: "intermediate", start: 4.4, wins: 14, losses: 5 },
-  { name: "Irfan Maulana", level: "intermediate", start: 4.3, wins: 13, losses: 5 },
-  { name: "Joko Prasetyo", level: "intermediate", start: 4.2, wins: 11, losses: 6 },
-  { name: "Kiki Ardiansyah", level: "intermediate", start: 4.1, wins: 9, losses: 6 },
-  { name: "Lukman Hakim", level: "intermediate", start: 4.0, wins: 5, losses: 3 },
-  { name: "Maman Sulaeman", level: "beginner", start: 3.15, wins: 14, losses: 6 },
-  { name: "Nanda Putra", level: "beginner", start: 3.05, wins: 12, losses: 6 },
-  { name: "Omar Fauzi", level: "beginner", start: 2.95, wins: 11, losses: 7 },
-  { name: "Pandu Wibowo", level: "beginner", start: 2.85, wins: 9, losses: 5 },
-  { name: "Qori Hidayat", level: "beginner", start: 2.75, wins: 7, losses: 4 },
-  { name: "Rizky Aditya", level: "beginner", start: 2.65, wins: 6, losses: 4 },
-  { name: "Surya Gunawan", level: "intermediate", start: 4.45, wins: 16, losses: 6 },
-  { name: "Teguh Prakoso", level: "intermediate", start: 4.35, wins: 15, losses: 6 },
-  { name: "Umar Faruq", level: "intermediate", start: 4.25, wins: 12, losses: 7 },
-  { name: "Vino Setiawan", level: "intermediate", start: 4.15, wins: 10, losses: 7 },
-  { name: "Wahyu Nugroho", level: "intermediate", start: 4.05, wins: 8, losses: 5 },
-  { name: "Yoga Pratama", level: "intermediate", start: 3.95, wins: 6, losses: 4 },
-];
-
-const WIN_GAIN = 0.04;
-const LOSS_DROP = 0.035;
-
-const round2 = (value) => Math.round(value * 100) / 100;
-const round3 = (value) => Math.round(value * 1000) / 1000;
-const finalRating = (player) =>
-  round2(Math.max(1, player.start + player.wins * WIN_GAIN - player.losses * LOSS_DROP));
-const matches = (player) => player.wins + player.losses;
-
-const rankedByLevel = (level) =>
-  players
-    .filter((player) => player.level === level)
-    .map((player) => ({
-      ...player,
-      rating: finalRating(player),
-      played: matches(player),
-      winGain: round2(player.wins * WIN_GAIN),
-      lossDrop: round2(-player.losses * LOSS_DROP),
-      avgWinGain: round3(WIN_GAIN),
-      avgLossDrop: round3(-LOSS_DROP),
-    }))
-    .sort(
-      (a, b) =>
-        b.rating - a.rating || b.wins - a.wins || b.played - a.played || a.name.localeCompare(b.name)
-    );
+const players = simulateCategory(24);
+const qualified = players.filter((player) => player.qualified);
 
 const pad = (value, width) => String(value).padEnd(width);
 const padStart = (value, width) => String(value).padStart(width);
 
-function printGroup(level) {
-  const label = level === "beginner" ? "BEGINNER" : "INTERMEDIATE";
-  const ranked = rankedByLevel(level);
-  console.log(`\n${label}`);
-  console.log(
-    `${pad("#", 3)}${pad("Pemain", 20)}${padStart("Main", 6)}${padStart("W", 4)}${padStart("L", 4)}${padStart("Awal", 7)}${padStart("Akhir", 7)}${padStart("ΔMenang", 10)}${padStart("ΔKalah", 9)}  Status`
-  );
-  console.log("-".repeat(112));
-
-  ranked.forEach((player, index) => {
-    const rank = index + 1;
-    const remaining = Math.max(0, MIN_MATCHES - player.played);
-    let status;
-    if (rank <= QUOTA_PER_LEVEL && player.played >= MIN_MATCHES) {
-      status = `Juara ${rank} ${label} — LOLOS`;
-    } else if (rank <= QUOTA_PER_LEVEL) {
-      status = `Kandidat Juara ${rank} — butuh ${remaining} match lagi`;
-    } else if (player.played < MIN_MATCHES) {
-      status = `Belum lolos — butuh ${remaining} match lagi`;
-    } else {
-      status = "Belum lolos — di luar kuota";
-    }
-    console.log(
-      `${pad(rank, 3)}${pad(player.name, 20)}${padStart(player.played, 6)}${padStart(
-        player.wins,
-        4
-      )}${padStart(player.losses, 4)}${padStart(player.start.toFixed(2), 7)}${padStart(
-        player.rating.toFixed(2),
-        7
-      )}${padStart(`+${player.winGain.toFixed(2)}`, 10)}${padStart(
-        player.lossDrop.toFixed(2),
-        9
-      )}  ${status}`
-    );
-  });
-
-  return ranked
-    .filter((player) => player.played >= MIN_MATCHES)
-    .slice(0, QUOTA_PER_LEVEL)
-    .map((player, index) => ({ ...player, juara: index + 1 }));
-}
-
-console.log("SIMULASI KUALIFIKASI MAIN EVENT — SINGLE PUTRA");
-console.log("Liga Tennis IKA17 · Musim 1 2027");
+console.log("Simulasi Kualifikasi Single Man — 24 pemain (DTR)");
 console.log(
-  `Aturan: peringkat berdasarkan rating; menang/kalah memengaruhi rating; minimal ${MIN_MATCHES} pertandingan.`
+  `Rating awal ${Math.round(SIMULATION_START_RATING)} untuk semua pemain · ${SIMULATION_ROUNDS} ronde Swiss · ${SIMULATION_QUALIFIERS} besar lolos`
 );
-console.log("Data SINTETIS. Versi UI: /admin/simulasi.");
+console.log("");
+console.log(
+  `${pad("#", 3)}${pad("Pemain", 20)}${padStart("Main", 6)}${padStart("M-K", 7)}${padStart(
+    "Awal",
+    9
+  )}${padStart("Akhir", 9)}${padStart("Δ", 9)}${padStart("ΔMenang", 10)}${padStart(
+    "ΔKalah",
+    9
+  )}  Status`
+);
+console.log("-".repeat(112));
 
-const beginnerWinners = printGroup("beginner");
-const intermediateWinners = printGroup("intermediate");
-
-console.log("\nRINGKASAN LOLOS KE MAIN EVENT");
-for (const winner of beginnerWinners) {
+for (const player of players) {
+  const status = player.qualified ? "LOLOS 8 BESAR" : "-";
   console.log(
-    `- Juara ${winner.juara} Beginner: ${winner.name} (rating ${winner.start.toFixed(2)} → ${winner.rating.toFixed(2)}, +${winner.winGain.toFixed(2)} dari menang / ${winner.lossDrop.toFixed(2)} dari kalah, ${winner.played} match)`
+    `${pad(player.rank, 3)}${pad(player.name, 20)}${padStart(player.matchesPlayed, 6)}${padStart(
+      `${player.wins}-${player.losses}`,
+      7
+    )}${padStart(String(Math.round(player.startRating)), 9)}${padStart(
+      String(Math.round(player.finalRating)),
+      9
+    )}${padStart(`${player.ratingChange >= 0 ? "+" : ""}${Math.round(player.ratingChange)}`, 9)}${padStart(
+      `+${player.avgWinGain.toFixed(1)}`,
+      10
+    )}${padStart(player.avgLossDrop.toFixed(1), 9)}  ${status}`
   );
 }
-for (const winner of intermediateWinners) {
+
+console.log("");
+console.log(`Lolos 8 besar (${qualified.length} pemain):`);
+for (const player of qualified) {
   console.log(
-    `- Juara ${winner.juara} Intermediate: ${winner.name} (rating ${winner.start.toFixed(2)} → ${winner.rating.toFixed(2)}, +${winner.winGain.toFixed(2)} dari menang / ${winner.lossDrop.toFixed(2)} dari kalah, ${winner.played} match)`
+    `- #${player.rank} ${player.name} — rating ${Math.round(player.finalRating)} (${player.wins}-${player.losses})`
   );
 }
-console.log(`\nTotal lolos: ${beginnerWinners.length + intermediateWinners.length} pemain.`);
+
+const biggestWin = [...players]
+  .flatMap((player) =>
+    player.matches
+      .filter((match) => match.result === "win")
+      .map((match) => ({ player, match }))
+  )
+  .sort((a, b) => b.match.delta - a.match.delta)[0];
+
+const biggestLoss = [...players]
+  .flatMap((player) =>
+    player.matches
+      .filter((match) => match.result === "loss")
+      .map((match) => ({ player, match }))
+  )
+  .sort((a, b) => a.match.delta - b.match.delta)[0];
+
+console.log("");
+console.log("Contoh perubahan rating dinamis:");
+if (biggestWin) {
+  console.log(
+    `- Kenaikan terbesar: ${biggestWin.player.name} mengalahkan ${biggestWin.match.opponent} (rating lawan ${Math.round(
+      biggestWin.match.opponentRatingBefore
+    )}) → +${Math.round(biggestWin.match.delta)}`
+  );
+}
+if (biggestLoss) {
+  console.log(
+    `- Pengurangan terbesar: ${biggestLoss.player.name} kalah dari ${biggestLoss.match.opponent} (rating lawan ${Math.round(
+      biggestLoss.match.opponentRatingBefore
+    )}) → ${Math.round(biggestLoss.match.delta)}`
+  );
+}
+
+console.log("");
+console.log("Catatan: data sintetis dan deterministik; tidak menyentuh data production.");
