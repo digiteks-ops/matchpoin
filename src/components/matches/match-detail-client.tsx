@@ -41,6 +41,7 @@ export interface ViewerInfo {
   isInvited: boolean;
   inviteId: string | null;
   team: 1 | 2 | null;
+  isAdmin?: boolean;
 }
 
 interface MatchDetailClientProps {
@@ -375,6 +376,14 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
               <div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold font-heading text-slate-900">{match.title}</h1>
                 <p className="text-sm text-slate-500 mt-1">{match.categoryLabel}</p>
+                {viewer.isAdmin && (
+                  <a
+                    href={`/admin/matches/${match.id}/result`}
+                    className="mt-2 inline-flex text-xs font-semibold text-matchpoin-navy underline"
+                  >
+                    Input Hasil (Admin)
+                  </a>
+                )}
               </div>
               <Badge variant={match.status === "open" ? "tennis" : "secondary"} className={match.status === "open" ? "text-matchpoin-navy" : ""}>
                 {match.status === "open"

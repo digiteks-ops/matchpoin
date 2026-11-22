@@ -3,6 +3,7 @@ import nextDynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/server";
 import { getMatchDetail } from "@/lib/services/match-service";
 import { getMatchResult } from "@/lib/services/rating-service";
+import { getUserRoles } from "@/lib/supabase/rbac-service";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import type { ViewerInfo } from "@/components/matches/match-detail-client";
 
@@ -38,6 +39,7 @@ export default async function MatchDetailPage({
     isInvited: false,
     inviteId: null,
     team: null,
+    isAdmin: false,
   };
 
   if (user) {
@@ -45,6 +47,13 @@ export default async function MatchDetailPage({
     const pending = match.pendingRequests.find((p) => p.userId === user.id);
     const invited = match.invitedPlayers.find((p) => p.userId === user.id);
     const participant = confirmed ?? pending ?? invited;
+    let isAdmin = false;
+    try {
+      const roles = await getUserRoles(user.id);
+      isAdmin = roles.includes("admin") || roles.includes("super_admin");
+    } catch {
+      isAdmin = false;
+    }
 
     viewer = {
       id: user.id,
@@ -54,6 +63,7 @@ export default async function MatchDetailPage({
       isInvited: Boolean(invited),
       inviteId: invited?.id ?? null,
       team: participant?.team ?? null,
+      isAdmin,
     };
   }
 

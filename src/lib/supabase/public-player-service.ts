@@ -128,9 +128,10 @@ const PUBLIC_PLAYER_COLUMNS =
   "user_id, display_name, full_name, avatar_url, gender, city_id, city_name, province, bio, preferred_hand, backhand, play_frequency, preferred_categories, preferred_times, self_assessed_level, playing_since, completion_score, allow_invites, show_rating, current_rating, peak_rating, matches_played, wins, losses, draws, is_verified_player";
 
 function client() {
-  // Public data (players view + active cities) is readable with the anon key.
-  // Fall back so /players and /leaderboard still work without a service key.
-  const supabase = createAdminClient() ?? createPublicClient();
+  // Public data (players view + active cities) only needs the anon key. Using
+  // the anon client first keeps /players and /leaderboard working even when the
+  // service key is missing or invalid (e.g. a stale Vercel env var).
+  const supabase = createPublicClient() ?? createAdminClient();
   if (!supabase) throw new Error("Supabase belum dikonfigurasi (URL/anon key).");
   return supabase;
 }
