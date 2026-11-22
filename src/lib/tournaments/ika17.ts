@@ -7,6 +7,7 @@ export const IKA17_MAIN_EVENT_START = "2027-04-03";
 export const IKA17_MAIN_EVENT_END = "2027-04-04";
 export const IKA17_REGISTRATION_DEADLINE = "2026-12-31";
 export const IKA17_QUOTA = 24;
+export const IKA17_MIN_MATCHES = 17;
 
 export type TournamentCategory =
   | "womens_singles"
