@@ -72,6 +72,7 @@ export default function TournamentsPage() {
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
   const [regSuccess, setRegSuccess] = useState<string | null>(null);
+  const [eligibilityConfirmed, setEligibilityConfirmed] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -137,6 +138,7 @@ export default function TournamentsPage() {
     setRegError(null);
     setRegSuccess(null);
     setPartners([]);
+    setEligibilityConfirmed(false);
 
     const definition = ika17Category(row.category);
     if (!definition?.doubles) return;
@@ -339,7 +341,23 @@ export default function TournamentsPage() {
                       )}
                     </div>
 
-                    <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                  <label className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+                    <input
+                      type="checkbox"
+                      checked={eligibilityConfirmed}
+                      onChange={(event) => setEligibilityConfirmed(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded border-rose-300 text-rose-600 focus:ring-rose-500"
+                    />
+                    <span>
+                      <strong>
+                        Saya menyatakan belum pernah mengikuti PORDA, PORPROV, atau PON.
+                      </strong>{" "}
+                      Pernyataan ini menjadi dasar verifikasi admin. Peserta yang pernah tampil di
+                      ajang tersebut tidak eligible.
+                    </span>
+                  </label>
+
+                  <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                       <p className="flex items-start gap-1.5">
                         <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
                         {definition.genderRule === "mixed"
@@ -413,6 +431,12 @@ export default function TournamentsPage() {
           <ul className="mt-2 list-inside list-disc space-y-1">
             <li>Periode liga: {dateLabel(league.start)} – {dateLabel(league.end)}.</li>
             <li>Main event: {dateLabel(league.mainEventStart)} – {dateLabel(league.mainEventEnd)}.</li>
+            <li>
+              <strong className="text-rose-700">
+                Peserta dilarang pernah mengikuti PORDA, PORPROV, atau PON.
+              </strong>{" "}
+              Pemain yang pernah tampil di ajang tersebut tidak eligible untuk mengikuti liga ini.
+            </li>
             <li>
               <strong className="text-slate-800">
                 Syarat lolos ke Main Event: minimal {IKA17_MIN_MATCHES} pertandingan
@@ -513,6 +537,7 @@ export default function TournamentsPage() {
                     onClick={submitRegistration}
                     disabled={
                       regLoading ||
+                      !eligibilityConfirmed ||
                       (ika17Category(selected.category)?.doubles && !partnerUserId)
                     }
                   >
