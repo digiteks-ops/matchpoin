@@ -18,17 +18,41 @@ const players = [
   { name: "Joko Prasetyo", level: "intermediate", start: 4.2, wins: 11, losses: 6 },
   { name: "Kiki Ardiansyah", level: "intermediate", start: 4.1, wins: 9, losses: 6 },
   { name: "Lukman Hakim", level: "intermediate", start: 4.0, wins: 5, losses: 3 },
+  { name: "Maman Sulaeman", level: "beginner", start: 3.15, wins: 14, losses: 6 },
+  { name: "Nanda Putra", level: "beginner", start: 3.05, wins: 12, losses: 6 },
+  { name: "Omar Fauzi", level: "beginner", start: 2.95, wins: 11, losses: 7 },
+  { name: "Pandu Wibowo", level: "beginner", start: 2.85, wins: 9, losses: 5 },
+  { name: "Qori Hidayat", level: "beginner", start: 2.75, wins: 7, losses: 4 },
+  { name: "Rizky Aditya", level: "beginner", start: 2.65, wins: 6, losses: 4 },
+  { name: "Surya Gunawan", level: "intermediate", start: 4.45, wins: 16, losses: 6 },
+  { name: "Teguh Prakoso", level: "intermediate", start: 4.35, wins: 15, losses: 6 },
+  { name: "Umar Faruq", level: "intermediate", start: 4.25, wins: 12, losses: 7 },
+  { name: "Vino Setiawan", level: "intermediate", start: 4.15, wins: 10, losses: 7 },
+  { name: "Wahyu Nugroho", level: "intermediate", start: 4.05, wins: 8, losses: 5 },
+  { name: "Yoga Pratama", level: "intermediate", start: 3.95, wins: 6, losses: 4 },
 ];
 
+const WIN_GAIN = 0.04;
+const LOSS_DROP = 0.035;
+
 const round2 = (value) => Math.round(value * 100) / 100;
+const round3 = (value) => Math.round(value * 1000) / 1000;
 const finalRating = (player) =>
-  round2(Math.max(1, player.start + player.wins * 0.04 - player.losses * 0.035));
+  round2(Math.max(1, player.start + player.wins * WIN_GAIN - player.losses * LOSS_DROP));
 const matches = (player) => player.wins + player.losses;
 
 const rankedByLevel = (level) =>
   players
     .filter((player) => player.level === level)
-    .map((player) => ({ ...player, rating: finalRating(player), played: matches(player) }))
+    .map((player) => ({
+      ...player,
+      rating: finalRating(player),
+      played: matches(player),
+      winGain: round2(player.wins * WIN_GAIN),
+      lossDrop: round2(-player.losses * LOSS_DROP),
+      avgWinGain: round3(WIN_GAIN),
+      avgLossDrop: round3(-LOSS_DROP),
+    }))
     .sort(
       (a, b) =>
         b.rating - a.rating || b.wins - a.wins || b.played - a.played || a.name.localeCompare(b.name)
@@ -42,9 +66,9 @@ function printGroup(level) {
   const ranked = rankedByLevel(level);
   console.log(`\n${label}`);
   console.log(
-    `${pad("#", 3)}${pad("Pemain", 20)}${padStart("Main", 6)}${padStart("W", 4)}${padStart("L", 4)}${padStart("Awal", 7)}${padStart("Akhir", 7)}  Status`
+    `${pad("#", 3)}${pad("Pemain", 20)}${padStart("Main", 6)}${padStart("W", 4)}${padStart("L", 4)}${padStart("Awal", 7)}${padStart("Akhir", 7)}${padStart("ΔMenang", 10)}${padStart("ΔKalah", 9)}  Status`
   );
-  console.log("-".repeat(88));
+  console.log("-".repeat(112));
 
   ranked.forEach((player, index) => {
     const rank = index + 1;
@@ -66,6 +90,9 @@ function printGroup(level) {
       )}${padStart(player.losses, 4)}${padStart(player.start.toFixed(2), 7)}${padStart(
         player.rating.toFixed(2),
         7
+      )}${padStart(`+${player.winGain.toFixed(2)}`, 10)}${padStart(
+        player.lossDrop.toFixed(2),
+        9
       )}  ${status}`
     );
   });
@@ -89,12 +116,12 @@ const intermediateWinners = printGroup("intermediate");
 console.log("\nRINGKASAN LOLOS KE MAIN EVENT");
 for (const winner of beginnerWinners) {
   console.log(
-    `- Juara ${winner.juara} Beginner: ${winner.name} (rating ${winner.start.toFixed(2)} → ${winner.rating.toFixed(2)}, ${winner.played} match)`
+    `- Juara ${winner.juara} Beginner: ${winner.name} (rating ${winner.start.toFixed(2)} → ${winner.rating.toFixed(2)}, +${winner.winGain.toFixed(2)} dari menang / ${winner.lossDrop.toFixed(2)} dari kalah, ${winner.played} match)`
   );
 }
 for (const winner of intermediateWinners) {
   console.log(
-    `- Juara ${winner.juara} Intermediate: ${winner.name} (rating ${winner.start.toFixed(2)} → ${winner.rating.toFixed(2)}, ${winner.played} match)`
+    `- Juara ${winner.juara} Intermediate: ${winner.name} (rating ${winner.start.toFixed(2)} → ${winner.rating.toFixed(2)}, +${winner.winGain.toFixed(2)} dari menang / ${winner.lossDrop.toFixed(2)} dari kalah, ${winner.played} match)`
   );
 }
 console.log(`\nTotal lolos: ${beginnerWinners.length + intermediateWinners.length} pemain.`);

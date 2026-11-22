@@ -12,8 +12,13 @@ import {
   TrendingDown,
   TrendingUp,
   Trophy,
+  Users,
 } from "lucide-react";
-import { simulateSinglesMen, type SimulatedPlayer } from "@/lib/tournaments/simulation";
+import {
+  simulateSinglesMen,
+  simulateSinglesMen24,
+  type SimulatedPlayer,
+} from "@/lib/tournaments/simulation";
 import { IKA17_MIN_MATCHES } from "@/lib/tournaments/ika17";
 
 const QUOTA_PER_LEVEL = 2;
@@ -23,6 +28,8 @@ const LEVEL_LABEL: Record<SimulatedPlayer["level"], string> = {
   beginner: "Beginner",
   intermediate: "Intermediate",
 };
+
+type Variant = "12" | "24";
 
 function sortByRating(players: SimulatedPlayer[]): SimulatedPlayer[] {
   return [...players].sort(
@@ -57,8 +64,36 @@ function RatingDelta({ value }: { value: number }) {
   );
 }
 
+function StatBox({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "emerald" | "rose" | "slate";
+}) {
+  const toneClass =
+    tone === "emerald"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : tone === "rose"
+        ? "border-rose-200 bg-rose-50 text-rose-700"
+        : "border-slate-200 bg-white text-slate-700";
+
+  return (
+    <div className={`rounded-lg border px-2.5 py-2 ${toneClass}`}>
+      <p className="text-[9px] font-semibold uppercase tracking-wider opacity-70">{label}</p>
+      <p className="text-sm font-extrabold">{value}</p>
+    </div>
+  );
+}
+
 export default function SimulationClient() {
-  const players = useMemo(() => simulateSinglesMen(), []);
+  const [variant, setVariant] = useState<Variant>("24");
+  const players = useMemo(
+    () => (variant === "24" ? simulateSinglesMen24() : simulateSinglesMen()),
+    [variant]
+  );
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const winners = useMemo(() => {
@@ -104,9 +139,9 @@ export default function SimulationClient() {
               </Badge>
             </div>
             <p className="mt-1 text-sm text-slate-600">
-              Peringkat berdasarkan rating. Menang/kalah memengaruhi rating. Minimal{" "}
-              {IKA17_MIN_MATCHES} pertandingan untuk lolos. Juara 1 &amp; 2 Beginner dan Juara 1
-              &amp; 2 Intermediate masuk Main Event.
+              Peringkat berdasarkan rating. Poin tidak berlaku; menang/kalah memengaruhi rating.
+              Minimal {IKA17_MIN_MATCHES} pertandingan untuk lolos. Juara 1 &amp; 2 Beginner dan
+              Juara 1 &amp; 2 Intermediate masuk Main Event.
             </p>
           </div>
           <div className="flex gap-2">
@@ -125,9 +160,38 @@ export default function SimulationClient() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+            <button
+              type="button"
+              onClick={() => setVariant("12")}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                variant === "12"
+                  ? "bg-matchpoin-navy text-white"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Users className="h-3.5 w-3.5" />
+              Simulasi 12 Pemain
+            </button>
+            <button
+              type="button"
+              onClick={() => setVariant("24")}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                variant === "24"
+                  ? "bg-matchpoin-navy text-white"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Users className="h-3.5 w-3.5" />
+              Simulasi 24 Pemain
+            </button>
+          </div>
+        </div>
+
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
           Data ini <strong>sintetis</strong> dan deterministik untuk simulasi. Tidak menulis atau
-          mengubah data production.
+          mengubah data production. Kedua simulasi tetap tersedia (12 dan 24 pemain).
         </div>
 
         {LEVELS.map((level) => {
@@ -151,7 +215,9 @@ export default function SimulationClient() {
                         <th className="pb-2 pr-2 text-center">M-K</th>
                         <th className="pb-2 pr-2 text-right">Rating Awal</th>
                         <th className="pb-2 pr-2 text-right">Rating Akhir</th>
-                        <th className="pb-2 pr-2 text-right">Δ</th>
+                        <th className="pb-2 pr-2 text-right">Δ Total</th>
+                        <th className="pb-2 pr-2 text-right">Δ Menang</th>
+                        <th className="pb-2 pr-2 text-right">Δ Kalah</th>
                         <th className="pb-2 text-right">Status</th>
                       </tr>
                     </thead>
@@ -196,6 +262,22 @@ export default function SimulationClient() {
                               <td className="py-2.5 pr-2 text-right text-xs">
                                 <RatingDelta value={player.ratingChange} />
                               </td>
+                              <td className="py-2.5 pr-2 text-right">
+                                <div className="text-xs font-semibold text-emerald-600">
+                                  +{player.avgWinGain.toFixed(3)}
+                                </div>
+                                <div className="text-[9px] text-slate-400">
+                                  total +{player.winRatingGain.toFixed(2)}
+                                </div>
+                              </td>
+                              <td className="py-2.5 pr-2 text-right">
+                                <div className="text-xs font-semibold text-rose-600">
+                                  {player.avgLossDrop.toFixed(3)}
+                                </div>
+                                <div className="text-[9px] text-slate-400">
+                                  total {player.lossRatingDrop.toFixed(2)}
+                                </div>
+                              </td>
                               <td className="py-2.5 text-right">
                                 {juara ? (
                                   qualifies ? (
@@ -223,8 +305,44 @@ export default function SimulationClient() {
                             </tr>
                             {isOpen && (
                               <tr className="bg-slate-50/60">
-                                <td colSpan={8} className="p-0">
+                                <td colSpan={10} className="p-0">
                                   <div className="px-3 py-3">
+                                    <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                      Statistik Perubahan Rating
+                                    </p>
+                                    <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
+                                      <StatBox
+                                        label="Kenaikan total"
+                                        value={`+${player.winRatingGain.toFixed(2)}`}
+                                        tone="emerald"
+                                      />
+                                      <StatBox
+                                        label="Pengurangan total"
+                                        value={player.lossRatingDrop.toFixed(2)}
+                                        tone="rose"
+                                      />
+                                      <StatBox
+                                        label="Rata² menang"
+                                        value={`+${player.avgWinGain.toFixed(3)}`}
+                                        tone="emerald"
+                                      />
+                                      <StatBox
+                                        label="Rata² kalah"
+                                        value={player.avgLossDrop.toFixed(3)}
+                                        tone="rose"
+                                      />
+                                      <StatBox
+                                        label="Kenaikan terbesar"
+                                        value={`+${player.bestWinGain.toFixed(2)}`}
+                                        tone="emerald"
+                                      />
+                                      <StatBox
+                                        label="Pengurangan terbesar"
+                                        value={player.worstLossDrop.toFixed(2)}
+                                        tone="rose"
+                                      />
+                                    </div>
+
                                     <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                                       History Match &amp; Perubahan Rating
                                     </p>
