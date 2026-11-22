@@ -16,7 +16,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
 
   try {
-    await requestJoinOpenMatch(params.id, user.id);
+    const body = (await request.json().catch(() => ({}))) as { team?: number };
+    const preferredTeam = body.team === 1 ? 1 : body.team === 2 ? 2 : null;
+    await requestJoinOpenMatch(params.id, user.id, preferredTeam);
 
     try {
       const [{ data: match }, { data: profile }, { data: userRow }] = await Promise.all([

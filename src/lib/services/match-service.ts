@@ -497,11 +497,15 @@ export async function createOpenMatch(
  */
 export async function requestJoinOpenMatch(
   matchId: string,
-  userId: string
+  userId: string,
+  preferredTeam: 1 | 2 | null = null
 ): Promise<void> {
   const supabase = createClient();
 
-  const { data, error } = await supabase.rpc("join_match", { p_match_id: matchId });
+  const { data, error } = await supabase.rpc("join_match", {
+    p_match_id: matchId,
+    p_team: preferredTeam,
+  });
 
   if (error) {
     logError("match.join", error, { matchId, userId });
@@ -602,7 +606,7 @@ export async function acceptParticipantRequest(
 
   const { data: participant } = await supabase
     .from("match_participants")
-    .select("id, metadata")
+    .select("id, metadata, team")
     .eq("match_id", matchId)
     .eq("user_id", participantUserId)
     .maybeSingle();
@@ -625,12 +629,23 @@ export async function acceptParticipantRequest(
   const playersPerTeam = Math.ceil(logicalPlayers / 2);
   const team1Count = confirmedRoster.filter((entry) => teamOf(entry.team) === 1).length;
   const team2Count = confirmedRoster.filter((entry) => teamOf(entry.team) === 2).length;
-  const team: 1 | 2 =
-    logicalPlayers <= 2
-      ? 2
-      : team1Count < playersPerTeam && team1Count <= team2Count
-      ? 1
-      : 2;
+  const preferredTeam =
+    participant.team === 1 ? 1 : participant.team === 2 ? 2 : null;
+  let team: 1 | 2;
+  if (logicalPlayers <= 2) {
+    team = 2;
+  } else if (preferredTeam) {
+    const teamCount = preferredTeam === 1 ? team1Count : team2Count;
+    if (teamCount >= playersPerTeam) {
+      throw new Error(
+        preferredTeam === 1 ? "Tim host sudah penuh." : "Tim lawan sudah penuh."
+      );
+    }
+    team = preferredTeam;
+  } else {
+    team =
+      team1Count < playersPerTeam && team1Count <= team2Count ? 1 : 2;
+  }
 
   const { error: updateError } = await supabase
     .from("match_participants")
