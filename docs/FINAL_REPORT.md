@@ -52,6 +52,14 @@ npm run test:e2e:playwright  # requires accounts + migrations
 5. Legacy MySQL modules and the `match-evidence` bucket are intentionally kept for rollback.
 6. City-list duplicate query was proposed but not consolidated: `getActiveCities()` uses the service role, so swapping `profile-service` to it would add a new failure mode when that key is absent.
 
+## Release status — 2026-11-22
+
+- E2E release suite (auth, admin, profile, tournament, match, security, edge): **15 passed, 3 skipped, 0 failed**.
+- Open-slot join + 3-way concurrent join: PASS (after `00024` enum cast and `00025` notification enum).
+- Fixed during QA: profile loader self-retrigger, OAuth avatar hosts, match-create navigation, "Ajukan Slot" selector, submit-enabled wait.
+- Build: 55/55 pages.
+- Not automated: `uploads.spec.ts` (would overwrite a real profile photo); run manually with a dedicated account.
+
 ## Manual steps
 
 See `docs/SETUP-CHECKLIST.md` (env, migrations, test accounts, Playwright, deploy, OAuth, mobile) and `supabase/verify/phase4.sql` (read-only DB verification).

@@ -26,6 +26,9 @@ Run each file top-to-bottom in the Supabase **SQL Editor**, in this order:
 2. `supabase/migrations/00020_query_explain_tool.sql`
 3. `supabase/migrations/00021_perf_indexes_and_rls.sql`
 4. `supabase/migrations/00022_rls_hardening.sql`
+5. `supabase/migrations/00023_notifications_message.sql`
+6. `supabase/migrations/00024_match_status_text.sql`
+7. `supabase/migrations/00025_notification_player_joined.sql`
 
 Verify:
 
