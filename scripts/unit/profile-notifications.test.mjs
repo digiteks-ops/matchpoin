@@ -8,6 +8,7 @@ const playerService = await read("src/lib/services/player-service.ts");
 const profileApi = await read("src/app/api/profile/route.ts");
 const profilePage = await read("src/app/(protected)/profile/edit/page.tsx");
 const notificationsMigration = await read("supabase/migrations/00023_notifications_message.sql");
+const notificationEnumMigration = await read("supabase/migrations/00025_notification_player_joined.sql");
 
 test("player sync never overwrites an existing account name or city", () => {
   const block = playerService.match(/export async function ensurePlayerRecordsWithClient[\s\S]*?\n\}/)?.[0] ?? "";
@@ -31,6 +32,11 @@ test("notifications migration adds and backfills the message column", () => {
   assert.match(notificationsMigration, /ADD COLUMN IF NOT EXISTS message TEXT/);
   assert.match(notificationsMigration, /SET message = COALESCE\(NULLIF\(message, ''\), body, ''\)/);
   assert.match(notificationsMigration, /sync_notification_message/);
+});
+
+test("notification enum supports host player-joined notifications", () => {
+  assert.match(notificationEnumMigration, /ALTER TYPE public\.notification_type/);
+  assert.match(notificationEnumMigration, /ADD VALUE IF NOT EXISTS 'player_joined'/);
 });
 test("profile loader cannot re-trigger itself and overwrite user input", () => {
   assert.match(profilePage, /\}, \[router\]\);/);
