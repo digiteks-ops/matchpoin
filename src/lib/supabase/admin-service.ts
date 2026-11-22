@@ -204,8 +204,9 @@ export async function getAdminSettingsData(tab: string): Promise<{
   let matches: AdminMatchRow[] = [];
   let tournaments: AdminTournamentRow[] = [];
   const systemHealth: AdminSystemHealth = {};
+  const loadAll = tab === "all";
 
-  if (tab === "users" || tab === "overview") {
+  if (loadAll || tab === "users" || tab === "overview") {
     const { data, error } = await supabase
       .from("users")
       .select("id, email, full_name, created_at")
@@ -244,7 +245,7 @@ export async function getAdminSettingsData(tab: string): Promise<{
     });
   }
 
-  if (tab === "players" || tab === "overview") {
+  if (loadAll || tab === "players" || tab === "overview") {
     const { data, error } = await supabase
       .from("public_players")
       .select(
@@ -278,7 +279,7 @@ export async function getAdminSettingsData(tab: string): Promise<{
     }));
   }
 
-  if (tab === "matches" || tab === "overview") {
+  if (loadAll || tab === "matches" || tab === "overview") {
     const { data, error } = await supabase
       .from("matches")
       .select("id, title, match_date, start_time, status, created_at, metadata, tennis_courts(name, address)")
@@ -316,7 +317,7 @@ export async function getAdminSettingsData(tab: string): Promise<{
     });
   }
 
-  if (tab === "tournaments" || tab === "overview") {
+  if (loadAll || tab === "tournaments" || tab === "overview") {
     const { data, error } = await supabase
       .from("tournaments")
       .select("id, name, category, season, status, max_participants, start_date, end_date, registration_deadline")
@@ -358,7 +359,7 @@ export async function getAdminSettingsData(tab: string): Promise<{
     }));
   }
 
-  if (tab === "overview") {
+  if (loadAll || tab === "overview") {
     try {
       const { error } = await supabase.from("roles").select("code", { head: true, count: "exact" });
       systemHealth.database = error ? "degraded" : "healthy";
