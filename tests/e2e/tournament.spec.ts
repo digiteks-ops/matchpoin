@@ -51,6 +51,11 @@ test("register -> admin accept -> player sees accepted; quota counts accepted on
   await page.goto("/tournaments");
   // Open the card for the player's own gender so the RPC accepts the entry.
   const categoryLabel = gender === "female" ? "Single Woman" : "Single Man";
+  await page
+    .getByRole("heading", { name: categoryLabel, exact: true })
+    .first()
+    .waitFor({ timeout: 30_000 })
+    .catch(() => undefined);
   const card = page
     .locator("div")
     .filter({ has: page.getByRole("heading", { name: categoryLabel, exact: true }) })
