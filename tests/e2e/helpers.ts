@@ -155,7 +155,14 @@ export async function createOpenMatchViaUi(page: Page, title: string) {
   await citySelect
     .selectOption({ label: "Makassar" })
     .catch(async () => citySelect.selectOption({ index: 1 }));
-  await page.getByRole("button", { name: /buat open match/i }).click();
+  const submit = page.getByRole("button", { name: /buat open match/i });
+  if (!(await submit.isEnabled())) {
+    // City options can still be repopulating after the province change.
+    await page.waitForTimeout(800);
+    await citySelect.selectOption({ index: 1 }).catch(() => undefined);
+  }
+  await expect(submit).toBeEnabled({ timeout: 20_000 });
+  await submit.click();
   // Wait for the redirect to the new match so callers can read its id.
   await page.waitForURL(/\/matches\/[0-9a-f-]{36}/, { timeout: 25_000 });
 }
