@@ -32,9 +32,10 @@ interface CreateMatchFormProps {
   inviteUserId?: string;
   inviteName?: string;
   currentUserId: string;
+  isAdmin?: boolean;
 }
 
-export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserId }: CreateMatchFormProps) {
+export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserId, isAdmin = false }: CreateMatchFormProps) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<MatchCategory>("mens_singles");
@@ -51,6 +52,9 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
   const [partnerUserId, setPartnerUserId] = useState("");
   const [opponentUserId, setOpponentUserId] = useState(inviteUserId ?? "");
   const [opponentPartnerUserId, setOpponentPartnerUserId] = useState("");
+  const [teamACaptainUserId, setTeamACaptainUserId] = useState(isAdmin ? "" : currentUserId);
+  const [team1Score, setTeam1Score] = useState("");
+  const [team2Score, setTeam2Score] = useState("");
   const [matchType, setMatchType] = useState<MatchType>("private");
   const [singlesMode, setSinglesMode] = useState<MatchType>("private");
   const [partners, setPartners] = useState<{ user_id: string; display_name: string; gender: string | null }[]>([]);
@@ -67,7 +71,13 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
   const isDoubles = category.includes("doubles");
   const categoryName = MATCH_CATEGORY_LABELS[category].split(" (")[0];
   const requiredDoublesPlayers = [partnerUserId, opponentUserId, opponentPartnerUserId].filter(Boolean).length;
-  const formProgress = isDoubles
+  const adminTeamSlots = isDoubles
+    ? [teamACaptainUserId, partnerUserId, opponentUserId, opponentPartnerUserId]
+    : [teamACaptainUserId, opponentUserId];
+  const adminFilledSlots = adminTeamSlots.filter(Boolean).length;
+  const formProgress = isAdmin
+    ? `${adminFilledSlots}/${isDoubles ? 4 : 2} pemain`
+    : isDoubles
     ? `${requiredDoublesPlayers + 1}/4 pemain`
     : opponentUserId
     ? "2/2 pemain"
@@ -113,18 +123,28 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
   }, [isDoubles]);
 
   useEffect(() => {
+    if (isAdmin) {
+      setMatchType("private");
+      setSinglesMode("private");
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
     let cancelled = false;
     async function loadPlayers() {
       setPartnersLoading(true);
       setOpponentsLoading(true);
       try {
         const supabase = createClient();
-        const { data } = await supabase
+        let query = supabase
           .from("public_players")
           .select("user_id, display_name, gender")
-          .neq("user_id", currentUserId)
           .order("display_name", { ascending: true })
           .limit(200);
+        if (!isAdmin) {
+          query = query.neq("user_id", currentUserId);
+        }
+        const { data } = await query;
         if (cancelled) return;
         const rows = (data ?? []) as {
           user_id: string;
@@ -154,11 +174,23 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
     return () => {
       cancelled = true;
     };
-  }, [currentUserId]);
+  }, [currentUserId, isAdmin]);
 
 
 
   const today = new Date().toISOString().slice(0, 10);
+
+  const teamACaptainOptions = useMemo(
+    () =>
+      opponents.filter(
+        (player) =>
+          isGenderCompatible(category, player.gender) &&
+          player.user_id !== partnerUserId &&
+          player.user_id !== opponentUserId &&
+          player.user_id !== opponentPartnerUserId
+      ),
+    [category, opponentPartnerUserId, opponentUserId, opponents, partnerUserId]
+  );
 
   const partnerOptions = useMemo(
     () =>
@@ -166,10 +198,11 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
         (player) =>
           isGenderCompatible(category, player.gender) &&
           player.user_id !== inviteUserId &&
+          player.user_id !== teamACaptainUserId &&
           player.user_id !== opponentUserId &&
           player.user_id !== opponentPartnerUserId
       ),
-    [category, inviteUserId, opponentPartnerUserId, opponentUserId, partners]
+    [category, inviteUserId, opponentPartnerUserId, opponentUserId, partners, teamACaptainUserId]
   );
 
   const opponentOptions = useMemo(
@@ -177,10 +210,11 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
       opponents.filter(
         (player) =>
           isGenderCompatible(category, player.gender) &&
+          player.user_id !== teamACaptainUserId &&
           player.user_id !== partnerUserId &&
           player.user_id !== opponentPartnerUserId
       ),
-    [category, opponentPartnerUserId, opponents, partnerUserId]
+    [category, opponentPartnerUserId, opponents, partnerUserId, teamACaptainUserId]
   );
 
   const opponentPartnerOptions = useMemo(
@@ -188,10 +222,11 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
       opponents.filter(
         (player) =>
           isGenderCompatible(category, player.gender) &&
+          player.user_id !== teamACaptainUserId &&
           player.user_id !== partnerUserId &&
           player.user_id !== opponentUserId
       ),
-    [category, opponentUserId, opponents, partnerUserId]
+    [category, opponentUserId, opponents, partnerUserId, teamACaptainUserId]
   );
 
   const handleCategoryChange = (next: MatchCategory) => {
@@ -210,6 +245,13 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
 
   const handleOpponentChange = (value: string) => {
     setOpponentUserId(value);
+    if (opponentPartnerUserId === value) setOpponentPartnerUserId("");
+  };
+
+  const handleTeamACaptainChange = (value: string) => {
+    setTeamACaptainUserId(value);
+    if (partnerUserId === value) setPartnerUserId("");
+    if (opponentUserId === value) setOpponentUserId("");
     if (opponentPartnerUserId === value) setOpponentPartnerUserId("");
   };
 
@@ -238,25 +280,62 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
       setError("Tanggal dan jam mulai wajib diisi.");
       return;
     }
-    if (isDoubles && matchType === "private" && !partnerUserId) {
-      setError("Pilih partner untuk Team A.");
-      return;
-    }
-    if (isDoubles && matchType === "private" && !opponentUserId) {
-      setError("Pilih lawan utama untuk Team B.");
-      return;
-    }
-    if (isDoubles && matchType === "private" && !opponentPartnerUserId) {
-      setError("Pilih partner lawan untuk Team B.");
-      return;
-    }
-    if (isDoubles && matchType === "private" && new Set([partnerUserId, opponentUserId, opponentPartnerUserId]).size !== 3) {
-      setError("Setiap pemain hanya boleh mengisi satu posisi.");
-      return;
-    }
-    if (!isDoubles && singlesMode === "private" && !opponentUserId) {
-      setError("Pilih lawan untuk pertandingan tunggal (1 vs 1).");
-      return;
+    const adminTeam1 = isDoubles ? [teamACaptainUserId, partnerUserId] : [teamACaptainUserId];
+    const adminTeam2 = isDoubles ? [opponentUserId, opponentPartnerUserId] : [opponentUserId];
+    const hasAnyScore = team1Score !== "" || team2Score !== "";
+
+    if (isAdmin) {
+      if (adminTeam1.some((id) => !id) || adminTeam2.some((id) => !id)) {
+        setError(
+          isDoubles
+            ? "Lengkapi 2 pemain Team A dan 2 pemain Team B."
+            : "Pilih pemain Team A dan pemain Team B."
+        );
+        return;
+      }
+      if (new Set([...adminTeam1, ...adminTeam2]).size !== adminTeam1.length + adminTeam2.length) {
+        setError("Setiap pemain hanya boleh mengisi satu posisi.");
+        return;
+      }
+      if (hasAnyScore && (team1Score === "" || team2Score === "")) {
+        setError("Isi skor Team A dan Team B, atau kosongkan keduanya.");
+        return;
+      }
+      if (
+        hasAnyScore &&
+        (!Number.isInteger(Number(team1Score)) ||
+          !Number.isInteger(Number(team2Score)) ||
+          Number(team1Score) < 0 ||
+          Number(team2Score) < 0)
+      ) {
+        setError("Skor harus berupa angka bulat 0 atau lebih.");
+        return;
+      }
+      if (hasAnyScore && Number(team1Score) === Number(team2Score)) {
+        setError("Pertandingan tenis tidak boleh berakhir seri.");
+        return;
+      }
+    } else {
+      if (isDoubles && matchType === "private" && !partnerUserId) {
+        setError("Pilih partner untuk Team A.");
+        return;
+      }
+      if (isDoubles && matchType === "private" && !opponentUserId) {
+        setError("Pilih lawan utama untuk Team B.");
+        return;
+      }
+      if (isDoubles && matchType === "private" && !opponentPartnerUserId) {
+        setError("Pilih partner lawan untuk Team B.");
+        return;
+      }
+      if (isDoubles && matchType === "private" && new Set([partnerUserId, opponentUserId, opponentPartnerUserId]).size !== 3) {
+        setError("Setiap pemain hanya boleh mengisi satu posisi.");
+        return;
+      }
+      if (!isDoubles && singlesMode === "private" && !opponentUserId) {
+        setError("Pilih lawan untuk pertandingan tunggal (1 vs 1).");
+        return;
+      }
     }
 
     if (matchDate || startTime) {
@@ -293,16 +372,28 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
           reclubLink: reclubLink.trim() || undefined,
           raceToScore: RACE_TO_SCORE,
           courtSwitchAt: COURT_SWITCH_AT,
-          partnerUserId: isDoubles && matchType === "private" ? partnerUserId : undefined,
-          opponentUserId: isDoubles
+          partnerUserId: isAdmin
+            ? undefined
+            : isDoubles && matchType === "private"
+            ? partnerUserId
+            : undefined,
+          opponentUserId: isAdmin
+            ? undefined
+            : isDoubles
             ? matchType === "private"
               ? opponentUserId
               : undefined
             : singlesMode === "private"
             ? opponentUserId
             : undefined,
-          opponentPartnerUserId: isDoubles && matchType === "private" ? opponentPartnerUserId : undefined,
-          matchType: isDoubles ? matchType : singlesMode,
+          opponentPartnerUserId: isAdmin
+            ? undefined
+            : isDoubles && matchType === "private"
+            ? opponentPartnerUserId
+            : undefined,
+          matchType: isAdmin ? "private" : isDoubles ? matchType : singlesMode,
+          team1UserIds: isAdmin ? adminTeam1 : undefined,
+          team2UserIds: isAdmin ? adminTeam2 : undefined,
         }),
       });
 
@@ -317,6 +408,33 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
         setError(json.message || ERROR_CREATE_MATCH);
         setIsSubmitting(false);
         return;
+      }
+
+      if (isAdmin && hasAnyScore) {
+        try {
+          const resultRes = await fetch(`/api/admin/matches/${json.matchId}/result`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              team1Score: Number(team1Score),
+              team2Score: Number(team2Score),
+            }),
+          });
+          const resultJson = (await resultRes.json().catch(() => ({}))) as {
+            success?: boolean;
+            message?: string;
+          };
+          if (!resultRes.ok || !resultJson.success) {
+            setNotice(
+              resultJson.message
+                ? `Pertandingan dibuat, tetapi skor gagal disimpan: ${resultJson.message}`
+                : "Pertandingan dibuat, tetapi skor gagal disimpan."
+            );
+          }
+        } catch (resultErr) {
+          logError("create.result", resultErr, { matchId: json.matchId });
+          setNotice("Pertandingan dibuat, tetapi skor gagal disimpan.");
+        }
       }
 
       let invited = false;
@@ -471,7 +589,7 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
             </p>
           </div>
 
-          {!isDoubles && (
+          {!isDoubles && !isAdmin && (
             <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
               <div>
                 <p className="text-sm font-bold text-slate-900">Susunan pemain tunggal</p>
@@ -549,7 +667,7 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
             </div>
           )}
 
-          {isDoubles && (
+          {isDoubles && !isAdmin && (
             <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -758,6 +876,197 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
             </div>
           )}
 
+          {isAdmin && (
+            <div className="space-y-4 rounded-2xl border border-matchpoin-navy/30 bg-matchpoin-navy/[0.03] p-4 sm:p-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-bold text-slate-900">Susunan tim (Admin)</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    Pilih pemain Team A dan lawan Team B. Skor bersifat opsional dan bisa langsung
+                    disimpan saat pertandingan dibuat.
+                  </p>
+                </div>
+                <span className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">
+                  {isDoubles ? "4 pemain · 2 vs 2" : "2 pemain · 1 vs 1"}
+                </span>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-matchpoin-navy text-xs font-bold text-white">
+                      A
+                    </span>
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">Team A</p>
+                      <p className="text-[11px] text-slate-500">
+                        {isDoubles ? "Kapten dan partner" : "Pemain Team A"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="teamACaptain" className="text-xs text-slate-600">
+                      {isDoubles ? "Kapten Team A" : "Pemain Team A"}
+                    </Label>
+                    <select
+                      id="teamACaptain"
+                      value={teamACaptainUserId}
+                      onChange={(event) => handleTeamACaptainChange(event.target.value)}
+                      className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:border-matchpoin-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+                      disabled={isSubmitting || opponentsLoading}
+                    >
+                      <option value="">
+                        {opponentsLoading ? "Memuat pemain..." : "Pilih pemain Team A"}
+                      </option>
+                      {teamACaptainOptions.map((player) => (
+                        <option key={player.user_id} value={player.user_id}>
+                          {player.display_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {isDoubles && (
+                    <div className="space-y-2">
+                      <Label htmlFor="teamAPartner" className="text-xs text-slate-600">
+                        Partner Team A
+                      </Label>
+                      <select
+                        id="teamAPartner"
+                        value={partnerUserId}
+                        onChange={(event) => setPartnerUserId(event.target.value)}
+                        className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:border-matchpoin-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+                        disabled={isSubmitting || partnersLoading}
+                      >
+                        <option value="">
+                          {partnersLoading ? "Memuat pemain..." : "Pilih partner Team A"}
+                        </option>
+                        {partnerOptions.map((player) => (
+                          <option key={player.user_id} value={player.user_id}>
+                            {player.display_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-matchpoin-tennis text-xs font-bold text-matchpoin-navy">
+                      B
+                    </span>
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">Team B</p>
+                      <p className="text-[11px] text-slate-500">
+                        {isDoubles ? "Kapten dan partner" : "Pemain Team B"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="teamBCaptain" className="text-xs text-slate-600">
+                      {isDoubles ? "Kapten Team B" : "Pemain Team B"}
+                    </Label>
+                    <select
+                      id="teamBCaptain"
+                      value={opponentUserId}
+                      onChange={(event) => handleOpponentChange(event.target.value)}
+                      className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:border-matchpoin-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+                      disabled={isSubmitting || opponentsLoading}
+                    >
+                      <option value="">
+                        {opponentsLoading ? "Memuat pemain..." : "Pilih pemain Team B"}
+                      </option>
+                      {opponentOptions.map((player) => (
+                        <option key={player.user_id} value={player.user_id}>
+                          {player.display_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {isDoubles && (
+                    <div className="space-y-2">
+                      <Label htmlFor="teamBPartner" className="text-xs text-slate-600">
+                        Partner Team B
+                      </Label>
+                      <select
+                        id="teamBPartner"
+                        value={opponentPartnerUserId}
+                        onChange={(event) => setOpponentPartnerUserId(event.target.value)}
+                        className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:border-matchpoin-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+                        disabled={isSubmitting || opponentsLoading}
+                      >
+                        <option value="">
+                          {opponentsLoading ? "Memuat pemain..." : "Pilih partner Team B"}
+                        </option>
+                        {opponentPartnerOptions.map((player) => (
+                          <option key={player.user_id} value={player.user_id}>
+                            {player.display_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex items-start gap-2">
+                  <Trophy className="mt-0.5 h-4 w-4 text-matchpoin-tennis" />
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">Skor akhir (opsional)</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                      Isi skor untuk langsung menyimpan hasil dan memperbarui rating. Kosongkan
+                      keduanya bila hasil belum diketahui.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="team1Score" className="text-xs text-slate-600">
+                      Skor Team A
+                    </Label>
+                    <Input
+                      id="team1Score"
+                      type="number"
+                      min={0}
+                      step={1}
+                      inputMode="numeric"
+                      value={team1Score}
+                      onChange={(event) => setTeam1Score(event.target.value)}
+                      placeholder="Contoh: 8"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="team2Score" className="text-xs text-slate-600">
+                      Skor Team B
+                    </Label>
+                    <Input
+                      id="team2Score"
+                      type="number"
+                      min={0}
+                      step={1}
+                      inputMode="numeric"
+                      value={team2Score}
+                      onChange={(event) => setTeam2Score(event.target.value)}
+                      placeholder="Contoh: 6"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                </div>
+                {team1Score !== "" && team2Score !== "" && Number(team1Score) === Number(team2Score) && (
+                  <p className="mt-2 text-[11px] text-rose-600">
+                    Pertandingan tenis tidak boleh berakhir seri.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
             <div className="mb-4 flex items-center gap-2">
               <MapPin className="h-4 w-4 text-matchpoin-tennis" />
@@ -951,15 +1260,19 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
 
           <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[11px] leading-relaxed text-slate-500">
-              {isDoubles && matchType === "private" && requiredDoublesPlayers < 3
-                ? `Lengkapi ${3 - requiredDoublesPlayers} pemain lagi untuk membuat match ganda privat.`
-                : isDoubles && matchType === "open"
-                  ? "Match ganda terbuka: 3 slot akan dibuka untuk pemain lain."
-                  : !isDoubles && singlesMode === "open"
-                    ? "Match tunggal terbuka: slot lawan menunggu pemain lain bergabung."
-                    : !isDoubles && !opponentUserId
-                      ? "Pilih lawan untuk membuat pertandingan tunggal 1 vs 1."
-                      : "Semua data utama sudah siap. Periksa kembali sebelum menyimpan."}
+              {isAdmin
+                ? adminFilledSlots < (isDoubles ? 4 : 2)
+                  ? `Lengkapi ${(isDoubles ? 4 : 2) - adminFilledSlots} slot pemain lagi.`
+                  : "Skor opsional: isi untuk langsung menyimpan hasil dan memperbarui rating."
+                : isDoubles && matchType === "private" && requiredDoublesPlayers < 3
+                  ? `Lengkapi ${3 - requiredDoublesPlayers} pemain lagi untuk membuat match ganda privat.`
+                  : isDoubles && matchType === "open"
+                    ? "Match ganda terbuka: 3 slot akan dibuka untuk pemain lain."
+                    : !isDoubles && singlesMode === "open"
+                      ? "Match tunggal terbuka: slot lawan menunggu pemain lain bergabung."
+                      : !isDoubles && !opponentUserId
+                        ? "Pilih lawan untuk membuat pertandingan tunggal 1 vs 1."
+                        : "Semua data utama sudah siap. Periksa kembali sebelum menyimpan."}
             </p>
             <div className="flex justify-end">
               <Button
@@ -970,8 +1283,14 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
                   !province ||
                   !cityName ||
                   !courtName.trim() ||
-                  (!isDoubles && singlesMode === "private" && !opponentUserId) ||
-                  (isDoubles && matchType === "private" && (!partnerUserId || !opponentUserId || !opponentPartnerUserId))
+                  (isAdmin
+                    ? adminFilledSlots < (isDoubles ? 4 : 2) ||
+                      (team1Score !== "") !== (team2Score !== "") ||
+                      (team1Score !== "" && Number(team1Score) === Number(team2Score))
+                    : (!isDoubles && singlesMode === "private" && !opponentUserId) ||
+                      (isDoubles &&
+                        matchType === "private" &&
+                        (!partnerUserId || !opponentUserId || !opponentPartnerUserId)))
                 }
                 className="w-full text-matchpoin-navy font-bold gap-2 sm:w-auto"
               >
@@ -983,7 +1302,15 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
                 ) : (
                   <>
                     <CalendarPlus className="w-4 h-4" />
-                    {isDoubles ? "Buat Match Ganda" : singlesMode === "open" ? "Buat Open Match" : "Buat Pertandingan"}
+                    {isAdmin
+                      ? team1Score !== "" && team2Score !== ""
+                        ? "Buat & Simpan Skor"
+                        : "Buat Pertandingan"
+                      : isDoubles
+                        ? "Buat Match Ganda"
+                        : singlesMode === "open"
+                          ? "Buat Open Match"
+                          : "Buat Pertandingan"}
                   </>
                 )}
               </Button>
