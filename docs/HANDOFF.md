@@ -45,6 +45,17 @@ MODE: VERIFY. Jangan refactor/tambah fitur.
 Akhir: tabel PASS/FAIL/BLOCKED, commit list, 5 langkah manual tersisa.
 ```
 
+## Data safety rules (mandatory)
+
+- NEVER delete rows by pattern (`ilike`, `like`, wildcard) against production. A wrong filter can wipe every row.
+- Sequence for any destructive DB work:
+  1. `SELECT id, ... WHERE <exact condition>` and paste the list for review.
+  2. Confirm the ids with the user.
+  3. Delete only by explicit id list (`id=in.(...)`), in a transaction when possible.
+  4. Prefer a dry-run script that prints what would be deleted and requires `--apply`.
+- Take/verify a backup first (Supabase → Database → Backups). Free projects have no backups.
+- Test accounts: use dedicated `e2e-*@` accounts; never rename real users with test prefixes.
+
 ## Manual prerequisites
 1. Service key: rotation declined by the user; risk accepted, key never committed. Do not ask again.
 2. Merge PR / redeploy Vercel with final env vars.
