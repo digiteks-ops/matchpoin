@@ -15,6 +15,7 @@ import {
   IKA17_LEAGUE_NAME,
   IKA17_MAIN_EVENT_END,
   IKA17_MAIN_EVENT_START,
+  IKA17_MIN_MATCHES,
   IKA17_QUOTA,
   IKA17_REGISTRATION_DEADLINE,
   IKA17_START_DATE,
@@ -238,6 +239,10 @@ export default function TournamentsPage() {
                 kategori maksimal {IKA17_QUOTA} peserta/tim dan dihitung dari pendaftar yang sudah
                 diterima admin.
               </p>
+              <p className="mt-3 inline-flex items-center gap-2 rounded-xl bg-matchpoin-tennis/90 px-3 py-2 text-xs font-bold text-matchpoin-navy">
+                <Trophy className="h-4 w-4" />
+                Syarat Main Event: minimal {IKA17_MIN_MATCHES} pertandingan
+              </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[420px]">
               <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
@@ -405,6 +410,12 @@ export default function TournamentsPage() {
           <ul className="mt-2 list-inside list-disc space-y-1">
             <li>Periode liga: {dateLabel(league.start)} – {dateLabel(league.end)}.</li>
             <li>Main event: {dateLabel(league.mainEventStart)} – {dateLabel(league.mainEventEnd)}.</li>
+            <li>
+              <strong className="text-slate-800">
+                Syarat lolos ke Main Event: minimal {IKA17_MIN_MATCHES} pertandingan
+              </strong>{" "}
+              yang tercatat selama periode liga.
+            </li>
             <li>Setiap kategori maksimal {IKA17_QUOTA} peserta (single) atau {IKA17_QUOTA} tim (ganda).</li>
             <li>Kuota dihitung dari pendaftar berstatus diterima (accepted).</li>
             <li>Pendaftaran masuk sebagai pending dan harus disetujui admin.</li>
@@ -473,6 +484,10 @@ export default function TournamentsPage() {
                   <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                     Pendaftaran akan dikirim dengan status <strong>pending</strong>. Anda dapat
                     melihat statusnya di kartu kategori setelah admin memproses.
+                    <span className="mt-2 block font-semibold text-slate-800">
+                      Syarat lolos Main Event: minimal {IKA17_MIN_MATCHES} pertandingan selama
+                      periode liga.
+                    </span>
                   </div>
                 </>
               )}
