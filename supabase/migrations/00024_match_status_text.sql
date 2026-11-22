@@ -5,51 +5,16 @@
 --
 -- Live error (42804): column "status" is of type match_status but expression is
 -- of type text — raised inside join_match/leave_match when a TEXT variable is
--- assigned to the enum column. Converting the column to TEXT with a CHECK that
--- carries the exact enum labels keeps validation while allowing RPC variables
--- and PostgREST updates to work.
+-- assigned to the enum column. The fix keeps the enum and explicitly casts the
+-- controlled status value to match_status inside the SECURITY DEFINER RPCs.
 --
 -- Manual backup (optional, run first):
 --   CREATE TABLE IF NOT EXISTS public.matches_status_backup AS
 --   SELECT id, status FROM public.matches;
 -- ============================================================================
 
-DO $$
-DECLARE
-  v_labels TEXT[];
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM pg_type t
-    JOIN pg_namespace n ON n.oid = t.typnamespace
-    WHERE n.nspname = 'public' AND t.typname = 'match_status' AND t.typtype = 'e'
-  ) AND EXISTS (
-    SELECT 1
-    FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'matches' AND column_name = 'status'
-      AND udt_name = 'match_status'
-  ) THEN
-    SELECT array_agg(e.enumlabel ORDER BY e.enumsortorder)
-    INTO v_labels
-    FROM pg_enum e
-    JOIN pg_type t ON t.oid = e.enumtypid
-    JOIN pg_namespace n ON n.oid = t.typnamespace
-    WHERE n.nspname = 'public' AND t.typname = 'match_status';
-
-    ALTER TABLE public.matches
-      ALTER COLUMN status TYPE TEXT USING status::text;
-
-    IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint
-      WHERE conrelid = 'public.matches'::regclass AND conname = 'matches_status_check'
-    ) THEN
-      EXECUTE format(
-        'ALTER TABLE public.matches ADD CONSTRAINT matches_status_check CHECK (status = ANY (%L::text[]))',
-        v_labels
-      );
-    END IF;
-  END IF;
-END $$;
+-- Do not alter the column type: policies on related tables may depend on it.
+-- The join function below uses the enum type directly instead.
 
 -- Recreate the join/leave RPCs (same bodies as 00011) without any enum
 -- dependency; TEXT parameters now assign cleanly into the TEXT column.
@@ -164,7 +129,7 @@ BEGIN
   v_status := CASE WHEN v_total >= v_max THEN 'full' ELSE 'open' END;
 
   UPDATE public.matches
-     SET status = v_status,
+     SET status = v_status::match_status,
          updated_at = now()
    WHERE id = p_match_id;
 
