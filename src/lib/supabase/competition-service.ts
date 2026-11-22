@@ -100,11 +100,42 @@ export async function getTournamentList(userId: string | null): Promise<Tourname
 
   const ids = (tournaments ?? []).map((row) => row.id);
 
-  // Quota counts come from a definer RPC that only exposes aggregates.
-  const { data: countRows } = await data.rpc("league_registration_counts");
+  // Quota counts come from a definer RPC that only exposes aggregates. If that
+  // RPC is unavailable (migration 00021 not applied yet), fall back to a bounded
+  // server-side count so the quota never silently shows 0.
+  const { data: countRows, error: countError } = await data.rpc("league_registration_counts");
   const counts = new Map<string, RegistrationCountRow>();
-  for (const row of (Array.isArray(countRows) ? countRows : []) as RegistrationCountRow[]) {
-    counts.set(row.tournament_id, row);
+  if (!countError && Array.isArray(countRows)) {
+    for (const row of countRows as RegistrationCountRow[]) {
+      counts.set(row.tournament_id, row);
+    }
+  } else if (ids.length) {
+    const { data: rows } = await data
+      .from("tournament_participants")
+      .select("tournament_id, entry_id, id, status, entry_role")
+      .in("tournament_id", ids)
+      .limit(5000);
+    const accepted = new Map<string, Set<string>>();
+    const pending = new Map<string, Set<string>>();
+    for (const row of rows ?? []) {
+      const key = row.entry_id ?? row.id;
+      if (row.status === "accepted" || row.status === "confirmed") {
+        const set = accepted.get(row.tournament_id) ?? new Set<string>();
+        set.add(key);
+        accepted.set(row.tournament_id, set);
+      } else if (row.status === "pending" && row.entry_role === "captain") {
+        const set = pending.get(row.tournament_id) ?? new Set<string>();
+        set.add(key);
+        pending.set(row.tournament_id, set);
+      }
+    }
+    for (const id of ids) {
+      counts.set(id, {
+        tournament_id: id,
+        accepted: accepted.get(id)?.size ?? 0,
+        pending: pending.get(id)?.size ?? 0,
+      });
+    }
   }
 
   // The session client only returns the caller's own registrations under RLS.

@@ -54,6 +54,37 @@ REVOKE ALL ON FUNCTION public.is_match_participant(UUID, UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.is_match_participant(UUID, UUID) TO authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
+-- Drop any previous version of these policies before recreating them. A plain
+-- `DROP POLICY IF EXISTS` can miss a policy created by a different owner, which
+-- produced `policy "..." already exists` on re-runs. The catalog loop is
+-- deterministic and schema-qualified.
+-- ---------------------------------------------------------------------------
+
+DO $$
+DECLARE
+  p RECORD;
+BEGIN
+  FOR p IN
+    SELECT policyname
+    FROM pg_policies
+    WHERE schemaname = 'storage'
+      AND tablename = 'objects'
+      AND policyname IN (
+        'avatars public read',
+        'avatars owner insert',
+        'avatars owner update',
+        'avatars owner delete',
+        'match results public read',
+        'match results participant insert',
+        'match results participant update',
+        'match results participant delete'
+      )
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', p.policyname);
+  END LOOP;
+END $$;
+
+-- ---------------------------------------------------------------------------
 -- avatars: public read; owner-only writes.
 -- Accepts both key layouts:
 --   {userId}/avatar-*.webp        (current)

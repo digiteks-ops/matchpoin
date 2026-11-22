@@ -1,0 +1,59 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+const read = (relative) => readFile(new URL(`../../${relative}`, import.meta.url), "utf8");
+
+const playerService = await read("src/lib/services/player-service.ts");
+const profileApi = await read("src/app/api/profile/route.ts");
+const profilePage = await read("src/app/(protected)/profile/edit/page.tsx");
+const notificationsMigration = await read("supabase/migrations/00023_notifications_message.sql");
+const notificationEnumMigration = await read("supabase/migrations/00025_notification_player_joined.sql");
+
+test("player sync never overwrites an existing account name or city", () => {
+  const block = playerService.match(/export async function ensurePlayerRecordsWithClient[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.match(block, /\.from\("users"\)[\s\S]*?\.select\("id"\)[\s\S]*?maybeSingle\(\)/);
+  assert.match(block, /if \(!existingUser\)/);
+  assert.doesNotMatch(block, /from\("users"\)\.upsert/);
+});
+
+test("profile saves through the authenticated server route", () => {
+  assert.match(profilePage, /fetch\("\/api\/profile"/);
+  assert.match(profilePage, /method: "PUT"/);
+  assert.doesNotMatch(profilePage, /\.from\("users"\)\s*\.update/);
+});
+
+test("profile name is capped at the database limits (50 / 100)", () => {
+  assert.match(profileApi, /body\.fullName\.trim\(\)\.length > 50/);
+  assert.match(profilePage, /maxLength=\{50\}/);
+});
+
+test("notifications migration adds and backfills the message column", () => {
+  assert.match(notificationsMigration, /ADD COLUMN IF NOT EXISTS message TEXT/);
+  assert.match(notificationsMigration, /SET message = COALESCE\(NULLIF\(message, ''\), body, ''\)/);
+  assert.match(notificationsMigration, /sync_notification_message/);
+});
+
+test("notification enum supports host player-joined notifications", () => {
+  assert.match(notificationEnumMigration, /ALTER TYPE public\.notification_type/);
+  assert.match(notificationEnumMigration, /ADD VALUE IF NOT EXISTS 'player_joined'/);
+});
+test("profile loader cannot re-trigger itself and overwrite user input", () => {
+  assert.match(profilePage, /\}, \[router\]\);/);
+  assert.doesNotMatch(profilePage, /\}, \[cityId/);
+  assert.match(profilePage, /savedCity/);
+});
+const nextConfig = await read("next.config.mjs");
+const createForm = await read("src/components/matches/create-match-form.tsx");
+
+test("OAuth avatar hosts are allowed by next/image", () => {
+  assert.match(nextConfig, /platform-lookaside\.fbsbx\.com/);
+  assert.match(nextConfig, /fbcdn\.net/);
+  assert.match(nextConfig, /googleusercontent\.com/);
+});
+
+test("create match navigates without a cancelling router.refresh", () => {
+  assert.match(createForm, /router\.push\(`\/matches\/\$\{json\.matchId\}/);
+  const executable = createForm.replace(/\/\/.*$/gm, "");
+  assert.doesNotMatch(executable, /router\.refresh\(\)/);
+});

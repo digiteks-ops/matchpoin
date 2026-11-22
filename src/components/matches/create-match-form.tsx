@@ -350,7 +350,8 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
       }
 
       router.push(`/matches/${json.matchId}${invited && inviteUserId ? "?invited=1" : ""}`);
-      router.refresh();
+      // No router.refresh() here: calling refresh immediately after push can
+      // cancel the navigation in Next 14, leaving the user on /matches/new.
     } catch (err) {
       logError("create.match", err);
       setError(isOffline() ? ERROR_NETWORK : ERROR_CREATE_MATCH);

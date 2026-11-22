@@ -23,7 +23,7 @@ function parseProfileInput(value: unknown): ProfileInput | null {
   if (
     typeof body.fullName !== "string" ||
     !body.fullName.trim() ||
-    body.fullName.length > 160 ||
+    body.fullName.trim().length > 50 ||
     (body.phone !== null && typeof body.phone !== "string") ||
     (body.gender !== null && !genders.has(String(body.gender))) ||
     (body.cityId !== null && typeof body.cityId !== "string") ||

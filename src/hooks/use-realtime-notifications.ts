@@ -127,12 +127,3 @@ export function useRealtimeNotifications() {
     refetch: fetchNotifications,
   };
 }
-
-export function useNotificationSound() {
-  const playSound = useCallback(() => {
-    const audio = new Audio("/notification.mp3");
-    audio.volume = 0.3;
-    audio.play().catch(() => {});
-  }, []);
-  return { playSound };
-}

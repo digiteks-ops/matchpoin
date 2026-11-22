@@ -36,6 +36,11 @@
     "test:supabase-storage": "node --test scripts/supabase/storage-uploads.test.mjs",
     "test:supabase-perf": "node --test scripts/supabase/perf-audit.test.mjs",
     "test:supabase-frontend-perf": "node --test scripts/supabase/frontend-perf.test.mjs",
+    "test:supabase-rls": "node --test scripts/supabase/rls-hardening.test.mjs",
+    "test:unit": "node --test scripts/unit",
+    "audit:rls": "node scripts/supabase/rls-audit.mjs",
+    "test:e2e:playwright": "playwright test",
+    "verify:live": "node scripts/verify-live.mjs",
     "db:explain": "node --env-file=.env.local scripts/supabase/explain-hot-queries.mjs",
     "db:time": "node --env-file=.env.local scripts/supabase/time-hot-endpoints.mjs",
     "db:backup:mysql": "node --env-file=.env.local scripts/supabase/migrate-mysql-data.mjs --backup-only",
@@ -63,6 +68,7 @@
     "ws": "^8.23.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "@types/node": "^20.12.7",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.0",

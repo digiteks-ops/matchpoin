@@ -64,3 +64,8 @@ test("storage migration creates buckets and owner/participant policies", () => {
     /"match results participant insert"[\s\S]*?public\.is_match_participant\(split_part\(name, '\/', 2\)::uuid, auth\.uid\(\)\)/
   );
 });
+
+test("storage migration drops stale policies through the catalog before recreating", () => {
+  assert.match(migration, /FROM pg_policies[\s\S]*?schemaname = 'storage'[\s\S]*?tablename = 'objects'/);
+  assert.match(migration, /DROP POLICY IF EXISTS %I ON storage\.objects/);
+});

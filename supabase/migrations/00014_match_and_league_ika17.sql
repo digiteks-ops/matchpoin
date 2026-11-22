@@ -788,6 +788,10 @@ BEGIN
   );
 END $$;
 
+-- A later migration (00017) gives p_reason a default. Dropping first keeps this
+-- file re-runnable on a database that already has the newer signature.
+DROP FUNCTION IF EXISTS public.admin_reject_registration(UUID, UUID, TEXT);
+
 CREATE OR REPLACE FUNCTION public.admin_reject_registration(
   p_registration_id UUID,
   p_actor_id UUID,
