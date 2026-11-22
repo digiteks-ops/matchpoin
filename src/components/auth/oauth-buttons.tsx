@@ -186,11 +186,11 @@ export function OAuthButtons({ redirectTo = "/dashboard", mode = "signin" }: OAu
   return (
     <div className="space-y-3">
       {isLoading && <OAuthRedirectOverlay provider={isLoading} />}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2">
         <Button
           type="button"
           variant="outline"
-          className="w-full gap-2"
+          className="w-full justify-start gap-2"
           disabled={isLoading !== null}
           onClick={() => handleOAuth("google")}
           title={
@@ -205,7 +205,7 @@ export function OAuthButtons({ redirectTo = "/dashboard", mode = "signin" }: OAu
         <Button
           type="button"
           variant="outline"
-          className="w-full gap-2"
+          className="w-full justify-start gap-2"
           disabled={isLoading !== null}
           onClick={() => handleOAuth("facebook")}
           title={
