@@ -40,7 +40,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       logError('match.join.notify', notifyError, { matchId: params.id, userId: user.id });
     }
 
-    return NextResponse.json({ success: true, message: 'Anda berhasil bergabung dengan pertandingan.' });
+    return NextResponse.json({ success: true, message: 'Permohonan terkirim. Menunggu persetujuan host.' });
   } catch (err: any) {
     console.error('Join request error:', err);
     return NextResponse.json({ success: false, message: err.message || 'Gagal mengajukan permohonan.' }, { status: 400 });

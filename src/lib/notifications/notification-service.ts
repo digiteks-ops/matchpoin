@@ -269,8 +269,8 @@ export async function notifyOpenMatchJoined(
 ): Promise<void> {
   await createNotification(organizerId, {
     type: "player_joined",
-    title: "Pemain Bergabung",
-    message: `${playerName} bergabung ke "${matchTitle}".`,
+    title: "Permohonan Bergabung",
+    message: `${playerName} mengajukan bergabung ke "${matchTitle}". Menunggu persetujuan Anda.`,
     data: { matchId, matchTitle, playerName },
     referenceId: matchId,
   });
