@@ -43,9 +43,9 @@ test("callback handles denied consent, missing code and exchange failure in Indo
 });
 
 test("OAuth buttons are always rendered and labelled Lanjutkan", () => {
-  assert.match(buttons, /const label = "Lanjutkan"/);
-  assert.match(buttons, /Lanjutkan dengan Google/);
-  assert.match(buttons, /Lanjutkan dengan Facebook/);
+  assert.match(buttons, /const label = mode === "signup" \? "Daftar" : "Masuk"/);
+  assert.match(buttons, /\{label\} dengan Google/);
+  assert.match(buttons, /\{label\} dengan Facebook/);
   assert.doesNotMatch(buttons, /if \(!enabled\.google && !enabled\.facebook\) return null/);
 });
 

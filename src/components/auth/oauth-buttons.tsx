@@ -181,7 +181,7 @@ export function OAuthButtons({ redirectTo = "/dashboard", mode = "signin" }: OAu
     }
   };
 
-  const label = "Lanjutkan";
+  const label = mode === "signup" ? "Daftar" : "Masuk";
 
   return (
     <div className="space-y-3">
