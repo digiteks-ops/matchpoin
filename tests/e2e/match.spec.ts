@@ -47,11 +47,20 @@ test("second account joins the open slot", async ({ page, browser }) => {
   const context2 = await browser.newContext();
   const page2 = await context2.newPage();
   await login(page2, player2.email, player2.password);
-  await page2.goto(`/matches/${matchId}`);
+await page2.goto(`/matches/${matchId}`);
+  const joinResponsePromise = page2.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/matches/${matchId}/join`) &&
+      response.request().method() === "POST"
+  );
   await page2.getByRole("button", { name: /ajukan slot|gabung/i }).first().click();
-  await expect(page2.getByText(/bergabung|terdaftar|menunggu/i).first()).toBeVisible({
-    timeout: 20_000,
-  });
+  const joinResponse = await joinResponsePromise;
+  expect(joinResponse.status()).toBe(200);
+
+  const { body: joinedRows } = await serviceRest(
+    `match_participants?select=user_id,match_id&match_id=eq.${matchId}&user_id=eq.${player2Id}&left_at=is.null`
+  );
+  expect(Array.isArray(joinedRows) ? joinedRows.length : 0).toBe(1);
   await context2.close();
 });
 
