@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TournamentLeaderboard } from "@/components/tournaments/tournament-leaderboard";
+import { TournamentParticipants } from "@/components/tournaments/tournament-participants";
 import { AlertCircle, Calendar, CheckCircle2, Clock, Loader2, MapPin, Trophy, Users } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { formatIndonesianDate } from "@/lib/utils";
@@ -423,6 +424,8 @@ export default function TournamentsPage() {
             })
           )}
         </section>
+
+        <TournamentParticipants />
 
         <TournamentLeaderboard />
 

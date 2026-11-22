@@ -40,6 +40,7 @@ export interface LeagueOverview {
     max_participants: number;
   } | null;
   participants: Array<{
+    entryId: string;
     userId: string;
     name: string;
     avatarUrl: string | null;
@@ -295,6 +296,7 @@ export async function getLeagueOverview(category: string): Promise<LeagueOvervie
   const participants = (entries ?? []).map((entry) => {
     const player = playerById.get(entry.user_id);
     return {
+      entryId: entry.entry_id ?? entry.user_id,
       userId: entry.user_id,
       name: player?.display_name || player?.full_name || "Pemain MATCHPOIN",
       avatarUrl: player?.avatar_url ?? null,
