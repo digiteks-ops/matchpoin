@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -403,6 +404,7 @@ export default function AdminSettingsClient({
                         <th className="pb-2">Venue</th>
                         <th className="pb-2">Status</th>
                         <th className="pb-2">Peserta</th>
+                        <th className="pb-2">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -419,6 +421,22 @@ export default function AdminSettingsClient({
                           </td>
                           <td className="py-3">{getStatusBadge(match.status)}</td>
                           <td className="py-3 text-center text-slate-600">{match.participant_count}</td>
+                          <td className="py-3">
+                            <div className="flex flex-col gap-1 text-xs font-semibold">
+                              <Link
+                                href={`/matches/${match.id}`}
+                                className="text-matchpoin-navy hover:underline"
+                              >
+                                Detail
+                              </Link>
+                              <Link
+                                href={`/admin/matches/${match.id}/result`}
+                                className="text-emerald-700 hover:underline"
+                              >
+                                Input Hasil
+                              </Link>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

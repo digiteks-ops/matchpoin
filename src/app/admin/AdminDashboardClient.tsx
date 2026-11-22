@@ -81,11 +81,18 @@ export default function AdminDashboardClient({ initialStats, initialActivity, er
             <h1 className="text-3xl font-extrabold font-heading text-slate-900">Dasbor Admin</h1>
             <p className="text-slate-600 mt-1 text-sm">Ringkasan operasional platform MATCHPOIN.</p>
           </div>
-          <Link href="/admin/tournaments">
-            <Button variant="tennis" className="font-bold text-matchpoin-navy">
-              Kelola Persetujuan Turnamen
-            </Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/matches/new">
+              <Button variant="outline" className="font-bold">
+                Buat Pertandingan
+              </Button>
+            </Link>
+            <Link href="/admin/tournaments">
+              <Button variant="tennis" className="font-bold text-matchpoin-navy">
+                Kelola Persetujuan Turnamen
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {errorMessage && (
