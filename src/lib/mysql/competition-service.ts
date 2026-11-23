@@ -273,11 +273,13 @@ export async function registerForCompetition(
   const category = tournament.category || inferCategory(tournament.name);
   const doubles = isDoubles(category);
 
+  // Duplicate check is PER CATEGORY: a player may enter several categories
+  // (e.g. Single Man + Double Man), so only rows of this category count.
   const [existingEntries] = await connection.execute<RowDataPacket[]>(
     `SELECT user_id
      FROM tournament_participants
-     WHERE tournament_id = ? AND user_id IN (?, ?) AND status <> 'rejected'`,
-    [leagueId, userId, partnerUserId ?? userId]
+     WHERE tournament_id = ? AND category = ? AND user_id IN (?, ?) AND status <> 'rejected'`,
+    [leagueId, category, userId, partnerUserId ?? userId]
   );
   const registeredUserIds = existingEntries.map((entry) => String(entry.user_id));
 

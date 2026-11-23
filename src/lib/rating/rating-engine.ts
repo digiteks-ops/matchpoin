@@ -5,6 +5,7 @@
  */
 
 import {
+  DTR_ABSOLUTE_MIN_RATING,
   DTR_CATEGORIES,
   DTR_DEFAULT_RATING,
   DTR_MIN_RATING,
@@ -15,7 +16,15 @@ import {
   dtrStartingRating,
 } from "./dtr-core.mjs";
 
-export { DTR_CATEGORIES, DTR_DEFAULT_RATING, DTR_MIN_RATING, dtrCategoryLabel, dtrKFactor, dtrStartingRating };
+export {
+  DTR_ABSOLUTE_MIN_RATING,
+  DTR_CATEGORIES,
+  DTR_DEFAULT_RATING,
+  DTR_MIN_RATING,
+  dtrCategoryLabel,
+  dtrKFactor,
+  dtrStartingRating,
+};
 
 export type DtrCategory = "Beginner" | "Intermediate" | "Advanced" | "Expert";
 
@@ -28,11 +37,11 @@ export interface RatingCategoryInfo {
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   beginner:
-    "Pemain pemula, membiasakan pukulan dasar, servis, dan konsistensi rally.",
+    "Beginner: maksimal 2 tahun bermain. Membiasakan pukulan dasar, servis, dan konsistensi rally.",
   intermediate:
-    "Rally stabil dengan tempo sedang, pemahaman penempatan lapangan, dan pengalaman tanding.",
+    "Intermediate: lebih dari 2 tahun bermain. Rally stabil dengan tempo sedang dan pemahaman penempatan lapangan.",
   advanced:
-    "Pukulan kuat, antisipasi taktis tinggi, dan performa kompetisi yang matang.",
+    "Advanced: pernah mengikuti PORDA, PORPROV, PON. Pukulan kuat, antisipasi taktis tinggi, dan performa kompetisi yang matang.",
   expert:
     "Pemain turnamen tingkat tinggi dengan konsistensi dan strategi eksekusi tinggi.",
 };
@@ -58,7 +67,8 @@ export const DEFAULT_RATING_CONFIG: RatingEngineConfig = {
   kFactorProvisional: 30,
   provisionalMatchThreshold: 11,
   logisticDivisor: 400,
-  minRating: DTR_MIN_RATING,
+  // No 1000 floor: DTR_MIN_RATING is the starting rating, not a minimum.
+  minRating: DTR_ABSOLUTE_MIN_RATING,
   maxRating: Number.MAX_SAFE_INTEGER,
 };
 

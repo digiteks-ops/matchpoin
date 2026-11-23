@@ -29,6 +29,8 @@ export interface SupabasePublicPlayer {
   allowInvites: boolean;
   showRating: boolean;
   isVerifiedPlayer: boolean;
+  /** Waktu login terakhir (ISO 8601); null bila belum pernah tercatat. */
+  lastSeenAt: string | null;
 }
 
 export interface SupabasePlayerCity {
@@ -55,9 +57,11 @@ async function errorMessage(response: Response, fallback: string): Promise<strin
   return readErrorMessage(response, fallback);
 }
 
+export type PublicPlayerOrder = "name" | "rating" | "last_active";
+
 export async function fetchPublicPlayers(
   limit: number,
-  order: "name" | "rating" = "name"
+  order: PublicPlayerOrder = "name"
 ): Promise<{ players: SupabasePublicPlayer[]; cities: SupabasePlayerCity[] }> {
   const query = new URLSearchParams({ limit: String(limit), order });
   const response = await fetch(`/api/players?${query}`, { cache: "no-store" });

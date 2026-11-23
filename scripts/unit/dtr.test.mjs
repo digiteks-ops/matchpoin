@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  DTR_ABSOLUTE_MIN_RATING,
   DTR_MIN_RATING,
   calculateDtrDoubles,
   calculateDtrSingles,
@@ -58,11 +59,31 @@ test("beating a stronger opponent gains more; losing to a weaker opponent costs 
   assert.ok(Math.abs(upset.playerB.delta) > Math.abs(favoriteWins.playerB.delta));
 });
 
-test("rating never drops below the DTR minimum", () => {
+test("rating can drop below 1000", () => {
   const result = calculateDtrSingles(player("a", DTR_MIN_RATING), player("b", DTR_MIN_RATING), "B");
-  assert.ok(result.playerA.newRating >= DTR_MIN_RATING);
-  assert.equal(result.playerA.delta, 0);
+  assert.equal(result.playerA.newRating, DTR_MIN_RATING - 15);
+  assert.equal(result.playerA.delta, -15);
   assert.equal(result.playerB.newRating, DTR_MIN_RATING + 15);
+});
+
+test("rating keeps dropping below 1000 on repeated losses", () => {
+  let rating = 1000;
+  for (let match = 0; match < 5; match += 1) {
+    const result = calculateDtrSingles(player("a", rating), player("b", 1000), "B");
+    assert.ok(result.playerA.newRating < rating);
+    rating = result.playerA.newRating;
+  }
+  assert.ok(rating < 1000);
+  // A sub-1000 rating is still read back as-is, not snapped back to 1000.
+  const next = calculateDtrSingles(player("a", rating), player("b", rating), "A");
+  assert.equal(next.playerA.oldRating, rating);
+  assert.equal(next.playerB.oldRating, rating);
+});
+
+test("rating never goes below the absolute sanity floor", () => {
+  const result = calculateDtrSingles(player("a", 16), player("b", 5000), "B");
+  assert.equal(result.playerA.oldRating, 16);
+  assert.ok(result.playerA.newRating >= DTR_ABSOLUTE_MIN_RATING);
 });
 
 test("doubles uses team averages and applies the same change to both teammates", () => {

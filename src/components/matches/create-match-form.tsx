@@ -12,6 +12,7 @@ import { MATCH_CATEGORY_LABELS, type MatchCategory, type MatchType, type UmpireP
 import { ERROR_CREATE_MATCH, ERROR_NETWORK, isOffline, logError } from "@/lib/errors";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { toPlatformIsoString } from "@/lib/utils";
+import { RATING_TIER_OPTIONS } from "@/lib/rating/rating-tier-core.mjs";
 import { createClient } from "@/lib/supabase/client";
 
 export interface CityOption {
@@ -553,10 +554,11 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
                 className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:border-matchpoin-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
                 disabled={isSubmitting}
               >
-                <option value="all">Semua Level</option>
-                <option value="beginner">Pemula</option>
-                <option value="intermediate">Menengah</option>
-                <option value="advanced">Mahir</option>
+                {RATING_TIER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

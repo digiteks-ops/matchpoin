@@ -139,7 +139,20 @@ export async function submitMySqlMatchResult(
 ) {
   const match = await lockMatch(connection, matchId);
   if (match.organizer_id !== userId) {
-    throw new MatchWorkflowError("Hanya Host (penyelenggara) yang dapat mengirim hasil resmi pertandingan.");
+    // Kedua pihak boleh submit: host, atau lawan yang sudah terkonfirmasi.
+    const [participantRows] = await connection.execute<Array<{ user_id: string } & RowDataPacket>>(
+      `SELECT user_id FROM match_participants
+       WHERE match_id = ? AND user_id = ? AND left_at IS NULL
+         AND (is_organizer = TRUE OR
+           COALESCE(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.status')), 'confirmed') = 'confirmed')
+       LIMIT 1`,
+      [matchId, userId]
+    );
+    if (participantRows.length === 0) {
+      throw new MatchWorkflowError(
+        "Hanya Host atau lawan terkonfirmasi yang dapat mengirim hasil pertandingan ini."
+      );
+    }
   }
   if (match.status === "cancelled") {
     throw new MatchWorkflowError("Pertandingan yang dibatalkan tidak dapat mengirim hasil.");

@@ -52,29 +52,24 @@ const LEAGUE = {
 
 const CATEGORIES = [
   {
-    category: "womens_singles",
-    label: "Single Woman",
-    slug: "league-q1-2027-womens-singles",
-  },
-  {
-    category: "womens_doubles",
-    label: "Double Woman",
-    slug: "league-q1-2027-womens-doubles",
-  },
-  {
     category: "mens_singles",
-    label: "Single Man",
+    label: "Single Man Beginner",
     slug: "league-q1-2027-mens-singles",
   },
   {
     category: "mens_doubles",
-    label: "Double Man",
+    label: "Double Man Beginner–Intermediate",
     slug: "league-q1-2027-mens-doubles",
   },
   {
-    category: "mixed_doubles",
-    label: "Double Mix",
-    slug: "league-q1-2027-mixed-doubles",
+    category: "womens_doubles",
+    label: "Double Woman Beginner",
+    slug: "league-q1-2027-womens-doubles",
+  },
+  {
+    category: "womens_doubles_intermediate",
+    label: "Double Woman Beginner–Intermediate",
+    slug: "league-q1-2027-womens-doubles-intermediate",
   },
 ];
 
@@ -229,7 +224,7 @@ async function seedLeagues(userId) {
       organizer_id: userId,
       format: "round_robin",
       status: "registration_open",
-      registration_open_at: "2026-11-15T00:00:00+08:00",
+      registration_open_at: "2026-12-01T00:00:00+08:00",
       registration_close_at: "2026-12-31T23:59:59+08:00",
       start_date: LEAGUE.start,
       end_date: LEAGUE.end,

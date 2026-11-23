@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import {
   Users,
-  Trophy,
   Calendar,
   CheckCircle2,
   ArrowRight,
@@ -15,30 +14,33 @@ import {
   Flame,
   UserPlus,
 } from "lucide-react";
+import { RATING_TIER_RANGES } from "@/lib/rating/rating-tier-core.mjs";
 
 export default function HomePage() {
+  // Rentang diambil dari satu sumber (rating-tier-core) agar sama dengan
+  // filter level di /players dan /leaderboard.
   const ratingLevels = [
     {
       category: "Beginner",
-      range: "1000 – 1499",
+      range: RATING_TIER_RANGES.beginner,
       desc: "Baru memulai olahraga tenis, membiasakan teknik pukulan dasar dan servis.",
       color: "bg-blue-50 text-blue-800 border-blue-200",
     },
     {
       category: "Intermediate",
-      range: "1500 – 1999",
+      range: RATING_TIER_RANGES.intermediate,
       desc: "Konsisten melakukan rally pukulan sedang, memahami penempatan posisi lapangan.",
       color: "bg-emerald-50 text-emerald-800 border-emerald-200",
     },
     {
       category: "Advanced",
-      range: "2000 – 2499",
+      range: RATING_TIER_RANGES.advanced,
       desc: "Menguasai variasi spin, kontrol kedalaman bola, serta ritme pertandingan kompetitif.",
       color: "bg-amber-50 text-amber-800 border-amber-200",
     },
     {
       category: "Expert",
-      range: "2500+",
+      range: RATING_TIER_RANGES.expert,
       desc: "Pemain turnamen tingkat tinggi dengan konsistensi luar biasa dan strategi level lanjut.",
       color: "bg-rose-50 text-rose-800 border-rose-200",
     },
@@ -173,7 +175,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {ratingLevels.map((lvl) => (
               <div
                 key={lvl.category}
@@ -194,7 +196,7 @@ export default function HomePage() {
             <div className="flex items-center gap-3">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
               <p className="text-xs sm:text-sm text-slate-700">
-                Semua pemain terdaftar mulai dengan Rating Provisori 1.00 dan berkembang sesuai performa match nyata.
+                Semua pemain terdaftar mulai dengan Rating Provisori 1000 dan berkembang sesuai performa match nyata.
               </p>
             </div>
             <Link href="/register">
@@ -265,7 +267,7 @@ export default function HomePage() {
               </div>
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Rating awal 1.00</span>
+                <span>Rating awal 1000</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-matchpoin-tennis" />

@@ -11,8 +11,29 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Logo } from "@/components/layout/logo";
 import { createClient } from "@/lib/supabase/client";
 import { ensurePlayerRecords } from "@/lib/services/player-service";
+import { recordLastSeen } from "@/lib/services/last-seen";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
+import { dtrStartingRating } from "@/lib/rating/dtr-core.mjs";
+import type { SkillLevel } from "@/types/database.types";
 import { AlertCircle, ArrowLeft, Loader2, CheckCircle2, ShieldCheck } from "lucide-react";
+
+// Self rating wajib dipilih saat mendaftar: hanya dua pilihan.
+//   beginner     -> rating awal 1000, langsung tampil di leaderboard
+//   intermediate -> rating awal 1500, tampil setelah 3 pertandingan terverifikasi
+const STARTING_LEVELS: { value: SkillLevel; label: string; hint: string; leaderboard: string }[] = [
+  {
+    value: "beginner",
+    label: "Beginner",
+    hint: "Maksimal 2 tahun bermain",
+    leaderboard: "Langsung tampil di leaderboard",
+  },
+  {
+    value: "intermediate",
+    label: "Intermediate",
+    hint: "Lebih dari 2 tahun bermain",
+    leaderboard: "Tampil di leaderboard setelah 3x bertanding",
+  },
+];
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -21,6 +42,9 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  // Wajib dipilih sendiri; sengaja tidak diberi nilai awal agar tidak ada
+  // pemain yang terdaftar tanpa sadar dengan rating default.
+  const [startingLevel, setStartingLevel] = useState<SkillLevel | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -35,6 +59,11 @@ export default function RegisterPage() {
     }
     if (new TextEncoder().encode(password).length > 72) {
       setErrorMessage("Kata sandi melebihi batas 72 byte (UTF-8).");
+      return;
+    }
+
+    if (!startingLevel) {
+      setErrorMessage("Pilih self rating Anda: Beginner atau Intermediate.");
       return;
     }
 
@@ -53,6 +82,8 @@ export default function RegisterPage() {
         options: {
           data: {
             full_name: fullName.trim(),
+            // Dibaca trigger handle_new_user untuk menetapkan rating awal.
+            starting_level: startingLevel,
           },
         },
       });
@@ -65,7 +96,12 @@ export default function RegisterPage() {
 
       if (data.user) {
         try {
-          await ensurePlayerRecords(data.user.id, data.user.email || email, fullName.trim());
+          await ensurePlayerRecords(
+            data.user.id,
+            data.user.email || email,
+            fullName.trim(),
+            startingLevel
+          );
         } catch (e) {
           console.warn("Player sync on register:", e);
         }
@@ -75,6 +111,8 @@ export default function RegisterPage() {
       setIsLoading(false);
 
       if (data.session) {
+        // Sesi langsung aktif (konfirmasi email nonaktif): catat sebagai login.
+        if (data.user) await recordLastSeen(data.user.id, { force: true });
         setTimeout(() => {
           router.push("/dashboard");
           router.refresh();
@@ -193,10 +231,55 @@ export default function RegisterPage() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label>
+                  Self Rating <span className="text-rose-600">*</span>
+                </Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {STARTING_LEVELS.map((level) => {
+                    const active = startingLevel === level.value;
+                    return (
+                      <button
+                        key={level.value}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setStartingLevel(level.value)}
+                        disabled={isLoading}
+                        className={`rounded-xl border p-2.5 text-left transition-colors disabled:opacity-60 ${
+                          active
+                            ? "border-matchpoin-navy bg-matchpoin-navy/5 ring-1 ring-matchpoin-navy"
+                            : "border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <span className="flex items-center justify-between text-xs font-bold text-slate-900">
+                          {level.label}
+                          <span className="text-[11px] font-semibold text-matchpoin-navy">
+                            {dtrStartingRating(level.value)}
+                          </span>
+                        </span>
+                        <span className="mt-0.5 block text-[10px] leading-snug text-slate-500">
+                          {level.hint}
+                        </span>
+                        <span className="mt-0.5 block text-[10px] leading-snug text-slate-400">
+                          {level.leaderboard}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Rating awal ditetapkan sekali dari self rating ini dan tidak dapat diubah lewat
+                  halaman profil setelahnya. Hasil pertandingan berikutnya menaikkan atau
+                  menurunkan rating sesuai aturan DTR.
+                </p>
+              </div>
+
               <div className="p-3 rounded-lg bg-slate-100 flex items-start gap-2 text-[11px] text-slate-600">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <span>
-                  Autentikasi aman via Supabase. Pemain baru secara otomatis memperoleh Rating Provisori 1.00.
+                  Autentikasi aman via Supabase. Rating awal DTR Anda{" "}
+                  {startingLevel ? dtrStartingRating(startingLevel) : "—"} sesuai self rating
+                  yang dipilih.
                 </span>
               </div>
             </CardContent>

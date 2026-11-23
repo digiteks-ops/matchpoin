@@ -1,5 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { IKA17_CATEGORIES } from "@/lib/tournaments/ika17";
 
 export interface ManagedRegistration {
   id: string;
@@ -155,16 +156,15 @@ export async function getManagedLeague(tournamentId: string): Promise<ManagedLea
   });
   if (leagueError) throw new Error(`Gagal memuat kategori liga: ${leagueError.message}`);
 
-  const categoryOrder = [
-    "womens_singles",
-    "womens_doubles",
-    "mens_singles",
-    "mens_doubles",
-    "mixed_doubles",
-  ];
+  // Urutan tampilan mengikuti daftar resmi di `ika17-core.mjs`; kategori yang
+  // tidak dikenal ditaruh paling belakang alih-alih menjadi index -1.
+  const categoryOrder: string[] = IKA17_CATEGORIES.map((entry) => entry.id);
+  const rankOf = (category: string | null) => {
+    const index = categoryOrder.indexOf(category ?? "");
+    return index === -1 ? categoryOrder.length : index;
+  };
   const categories = ((leagueRows ?? []) as LeagueRow[]).sort(
-    (a, b) =>
-      categoryOrder.indexOf(a.category ?? "") - categoryOrder.indexOf(b.category ?? "")
+    (a, b) => rankOf(a.category) - rankOf(b.category)
   );
   const tournamentIds = categories.map((row) => row.id);
   if (tournamentIds.length === 0) throw new Error("Kategori liga tidak ditemukan.");

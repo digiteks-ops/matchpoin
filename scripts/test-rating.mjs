@@ -54,10 +54,10 @@ log("Favorite beats weaker", `+${favoriteWins.playerA.delta}`);
 log("Underdog beats stronger", `+${upset.playerA.delta}`);
 log("Stronger loses to underdog", `${upset.playerB.delta}`);
 
-// 5. Minimum rating
-const floor = calculateDtrSingles(player("a", DTR_MIN_RATING), player("b", DTR_MIN_RATING), "B");
-assert.ok(floor.playerA.newRating >= DTR_MIN_RATING);
-log("Minimum rating", `${floor.playerA.newRating}`);
+// 5. Rating can drop below 1000
+const belowFloor = calculateDtrSingles(player("a", DTR_MIN_RATING), player("b", DTR_MIN_RATING), "B");
+assert.equal(belowFloor.playerA.newRating, DTR_MIN_RATING - 15);
+log("Rating below 1000", `${belowFloor.playerA.newRating}`);
 
 // 6. Doubles: team averages and equal team change
 const doubles = calculateDtrDoubles(

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 export interface TournamentListItem {
   id: string;
   name: string;
+  slug: string | null;
   category: string;
   season: string;
   league_key: string | null;
@@ -94,7 +95,7 @@ export async function getTournamentList(userId: string | null): Promise<Tourname
   const { data: tournaments, error } = await supabase
     .from("tournaments")
     .select(
-      "id, name, category, season, league_key, league_name, start_date, end_date, main_event_start_date, main_event_end_date, registration_deadline, status, max_participants"
+      "id, name, slug, category, season, league_key, league_name, start_date, end_date, main_event_start_date, main_event_end_date, registration_deadline, status, max_participants"
     )
     .eq("is_league", true)
     .order("start_date", { ascending: true })
@@ -171,6 +172,7 @@ export async function getTournamentList(userId: string | null): Promise<Tourname
   return (tournaments ?? []).map((row) => ({
     id: row.id,
     name: row.name,
+    slug: row.slug ?? null,
     category: row.category ?? "mens_singles",
     season: row.season ?? "Musim 1 2027",
     league_key: row.league_key ?? null,

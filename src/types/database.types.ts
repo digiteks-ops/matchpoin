@@ -125,6 +125,7 @@ export interface Database {
           allow_invites: boolean;
           completion_score: number;
           is_verified_player: boolean;
+          last_seen_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -152,6 +153,7 @@ export interface Database {
           allow_invites?: boolean;
           completion_score?: number;
           is_verified_player?: boolean;
+          last_seen_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -179,6 +181,7 @@ export interface Database {
           allow_invites?: boolean;
           completion_score?: number;
           is_verified_player?: boolean;
+          last_seen_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -199,6 +202,7 @@ export interface Database {
           current_streak_type: string;
           last_match_at: string | null;
           last_rating_change_at: string | null;
+          starting_rating_set_at: string | null;
           rating_algorithm_version: number;
           created_at: string;
           updated_at: string;
@@ -217,6 +221,7 @@ export interface Database {
           current_streak_type?: string;
           last_match_at?: string | null;
           last_rating_change_at?: string | null;
+          starting_rating_set_at?: string | null;
           rating_algorithm_version?: number;
           created_at?: string;
           updated_at?: string;
@@ -235,6 +240,7 @@ export interface Database {
           current_streak_type?: string;
           last_match_at?: string | null;
           last_rating_change_at?: string | null;
+          starting_rating_set_at?: string | null;
           rating_algorithm_version?: number;
           created_at?: string;
           updated_at?: string;
@@ -330,4 +336,6 @@ export interface FullPlayerProfile {
   isProfilePublic: boolean;
   allowInvites: boolean;
   showRating?: boolean;
+  /** Waktu login terakhir (ISO 8601); null bila belum pernah tercatat. */
+  lastSeenAt?: string | null;
 }

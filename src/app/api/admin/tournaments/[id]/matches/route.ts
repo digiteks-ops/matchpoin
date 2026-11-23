@@ -2,18 +2,14 @@ import { NextResponse } from "next/server";
 import { requireApiRole } from "@/lib/auth/guards";
 import { logError } from "@/lib/errors";
 import { createOpenMatch } from "@/lib/services/match-service";
-import type { MatchCategory } from "@/lib/matches/constants";
+import { VALID_CATEGORIES, type MatchCategory } from "@/lib/matches/constants";
 import { getManagedLeague, getManagedTournamentCategory } from "@/lib/supabase/tournament-admin-service";
 
 export const dynamic = "force-dynamic";
 
-const CATEGORIES: MatchCategory[] = [
-  "mens_singles",
-  "womens_singles",
-  "mens_doubles",
-  "womens_doubles",
-  "mixed_doubles",
-];
+// Pakai daftar kategori bersama supaya kategori liga baru
+// (`womens_doubles_intermediate`) tidak ditolak saat admin membuat match.
+const CATEGORIES: MatchCategory[] = VALID_CATEGORIES;
 
 function cleanIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];

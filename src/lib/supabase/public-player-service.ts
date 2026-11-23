@@ -33,6 +33,11 @@ export interface PublicPlayer {
   allowInvites: boolean;
   showRating: boolean;
   isVerifiedPlayer: boolean;
+  /**
+   * Waktu login terakhir (ISO 8601) dari `player_profiles.last_seen_at`.
+   * Null bila pemain belum pernah login sejak pencatatan ini ada.
+   */
+  lastSeenAt: string | null;
 }
 
 export interface PlayerCity {
@@ -69,9 +74,16 @@ interface PublicPlayerRow {
   losses: number | null;
   draws: number | null;
   is_verified_player: boolean | null;
+  last_seen_at: string | null;
 }
 
-const ORDERING = {
+interface OrderClause {
+  column: string;
+  ascending: boolean;
+  nullsFirst?: boolean;
+}
+
+const ORDERING: Record<PublicPlayerOrder, OrderClause[]> = {
   rating: [
     { column: "current_rating", ascending: false },
     { column: "wins", ascending: false },
@@ -79,7 +91,20 @@ const ORDERING = {
     { column: "display_name", ascending: true },
   ],
   name: [{ column: "display_name", ascending: true }],
-} as const;
+  // Terakhir login paling atas. `nullsFirst: false` menaruh pemain yang belum
+  // pernah login di paling bawah, bukan di atas.
+  last_active: [
+    { column: "last_seen_at", ascending: false, nullsFirst: false },
+    { column: "display_name", ascending: true },
+  ],
+} satisfies Record<PublicPlayerOrder, OrderClause[]>;
+
+export type PublicPlayerOrder = "name" | "rating" | "last_active";
+
+/** Validasi `?order=` dari query string; nilai tak dikenal jadi "name". */
+export function normalizePublicPlayerOrder(value: string | null): PublicPlayerOrder {
+  return value === "rating" || value === "last_active" ? value : "name";
+}
 
 function arrayValue(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -121,11 +146,24 @@ function mapPublicPlayer(row: PublicPlayerRow): PublicPlayer {
     allowInvites: Boolean(row.allow_invites),
     showRating: Boolean(row.show_rating),
     isVerifiedPlayer: Boolean(row.is_verified_player),
+    lastSeenAt: row.last_seen_at ?? null,
   };
 }
 
 const PUBLIC_PLAYER_COLUMNS =
-  "user_id, display_name, full_name, avatar_url, gender, city_id, city_name, province, bio, preferred_hand, backhand, play_frequency, preferred_categories, preferred_times, self_assessed_level, playing_since, completion_score, allow_invites, show_rating, current_rating, peak_rating, matches_played, wins, losses, draws, is_verified_player";
+  "user_id, display_name, full_name, avatar_url, gender, city_id, city_name, province, bio, preferred_hand, backhand, play_frequency, preferred_categories, preferred_times, self_assessed_level, playing_since, completion_score, allow_invites, show_rating, current_rating, peak_rating, matches_played, wins, losses, draws, is_verified_player, last_seen_at";
+
+/** Sama seperti di atas tanpa `last_seen_at` (sebelum migration 00035). */
+const PUBLIC_PLAYER_COLUMNS_LEGACY = PUBLIC_PLAYER_COLUMNS.replace(", last_seen_at", "");
+
+/**
+ * True bila error muncul karena `last_seen_at` belum ada di view, yaitu ketika
+ * migration 00035 belum dijalankan. Hanya kasus itu yang di-fallback, supaya
+ * error lain tetap terlihat.
+ */
+function isMissingLastSeenColumn(error: { message?: string } | null): boolean {
+  return Boolean(error?.message && error.message.includes("last_seen_at"));
+}
 
 function client() {
   // Public data (players view + active cities) only needs the anon key. Using
@@ -136,25 +174,57 @@ function client() {
   return supabase;
 }
 
+async function runPublicPlayersQuery(
+  limit: number,
+  order: PublicPlayerOrder,
+  columns: string = PUBLIC_PLAYER_COLUMNS
+) {
+  let query = client().from("public_players").select(columns).limit(limit);
+  for (const clause of ORDERING[order]) {
+    query = query.order(clause.column, {
+      ascending: clause.ascending,
+      ...(clause.nullsFirst === undefined ? {} : { nullsFirst: clause.nullsFirst }),
+    });
+  }
+  return query;
+}
+
 export async function getPublicPlayers(
   limit: number,
-  order: "name" | "rating" = "name"
+  order: PublicPlayerOrder = "name"
 ): Promise<PublicPlayer[]> {
-  let query = client().from("public_players").select(PUBLIC_PLAYER_COLUMNS).limit(limit);
-  for (const clause of ORDERING[order]) {
-    query = query.order(clause.column, { ascending: clause.ascending });
+  let { data, error } = await runPublicPlayersQuery(limit, order);
+
+  // Sebelum migration 00035, kolom `last_seen_at` belum ada. Jangan sampai
+  // seluruh direktori pemain gagal hanya karena info login: ulangi tanpa kolom
+  // tersebut dan urutkan menurut nama.
+  if (isMissingLastSeenColumn(error)) {
+    ({ data, error } = await runPublicPlayersQuery(
+      limit,
+      order === "last_active" ? "name" : order,
+      PUBLIC_PLAYER_COLUMNS_LEGACY
+    ));
   }
-  const { data, error } = await query;
+
   if (error) throw new Error(`Gagal memuat daftar pemain: ${error.message}`);
-  return ((data ?? []) as PublicPlayerRow[]).map(mapPublicPlayer);
+  return ((data ?? []) as unknown as PublicPlayerRow[]).map(mapPublicPlayer);
 }
 
 export async function getPublicPlayer(userId: string): Promise<PublicPlayer | null> {
-  const { data, error } = await client()
+  let { data, error } = await client()
     .from("public_players")
     .select(PUBLIC_PLAYER_COLUMNS)
     .eq("user_id", userId)
     .maybeSingle();
+
+  if (isMissingLastSeenColumn(error)) {
+    ({ data, error } = await client()
+      .from("public_players")
+      .select(PUBLIC_PLAYER_COLUMNS_LEGACY)
+      .eq("user_id", userId)
+      .maybeSingle());
+  }
+
   if (error) throw new Error(`Gagal memuat profil pemain: ${error.message}`);
   return data ? mapPublicPlayer(data as PublicPlayerRow) : null;
 }

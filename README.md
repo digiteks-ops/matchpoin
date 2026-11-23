@@ -94,15 +94,16 @@ Invites are stored as `match_participants` rows with `metadata.status = 'invited
    row (including pending and invited ones).
 
 ### Match result workflow
-1. A participant submits a score. The server stores `match_results.status = 'pending'` and `metadata.dispute_deadline = submitted_at + 48h`.
-2. The opponent can confirm or dispute within 48 hours.
+1. Either side submits a score — the host or any confirmed opponent. The server stores `match_results.status = 'pending'` and `metadata.dispute_deadline = submitted_at + 48h`.
+2. The other side (host or opponent, whoever did not submit) can confirm or dispute within 48 hours.
 3. If no action is taken, opening the match detail triggers `/api/matches/[id]/sync`, which auto-confirms using **server time**.
 4. On confirmation, `applyVerifiedMatchRatings` computes ratings from the current `player_ratings` rows and persists them through `apply_match_rating_change` (SECURITY DEFINER), then marks the match `completed`.
 
 ### Rating
 - DTR (Dynamic Tennis Rating): Modified Elo with a fixed K-factor of 30.
 - Expected score: `1 / (1 + 10 ^ ((opponentRating - playerRating) / 400))`.
-- Ratings use the 1000+ scale (minimum 1000): Beginner 1000–1499, Intermediate 1500–1999, Advanced 2000–2499, Expert 2500+.
+- Ratings use the 1000+ scale for **starting** ratings (Beginner 1000, Intermediate 1500, Advanced 2000, Expert 2500), but there is no lower bound during play: a player who keeps losing drops below 1000. Categories: Beginner <1500, Intermediate 1500–1999, Advanced 2000–2499, Expert 2500+.
+- The starting category is picked once, on the registration form (or the `/pilih-kategori` page for OAuth signups) and stored on `player_ratings.starting_rating_set_at`. Editing "Penilaian Level Sendiri" afterwards no longer resets the rating.
 - Singles and Doubles share one combined rating; doubles use team averages and both teammates receive the same adjustment.
 - Walkovers and cancelled matches do not change ratings.
 - `rating_history` is unique per `(match_id, user_id)` to prevent duplicate application.

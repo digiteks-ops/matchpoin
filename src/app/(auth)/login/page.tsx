@@ -11,6 +11,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Logo } from "@/components/layout/logo";
 import { createClient } from "@/lib/supabase/client";
 import { ensurePlayerRecords } from "@/lib/services/player-service";
+import { recordLastSeen } from "@/lib/services/last-seen";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { AlertCircle, ArrowLeft, Loader2 } from "lucide-react";
 
@@ -68,6 +69,9 @@ function LoginForm() {
         } catch (e) {
           console.warn("Player sync on login:", e);
         }
+
+        // Catat "terakhir login" untuk direktori pemain (/players).
+        await recordLastSeen(data.user.id, { force: true });
 
         router.push(safeRedirect);
         router.refresh();

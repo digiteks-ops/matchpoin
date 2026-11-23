@@ -186,25 +186,30 @@ async function assertParticipant(matchId: string, userId: string) {
     .eq("match_id", matchId)
     .eq("user_id", userId)
     .maybeSingle();
-  if (!data) throw new Error("Anda bukan peserta pertandingan ini.");
-  return supabase;
+  if (data) return supabase;
+
+  // Host yang tidak ikut bermain tetap boleh mengonfirmasi/menyanggah hasil
+  // yang dikirim lawan (kebalikan dari aturan submit dua arah).
+  const { data: match } = await supabase
+    .from("matches")
+    .select("organizer_id")
+    .eq("id", matchId)
+    .maybeSingle();
+  if (match?.organizer_id === userId) return supabase;
+
+  throw new Error("Anda bukan peserta pertandingan ini.");
 }
 
 async function assertCanSubmitResult(matchId: string, userId: string) {
   const { supabase, match, team1, team2 } = await getMatchContext(matchId);
   const participantIds = [...team1, ...team2].map((participant) => participant.user_id);
-  const organizerPlays = participantIds.includes(match.organizer_id);
 
-  // Normal matches keep the host-only rule. Tournament matches created by an
-  // admin have no host participant, so a confirmed player may submit instead.
-  const allowed =
-    match.organizer_id === userId || (!organizerPlays && participantIds.includes(userId));
+  // Both sides may submit: the host AND every confirmed opponent. Whoever
+  // submits first becomes the pending result; the other side then confirms or
+  // disputes it (see confirmMatchResult / disputeMatchResult).
+  const allowed = match.organizer_id === userId || participantIds.includes(userId);
   if (!allowed) {
-    throw new Error(
-      organizerPlays
-        ? "Hanya Host (penyelenggara) yang dapat mengirim hasil resmi pertandingan."
-        : "Hanya peserta terkonfirmasi yang dapat mengirim hasil pertandingan ini."
-    );
+    throw new Error("Hanya Host atau lawan terkonfirmasi yang dapat mengirim hasil pertandingan ini.");
   }
   return supabase;
 }
@@ -598,12 +603,12 @@ export async function applyVerifiedMatchRatings(
 
     missingRatings.forEach((id) => {
       ratingMap.set(id, {
-        currentRating: 1,
+        currentRating: DTR_DEFAULT_RATING,
         matchesPlayed: 0,
         wins: 0,
         losses: 0,
         draws: 0,
-        peakRating: 1,
+        peakRating: DTR_DEFAULT_RATING,
       });
     });
   }

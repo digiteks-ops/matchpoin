@@ -84,6 +84,30 @@ export async function updateProfile(userId: string, input: ProfileInput) {
   }
 
   const fullName = input.fullName.trim();
+
+  // Kategori awal hanya ditetapkan sekali. Setelah terkunci (sudah dipilih saat
+  // pendaftaran atau sudah ada pertandingan), simpan nilai lama apa adanya
+  // supaya rating tidak pernah disetel ulang lewat form profil.
+  const [{ data: existingProfile }, { data: existingRating }] = await Promise.all([
+    supabase
+      .from("player_profiles")
+      .select("self_assessed_level")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    supabase
+      .from("player_ratings")
+      .select("matches_played, starting_rating_set_at")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
+
+  const startingLevelLocked =
+    Boolean(existingRating?.starting_rating_set_at) || (existingRating?.matches_played ?? 0) > 0;
+
+  const selfAssessedLevel = startingLevelLocked
+    ? ((existingProfile?.self_assessed_level as SkillLevel | null) ?? input.selfAssessedLevel)
+    : input.selfAssessedLevel;
+
   const profileRow = {
     user_id: userId,
     display_name: fullName,
@@ -92,7 +116,7 @@ export async function updateProfile(userId: string, input: ProfileInput) {
     preferred_hand: input.preferredHand,
     backhand: input.backhand,
     play_frequency: input.playFrequency,
-    self_assessed_level: input.selfAssessedLevel,
+    self_assessed_level: selfAssessedLevel,
     profile_visibility: input.profileVisibility,
     is_profile_public: input.profileVisibility === "public",
     preferred_categories: input.preferredCategories,

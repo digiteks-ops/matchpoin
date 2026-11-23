@@ -2,16 +2,14 @@ import { NextResponse } from "next/server";
 import { logError } from "@/lib/errors";
 import { getLeagueOverview } from "@/lib/supabase/competition-service";
 import { signAvatarUrl } from "@/lib/storage/supabase";
+import { IKA17_CATEGORIES } from "@/lib/tournaments/ika17";
 
 export const dynamic = "force-dynamic";
 
-const CATEGORIES = new Set([
-  "mens_singles",
-  "womens_singles",
-  "mens_doubles",
-  "womens_doubles",
-  "mixed_doubles",
-]);
+// Sumber tunggal kategori: `ika17-core.mjs`. Daftar lokal sebelumnya masih
+// memuat `womens_singles` dan belum mengenal
+// `womens_doubles_intermediate`, sehingga klasemen kategori itu 400.
+const CATEGORIES = new Set<string>(IKA17_CATEGORIES.map((entry) => entry.id));
 
 export async function GET(
   _request: Request,

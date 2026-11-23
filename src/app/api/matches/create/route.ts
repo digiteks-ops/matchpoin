@@ -6,10 +6,13 @@ import type { CreateOpenMatchInput } from '@/lib/services/match-service';
 import { ERROR_CREATE_MATCH, logError } from '@/lib/errors';
 import { getUserRoles } from '@/lib/supabase/rbac-service';
 import { hasRole } from '@/lib/auth/roles';
+import { VALID_CATEGORIES } from '@/lib/matches/constants';
 
 export const dynamic = 'force-dynamic';
 
-const CATEGORIES = ['mens_singles', 'womens_singles', 'mens_doubles', 'womens_doubles', 'mixed_doubles'];
+// Gunakan daftar kategori bersama (src/lib/matches/constants.ts) agar kategori
+// liga baru seperti `womens_doubles_intermediate` tidak ditolak di sini.
+const CATEGORIES = VALID_CATEGORIES;
 const UMPIRES = ['dengan_wasit', 'tanpa_wasit'];
 
 export async function POST(request: Request) {

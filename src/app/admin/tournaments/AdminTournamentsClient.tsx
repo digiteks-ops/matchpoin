@@ -244,11 +244,11 @@ export default function AdminTournamentsClient({ leagues, initialError = null }:
 
   const getCategoryLabel = (category: string) => {
     switch (category) {
-      case "mens_singles": return "Tunggal Putra";
-      case "womens_singles": return "Tunggal Putri";
-      case "mens_doubles": return "Ganda Putra";
-      case "womens_doubles": return "Ganda Putri";
-      case "mixed_doubles": return "Ganda Campuran";
+      case "mens_singles": return "Single Man Beginner";
+      case "mens_doubles": return "Double Man Beginner–Intermediate";
+      case "womens_doubles": return "Double Woman Beginner";
+      case "womens_doubles_intermediate": return "Double Woman Beginner–Intermediate";
+      case "mixed_doubles": return "Double Mix Beginner";
       default: return category;
     }
   };

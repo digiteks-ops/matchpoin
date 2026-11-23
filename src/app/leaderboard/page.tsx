@@ -14,7 +14,17 @@ import {
   isMySqlPublicPlayerReads,
   type MySqlPlayerCity,
 } from "@/lib/mysql/public-player-client";
-import { Trophy, Search, MapPin, Medal, Crown, TrendingUp } from "lucide-react";
+import { Trophy, Search, MapPin, Medal, Crown, TrendingUp, Lock } from "lucide-react";
+import {
+  LEADERBOARD_MIN_MATCHES_NON_BEGINNER,
+  isLeaderboardEligible,
+  leaderboardMatchesRemaining,
+  leaderboardRequiresMatches,
+} from "@/lib/rating/leaderboard-visibility-core.mjs";
+import {
+  RATING_TIER_OPTIONS,
+  matchesRatingTier,
+} from "@/lib/rating/rating-tier-core.mjs";
 
 interface LeaderboardRow {
   userId: string;
@@ -28,6 +38,7 @@ interface LeaderboardRow {
   cityName: string;
   cityId: string | null;
   isProvisional: boolean;
+  selfAssessedLevel: string | null;
 }
 
 interface CityOption {
@@ -47,6 +58,7 @@ interface SupabasePublicPlayer {
   losses: number | null;
   city_name: string | null;
   city_id: string | null;
+  self_assessed_level: string | null;
   show_rating?: boolean | null;
 }
 
@@ -59,6 +71,7 @@ interface LeaderboardPlayerData {
   matchesPlayed: number | null;
   wins: number | null;
   losses: number | null;
+  selfAssessedLevel: string | null;
   cityName: string;
   cityId: string | null;
 }
@@ -78,6 +91,7 @@ function leaderboardRow(player: LeaderboardPlayerData): LeaderboardRow {
     cityName: player.cityName || "Makassar",
     cityId: player.cityId,
     isProvisional: matchesPlayed === 0,
+    selfAssessedLevel: player.selfAssessedLevel,
   };
 }
 
@@ -92,8 +106,15 @@ export default function LeaderboardPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCity, setSelectedCity] = useState("all");
+  // Filter tingkat rating: beginner 0–1499, intermediate 1500–1999,
+  // advanced 2000–2499, expert 2500+.
+  const [selectedLevel, setSelectedLevel] = useState("all");
   const [province, setProvince] = useState<string>("");
   const [provinceOptions, setProvinceOptions] = useState<string[]>([]);
+  // Dipakai untuk memberi tahu pemain sendiri kalau belum lolos tampil.
+  const [myStatus, setMyStatus] = useState<
+    { level: string | null; matchesPlayed: number; remaining: number } | null
+  >(null);
 
   useEffect(() => {
     async function load() {
@@ -107,7 +128,13 @@ export default function LeaderboardPage() {
           }));
           setCities(cityOptions);
           setProvinceOptions(provinceOptionsFrom(cityOptions));
-          setRows(result.players.filter((player) => player.showRating).map(leaderboardRow));
+          setRows(
+            result.players
+              .filter((player) => player.showRating)
+              .map(leaderboardRow)
+              // Aturan tampil: beginner langsung, level lain menunggu 3 match.
+              .filter((row) => isLeaderboardEligible(row.selfAssessedLevel, row.matchesPlayed))
+          );
           return;
         }
 
@@ -119,6 +146,22 @@ export default function LeaderboardPage() {
             .select("*")
             .limit(500),
         ]);
+
+        // Status pemain yang sedang login, untuk memberi tahu bila belum lolos.
+        const { data: authUser } = await supabase.auth.getUser();
+        if (authUser?.user) {
+          const { data: mine } = await supabase
+            .from("public_players")
+            .select("self_assessed_level, matches_played")
+            .eq("user_id", authUser.user.id)
+            .maybeSingle();
+          if (mine) {
+            const level = (mine.self_assessed_level as string | null) ?? null;
+            const played = Number(mine.matches_played ?? 0);
+            const remaining = leaderboardMatchesRemaining(level, played);
+            if (remaining > 0) setMyStatus({ level, matchesPlayed: played, remaining });
+          }
+        }
 
         if (citiesResult.error) throw citiesResult.error;
         if (publicPlayersResult.error) throw publicPlayersResult.error;
@@ -144,10 +187,13 @@ export default function LeaderboardPage() {
               matchesPlayed: player.matches_played,
               wins: player.wins,
               losses: player.losses,
+              selfAssessedLevel: player.self_assessed_level ?? null,
               cityName: player.city_name || "Makassar",
               cityId: player.city_id,
             })
-          );
+          )
+          // Aturan tampil: beginner langsung, level lain menunggu 3 match.
+          .filter((row) => isLeaderboardEligible(row.selfAssessedLevel, row.matchesPlayed));
         merged.sort(
           (a, b) =>
             b.rating - a.rating ||
@@ -174,10 +220,11 @@ export default function LeaderboardPage() {
         if (r.cityId && !provinceCityIds.includes(r.cityId)) return false;
       }
       if (selectedCity !== "all" && r.cityId !== selectedCity) return false;
+      if (!matchesRatingTier(selectedLevel, r.rating)) return false;
       if (searchQuery.trim() && !r.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
       return true;
     });
-  }, [rows, searchQuery, selectedCity, province, cities]);
+  }, [rows, searchQuery, selectedCity, province, cities, selectedLevel]);
 
   const ranked = filtered.map((row, index) => ({ ...row, rank: index + 1 }));
   const podium = ranked.slice(0, 3);
@@ -199,6 +246,13 @@ export default function LeaderboardPage() {
             </div>
             <p className="text-slate-600 text-xs sm:text-sm max-w-xl leading-relaxed">
               Peringkat berdasarkan DTR (Dynamic Tennis Rating) dari pertandingan yang telah dikonfirmasi.
+            </p>
+            <p className="text-[11px] text-slate-500 max-w-xl leading-relaxed">
+              Pemain <strong>beginner</strong> langsung tampil. Level{" "}
+              <strong>intermediate</strong>, <strong>advanced</strong>, dan{" "}
+              <strong>expert</strong> baru tampil setelah{" "}
+              <strong>{LEADERBOARD_MIN_MATCHES_NON_BEGINNER} pertandingan</strong> yang hasilnya
+              sudah terverifikasi.
             </p>
           </div>
           <div className="flex gap-2">
@@ -259,7 +313,34 @@ export default function LeaderboardPage() {
                 ))}
             </select>
           </div>
+
+          <div className="space-y-2 w-full sm:w-48">
+            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Level</Label>
+            <select
+              value={selectedLevel}
+              onChange={(e) => setSelectedLevel(e.target.value)}
+              className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus:border-matchpoin-tennis"
+            >
+              {RATING_TIER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
+
+        {myStatus && (
+          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>
+              Anda terdaftar sebagai{" "}
+              <strong>{myStatus.level ?? "non-beginner"}</strong>, jadi belum tampil di
+              leaderboard. Butuh <strong>{myStatus.remaining} pertandingan terverifikasi</strong>{" "}
+              lagi ({myStatus.matchesPlayed}/{LEADERBOARD_MIN_MATCHES_NON_BEGINNER}).
+            </p>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

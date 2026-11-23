@@ -15,15 +15,35 @@ import {
   isMySqlPublicPlayerReads,
   type MySqlPublicPlayer,
 } from "@/lib/mysql/public-player-client";
-import { Users, Search, MapPin, UserPlus, X, Loader2 } from "lucide-react";
+import { Users, Search, MapPin, UserPlus, X, Loader2, Clock } from "lucide-react";
 import type { FullPlayerProfile, City } from "@/types/database.types";
 import type { User } from "@supabase/supabase-js";
+import {
+  compareByLastSeenDesc,
+  formatLastSeen,
+  formatLastSeenExact,
+  LAST_SEEN_NEVER_LABEL,
+} from "@/lib/players/last-seen-core.mjs";
+import {
+  RATING_TIER_OPTIONS,
+  matchesRatingTier,
+  ratingTierOf,
+} from "@/lib/rating/rating-tier-core.mjs";
 
 interface CityOption {
   id: string;
   name: string;
   province: string;
 }
+
+/** Urutan direktori pemain. Default: yang paling baru login di atas. */
+type PlayerSort = "last_active" | "name" | "level";
+
+const PLAYER_SORT_LABELS: Record<PlayerSort, string> = {
+  last_active: "Terakhir login",
+  name: "Nama (A–Z)",
+  level: "Level",
+};
 
 function mapMySqlPlayer(player: MySqlPublicPlayer): FullPlayerProfile {
   const matchesPlayed = player.matchesPlayed ?? 0;
@@ -58,6 +78,7 @@ function mapMySqlPlayer(player: MySqlPublicPlayer): FullPlayerProfile {
     isProfilePublic: true,
     allowInvites: player.allowInvites,
     showRating: player.showRating,
+    lastSeenAt: player.lastSeenAt ?? null,
   };
 }
 
@@ -74,6 +95,8 @@ export default function PlayersDirectoryPage() {
   const [selectedCityId, setSelectedCityId] = useState<string>("all");
   const [selectedLevel, setSelectedLevel] = useState<string>("all");
   const [selectedFormat, setSelectedFormat] = useState<string>("all");
+  // Default: pemain yang paling baru login tampil paling atas.
+  const [sortBy, setSortBy] = useState<PlayerSort>("last_active");
 
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [selectedPlayerForInvite, setSelectedPlayerForInvite] = useState<FullPlayerProfile | null>(null);
@@ -101,14 +124,26 @@ export default function PlayersDirectoryPage() {
         } = await supabase.auth.getUser();
         setCurrentUser(authUser);
 
-        const [citiesResult, publicPlayersResult] = await Promise.all([
+        const [citiesResult, firstPlayersResult] = await Promise.all([
           supabase.from("cities").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
           supabase
             .from("public_players")
             .select("*")
+            // Login terbaru di atas; pemain tanpa catatan login di bawah.
+            .order("last_seen_at", { ascending: false, nullsFirst: false })
             .order("display_name", { ascending: true })
             .limit(100),
         ]);
+
+        // Bila migration 00035 belum dijalankan, `last_seen_at` tidak ada di
+        // view. Daftar tetap harus tampil, jadi fallback ke urutan nama.
+        const publicPlayersResult = firstPlayersResult.error
+          ? await supabase
+              .from("public_players")
+              .select("*")
+              .order("display_name", { ascending: true })
+              .limit(100)
+          : firstPlayersResult;
 
         if (citiesResult.error) throw citiesResult.error;
         if (publicPlayersResult.error) throw publicPlayersResult.error;
@@ -170,6 +205,7 @@ export default function PlayersDirectoryPage() {
               isProfilePublic: true,
               allowInvites: p.allow_invites ?? true,
               showRating: p.show_rating !== false,
+              lastSeenAt: p.last_seen_at ?? null,
             };
           });
 
@@ -219,7 +255,7 @@ export default function PlayersDirectoryPage() {
   };
 
   const filteredPlayers = useMemo(() => {
-    return players.filter((p) => {
+    const matches = players.filter((p) => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesName =
@@ -231,7 +267,9 @@ export default function PlayersDirectoryPage() {
       if (selectedProvince !== "all" && p.province !== selectedProvince) return false;
       if (selectedCityId !== "all" && p.cityId !== selectedCityId) return false;
 
-      if (selectedLevel !== "all" && p.selfAssessedLevel !== selectedLevel) return false;
+      if (selectedLevel !== "all" && !matchesRatingTier(selectedLevel, p.currentRating)) {
+        return false;
+      }
 
       if (selectedFormat !== "all") {
         const categories = p.preferredCategories ?? [];
@@ -250,7 +288,33 @@ export default function PlayersDirectoryPage() {
 
       return true;
     });
-  }, [players, searchQuery, selectedProvince, selectedCityId, selectedLevel, selectedFormat]);
+
+    const sorted = [...matches];
+    if (sortBy === "last_active") {
+      sorted.sort((a, b) =>
+        compareByLastSeenDesc(a, b, (p) => p.displayName || p.fullName)
+      );
+    } else if (sortBy === "name") {
+      sorted.sort((a, b) =>
+        (a.displayName || a.fullName).localeCompare(b.displayName || b.fullName)
+      );
+    } else {
+      // Urut level mengikuti tingkat rating (sumber yang sama dengan filter).
+      const levelRank: Record<string, number> = {
+        expert: 0,
+        advanced: 1,
+        intermediate: 2,
+        beginner: 3,
+      };
+      sorted.sort(
+        (a, b) =>
+          (levelRank[ratingTierOf(a.currentRating)] ?? 4) -
+            (levelRank[ratingTierOf(b.currentRating)] ?? 4) ||
+          (a.displayName || a.fullName).localeCompare(b.displayName || b.fullName)
+      );
+    }
+    return sorted;
+  }, [players, searchQuery, selectedProvince, selectedCityId, selectedLevel, selectedFormat, sortBy]);
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -367,10 +431,12 @@ export default function PlayersDirectoryPage() {
               className="h-10 w-full md:w-40 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
               aria-label="Filter level"
             >
-              <option value="all">Semua Level</option>
-              <option value="beginner">Pemula</option>
-              <option value="intermediate">Menengah</option>
-              <option value="advanced">Mahir</option>
+              {/* Beginner 0–1499, Intermediate 1500–1999, Advanced 2000–2499, Expert 2500+ */}
+              {RATING_TIER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
 
             <select
@@ -384,7 +450,28 @@ export default function PlayersDirectoryPage() {
               <option value="doubles">Ganda</option>
               <option value="mixed_doubles">Ganda Campuran</option>
             </select>
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as PlayerSort)}
+              className="h-10 w-full md:w-44 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+              aria-label="Urutkan pemain"
+            >
+              {(Object.keys(PLAYER_SORT_LABELS) as PlayerSort[]).map((value) => (
+                <option key={value} value={value}>
+                  Urut: {PLAYER_SORT_LABELS[value]}
+                </option>
+              ))}
+            </select>
           </div>
+
+          {sortBy === "last_active" && !isLoading && !loadError && (
+            <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
+              <Clock className="h-3.5 w-3.5 text-slate-400" />
+              Diurutkan dari yang paling baru login. Pemain yang belum pernah login ada di
+              paling bawah.
+            </p>
+          )}
 
           {hasActiveFilters && (
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">

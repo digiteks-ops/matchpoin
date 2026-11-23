@@ -1,8 +1,13 @@
 // DTR — Dynamic Tennis Rating (Modified Elo, integer scale starting at 1000).
 // Shared by the Supabase rating engine, the admin simulation, and CLI scripts.
 
+// Rating a new player starts at. This is NOT a floor: a losing player keeps
+// dropping below 1000, with DTR_ABSOLUTE_MIN_RATING as the only safety net.
 export const DTR_MIN_RATING = 1000;
 export const DTR_DEFAULT_RATING = 1000;
+// Guard against corrupt arithmetic only; kept in sync with the CHECK
+// constraints in supabase/migrations/00031_dtr_no_rating_floor.sql.
+export const DTR_ABSOLUTE_MIN_RATING = 1;
 export const DTR_K_FACTOR = 30;
 export const DTR_LOGISTIC_DIVISOR = 400;
 
@@ -49,12 +54,15 @@ export function dtrStartingRating(level) {
 }
 
 function normalizeRating(value) {
-  return Math.max(DTR_MIN_RATING, Math.round(Number(value) || DTR_MIN_RATING));
+  // Missing values fall back to the 1000 starting rating. Real sub-1000 ratings
+  // are kept as-is: 1000 is the starting point, not a floor.
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? Math.round(numeric) : DTR_DEFAULT_RATING;
 }
 
 function buildChange(player, expected, actual, delta, matchK) {
   const oldRating = normalizeRating(player.rating);
-  const newRating = Math.max(DTR_MIN_RATING, oldRating + Math.round(delta));
+  const newRating = Math.max(DTR_ABSOLUTE_MIN_RATING, oldRating + Math.round(delta));
   return {
     userId: player.userId,
     oldRating,

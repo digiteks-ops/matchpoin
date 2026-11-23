@@ -1012,7 +1012,22 @@ function buildMatchDetail(
 
   // Counts are derived from confirmed participant rows so that a player who
   // accepts their own invite is reflected immediately.
-  const currentPlayers = participants.length > 0 ? confirmed.length : match.current_players ?? 0;
+  // `participants` includes pending and invited rows, so the naive
+  // `confirmed.length` would mark a match full while a request is still
+  // awaiting approval. Count only the actual confirmed roster.
+  const confirmedCount = participants.length > 0
+    ? confirmed.length
+    : (() => {
+        const data = (match as unknown as { match_participants?: { is_organizer?: boolean; metadata?: unknown }[] })
+          .match_participants;
+        if (Array.isArray(data) && data.length > 0) {
+          return data.filter(
+            (row) => row.is_organizer || asParticipantMetadata(row.metadata).status === "confirmed"
+          ).length;
+        }
+        return match.current_players ?? 0;
+      })();
+  const currentPlayers = confirmedCount;
   const availableSlots = Math.max(0, maxPlayers - currentPlayers);
   const storedStatus = normalizeStatus(match.status);
   const status: MatchStatus =

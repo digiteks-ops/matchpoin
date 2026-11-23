@@ -163,7 +163,7 @@ export default function SimulationClient() {
           <div className="space-y-1">
             <p className="font-semibold">DTR — Dynamic Tennis Rating (Modified Elo, K tetap 30).</p>
             <p>
-              Rating awal 1000, minimum 1000. Lawan selevel: menang +15, kalah −15.
+              Rating awal 1000, tanpa batas minimum. Lawan selevel: menang +15, kalah −15.
               Mengalahkan lawan berating lebih tinggi → kenaikan lebih besar. Kalah dari lawan
               berating lebih rendah → pengurangan lebih besar.
             </p>

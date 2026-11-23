@@ -13,6 +13,7 @@ import type { User } from "@supabase/supabase-js";
 import { formatIndonesianDate } from "@/lib/utils";
 import {
   IKA17_CATEGORIES,
+  IKA17_ELIGIBILITY_STATEMENT,
   IKA17_END_DATE,
   IKA17_LEAGUE_NAME,
   IKA17_MAIN_EVENT_END,
@@ -21,12 +22,17 @@ import {
   IKA17_QUOTA,
   IKA17_REGISTRATION_DEADLINE,
   IKA17_START_DATE,
+  TOURNAMENT_LEVEL_LABELS,
+  TOURNAMENT_LEVEL_REQUIREMENTS,
+  ika17AllowedLevels,
   ika17Category,
+  type TournamentLevel,
 } from "@/lib/tournaments/ika17";
 
 interface TournamentRow {
   id: string;
   name: string;
+  slug: string | null;
   category: string;
   season: string;
   league_key: string | null;
@@ -74,6 +80,7 @@ export default function TournamentsPage() {
   const [regError, setRegError] = useState<string | null>(null);
   const [regSuccess, setRegSuccess] = useState<string | null>(null);
   const [eligibilityConfirmed, setEligibilityConfirmed] = useState(false);
+  const [playingExperience, setPlayingExperience] = useState<TournamentLevel>("beginner");
 
   useEffect(() => {
     const supabase = createClient();
@@ -128,7 +135,12 @@ export default function TournamentsPage() {
 
   const categories = useMemo(() => {
     return IKA17_CATEGORIES.map((definition) => {
-      const row = tournaments.find((entry) => entry.category === definition.id);
+      // Cocokkan lewat `category`, dan lewat `slug` sebagai cadangan: baris liga
+      // lama bisa punya category NULL/berbeda dari slug-nya, dan dulu itu
+      // membuat kartu kategori tampil "belum tersedia" padahal liganya ada.
+      const row =
+        tournaments.find((entry) => entry.category === definition.id) ??
+        tournaments.find((entry) => entry.slug === definition.slug);
       return { definition, row };
     });
   }, [tournaments]);
@@ -140,6 +152,10 @@ export default function TournamentsPage() {
     setRegSuccess(null);
     setPartners([]);
     setEligibilityConfirmed(false);
+    // Kategori khusus beginner langsung memilih beginner; kategori campuran
+    // membiarkan pemain memilih (belum dipilih sampai diklik).
+    const allowedLevels = ika17AllowedLevels(row.category);
+    setPlayingExperience(allowedLevels.length === 1 ? allowedLevels[0] : "beginner");
 
     const definition = ika17Category(row.category);
     if (!definition?.doubles) return;
@@ -208,6 +224,8 @@ export default function TournamentsPage() {
         body: JSON.stringify({
           tournamentId: selected.id,
           partnerUserId: definition.doubles ? partnerUserId : null,
+          playingExperience,
+          eligibilityConfirmed,
         }),
       });
       const payload = (await response.json()) as { success?: boolean; message?: string };
@@ -245,7 +263,8 @@ export default function TournamentsPage() {
               </p>
               <p className="mt-3 inline-flex items-center gap-2 rounded-xl bg-matchpoin-tennis/90 px-3 py-2 text-xs font-bold text-matchpoin-navy">
                 <Trophy className="h-4 w-4" />
-                Syarat Main Event: minimal {IKA17_MIN_MATCHES} pertandingan
+                8 besar tiap kategori lolos ke Main Event (minimal {IKA17_MIN_MATCHES}{" "}
+                pertandingan)
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[420px]">
@@ -284,10 +303,32 @@ export default function TournamentsPage() {
             categories.map(({ definition, row }) => {
               if (!row) {
                 return (
-                  <Card key={definition.id} className="border-dashed border-slate-300">
-                    <CardContent className="space-y-2 p-6">
-                      <p className="font-bold text-slate-800">{definition.label}</p>
-                      <p className="text-xs text-slate-500">Kategori belum tersedia. Hubungi admin.</p>
+                  <Card key={definition.id} className="border-dashed border-amber-300 bg-amber-50/40">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <CardTitle className="text-lg font-bold text-slate-900">{definition.label}</CardTitle>
+                          <p className="mt-1 text-xs text-slate-500">{definition.shortLabel}</p>
+                        </div>
+                        <Badge variant="secondary">Belum dibuka</Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <p className="text-xs text-amber-800">
+                        Liga untuk kategori ini belum dibuat di server, jadi belum bisa didaftari.
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Slug: <code className="rounded bg-white px-1 py-0.5">{definition.slug}</code>
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-xs"
+                        onClick={loadTournaments}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? "Memuat..." : "Muat Ulang"}
+                      </Button>
                     </CardContent>
                   </Card>
                 );
@@ -351,7 +392,7 @@ export default function TournamentsPage() {
                     />
                     <span>
                       <strong>
-                        Saya menyatakan belum pernah mengikuti PORDA, PORPROV, atau PON.
+                        Saya menyatakan {IKA17_ELIGIBILITY_STATEMENT}
                       </strong>{" "}
                       Pernyataan ini menjadi dasar verifikasi admin. Peserta yang pernah tampil di
                       ajang tersebut tidak eligible.
@@ -441,15 +482,24 @@ export default function TournamentsPage() {
               </strong>
             </li>
             <li>
+              Kategori <strong>beginner</strong>: maksimal 2 tahun bermain. Kategori{" "}
+              <strong>intermediate</strong>: lebih dari 2 tahun bermain.
+            </li>
+            <li>
+              <strong>advanced</strong> adalah peserta yang pernah mengikuti PORDA, PORPROV,
+              PON — karena itu <strong>tidak dapat</strong> mendaftar di liga ini.
+            </li>
+            <li>
               <strong className="text-slate-800">
-                Syarat lolos ke Main Event: minimal {IKA17_MIN_MATCHES} pertandingan
+                Lolos ke Main Event: 8 besar kategori dengan minimal {IKA17_MIN_MATCHES} pertandingan
               </strong>{" "}
               yang tercatat selama periode liga.
             </li>
             <li>Setiap kategori maksimal {IKA17_QUOTA} peserta (single) atau {IKA17_QUOTA} tim (ganda).</li>
-            <li>Kuota dihitung dari pendaftar berstatus diterima (accepted).</li>
-            <li>Pendaftaran masuk sebagai pending dan harus disetujui admin.</li>
-            <li>Ganda campuran wajib 1 pemain putra + 1 pemain putri.</li>
+            <li>
+              <strong className="text-slate-800">8 besar</strong> setiap kategori lolos ke Main
+              Event.
+            </li>
           </ul>
         </section>
       </div>
@@ -511,12 +561,52 @@ export default function TournamentsPage() {
                     </div>
                   )}
 
+                  <div className="space-y-2">
+                    <span className="text-sm font-semibold text-slate-800">Pengalaman Bermain</span>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {(["beginner", "intermediate"] as TournamentLevel[]).map((level) => {
+                        const allowed = ika17AllowedLevels(selected.category).includes(level);
+                        const active = playingExperience === level;
+                        return (
+                          <button
+                            key={level}
+                            type="button"
+                            disabled={!allowed}
+                            aria-pressed={active}
+                            onClick={() => setPlayingExperience(level)}
+                            className={`rounded-xl border p-3 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                              active && allowed
+                                ? "border-matchpoin-navy bg-matchpoin-navy/5 ring-1 ring-matchpoin-navy"
+                                : "border-slate-200 hover:border-slate-300"
+                            }`}
+                          >
+                            <span className="block font-bold text-slate-900">
+                              {TOURNAMENT_LEVEL_LABELS[level]}
+                            </span>
+                            <span className="mt-0.5 block text-[11px] text-slate-500">
+                              {TOURNAMENT_LEVEL_REQUIREMENTS[level]}
+                            </span>
+                            {!allowed && (
+                              <span className="mt-1 block text-[10px] font-semibold text-rose-600">
+                                Tidak tersedia untuk kategori ini
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Kategori tunggal, ganda putri beginner, dan ganda campuran hanya menerima
+                      beginner (maksimal 2 tahun bermain).
+                    </p>
+                  </div>
+
                   <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                     Pendaftaran akan dikirim dengan status <strong>pending</strong>. Anda dapat
                     melihat statusnya di kartu kategori setelah admin memproses.
                     <span className="mt-2 block font-semibold text-slate-800">
-                      Syarat lolos Main Event: minimal {IKA17_MIN_MATCHES} pertandingan selama
-                      periode liga.
+                      8 besar kategori ini lolos ke Main Event dengan syarat minimal{" "}
+                      {IKA17_MIN_MATCHES} pertandingan selama periode liga.
                     </span>
                   </div>
                 </>
@@ -541,6 +631,7 @@ export default function TournamentsPage() {
                     disabled={
                       regLoading ||
                       !eligibilityConfirmed ||
+                      !ika17AllowedLevels(selected.category).includes(playingExperience) ||
                       (ika17Category(selected.category)?.doubles && !partnerUserId)
                     }
                   >

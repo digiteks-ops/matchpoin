@@ -34,17 +34,24 @@ function evaluate(overrides = {}) {
 }
 
 test("accepts the seeded slug league identifiers", () => {
-  const parsed = parseRegistrationPayload({ tournamentId: "ika17-mens-singles" });
+  const parsed = parseRegistrationPayload({
+    tournamentId: "ika17-mens-singles",
+    playingExperience: "beginner",
+    eligibilityConfirmed: true,
+  });
 
   assert.equal(parsed.ok, true);
   assert.equal(parsed.leagueId, "ika17-mens-singles");
   assert.equal(parsed.partnerUserId, null);
+  assert.equal(parsed.playingExperience, "beginner");
 });
 
 test("accepts UUID league identifiers and trims input", () => {
   const parsed = parseRegistrationPayload({
     tournamentId: "  ika17-mixed-doubles  ",
     partnerUserId: `  ${PARTNER}  `,
+    playingExperience: "beginner",
+    eligibilityConfirmed: true,
   });
 
   assert.equal(parsed.ok, true);
@@ -53,6 +60,8 @@ test("accepts UUID league identifiers and trims input", () => {
 
   const uuid = parseRegistrationPayload({
     tournamentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    playingExperience: "beginner",
+    eligibilityConfirmed: true,
   });
   assert.equal(uuid.ok, true);
 });

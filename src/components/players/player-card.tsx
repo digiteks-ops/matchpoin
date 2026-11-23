@@ -6,8 +6,14 @@ import Link from "next/link";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MapPin, Loader2 } from "lucide-react";
+import { MapPin, Loader2, Clock } from "lucide-react";
 import type { FullPlayerProfile } from "@/types/database.types";
+import {
+  formatLastSeen,
+  formatLastSeenExact,
+  LAST_SEEN_NEVER_LABEL,
+} from "@/lib/players/last-seen-core.mjs";
+import { ratingTierLabel, ratingTierOf } from "@/lib/rating/rating-tier-core.mjs";
 
 interface PlayerCardProps {
   player: FullPlayerProfile;
@@ -17,18 +23,14 @@ interface PlayerCardProps {
 
 export function PlayerCard({ player, onInvite, isInviting = false }: PlayerCardProps) {
   const getRatingBadgeColor = (rating: number) => {
-    if (rating >= 2500) return "bg-rose-100 text-rose-800 border-rose-300";
-    if (rating >= 2000) return "bg-purple-100 text-purple-800 border-purple-300";
-    if (rating >= 1500) return "bg-amber-100 text-amber-800 border-amber-300";
+    const tier = ratingTierOf(rating);
+    if (tier === "expert") return "bg-rose-100 text-rose-800 border-rose-300";
+    if (tier === "advanced") return "bg-purple-100 text-purple-800 border-purple-300";
+    if (tier === "intermediate") return "bg-amber-100 text-amber-800 border-amber-300";
     return "bg-blue-100 text-blue-800 border-blue-300";
   };
 
-  const getRatingTier = (rating: number) => {
-    if (rating >= 2500) return "Expert";
-    if (rating >= 2000) return "Advanced";
-    if (rating >= 1500) return "Intermediate";
-    return "Beginner";
-  };
+  const getRatingTier = (rating: number) => ratingTierLabel(rating);
 
   const handLabel =
     player.preferredHand === "left"
@@ -37,12 +39,12 @@ export function PlayerCard({ player, onInvite, isInviting = false }: PlayerCardP
 
   const levelLabel =
     player.selfAssessedLevel === "expert"
-      ? "Ahli (Expert)"
+      ? "Expert"
       : player.selfAssessedLevel === "advanced"
-      ? "Mahir (Advanced)"
+      ? "Advanced"
       : player.selfAssessedLevel === "intermediate"
-      ? "Menengah (Intermediate)"
-      : "Pemula (Beginner)";
+      ? "Intermediate"
+      : "Beginner";
 
   return (
     <Card className="hover:shadow-md transition-all duration-200 border-slate-200/90 flex flex-col justify-between overflow-hidden group">
@@ -76,6 +78,15 @@ export function PlayerCard({ player, onInvite, isInviting = false }: PlayerCardP
               <div className="flex items-center gap-1.5 text-xs text-slate-500">
                 <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <span>{[player.cityName, player.province].filter(Boolean).join(", ") || "Makassar"}</span>
+              </div>
+              <div
+                className="flex items-center gap-1.5 text-[11px] text-slate-400"
+                title={formatLastSeenExact(player.lastSeenAt) || LAST_SEEN_NEVER_LABEL}
+              >
+                <Clock className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                <span className="truncate">
+                  Login: {formatLastSeen(player.lastSeenAt)}
+                </span>
               </div>
             </div>
           </div>

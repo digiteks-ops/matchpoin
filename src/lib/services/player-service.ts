@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { assertValidImageFile, compressImage } from "@/lib/utils/image";
-import type { DbUser, PlayerProfile, PlayerRating } from "@/types/database.types";
+import { DTR_DEFAULT_RATING, dtrStartingRating } from "@/lib/rating/dtr-core.mjs";
+import type { DbUser, PlayerProfile, PlayerRating, SkillLevel } from "@/types/database.types";
 
 type AnySupabase = SupabaseClient<any, any, any>;
 
@@ -56,7 +57,8 @@ export async function ensurePlayerRecordsWithClient(
   supabase: AnySupabase,
   userId: string,
   email: string,
-  fullName?: string
+  fullName?: string,
+  startingLevel?: SkillLevel
 ) {
   const { data: cityData } = await supabase
     .from("cities")
@@ -106,7 +108,7 @@ export async function ensurePlayerRecordsWithClient(
       preferred_hand: "right",
       backhand: "two_handed",
       play_frequency: "weekly",
-      self_assessed_level: "beginner",
+      self_assessed_level: startingLevel ?? "beginner",
       completion_score: 40,
     });
     if (profileError) {
@@ -116,20 +118,44 @@ export async function ensurePlayerRecordsWithClient(
 
   const { data: existingRating } = await supabase
     .from("player_ratings")
-    .select("id")
+    .select("id, matches_played, starting_rating_set_at")
     .eq("user_id", userId)
     .maybeSingle();
+
+  const startingRating = startingLevel ? dtrStartingRating(startingLevel) : DTR_DEFAULT_RATING;
 
   if (!existingRating) {
     const { error: ratingError } = await supabase.from("player_ratings").insert({
       user_id: userId,
-      current_rating: 1000,
-      peak_rating: 1000,
+      current_rating: startingRating,
+      peak_rating: startingRating,
       matches_played: 0,
       wins: 0,
       losses: 0,
       draws: 0,
+      // Kategori awal hanya dipakai sekali saat pendaftaran.
+      ...(startingLevel ? { starting_rating_set_at: new Date().toISOString() } : {}),
     });
+    if (ratingError) {
+      throw new Error(`Gagal menyiapkan rating pemain: ${ratingError.message}`);
+    }
+  } else if (
+    startingLevel &&
+    existingRating.matches_played === 0 &&
+    !existingRating.starting_rating_set_at
+  ) {
+    // Baris rating dibuat sebelum kategori dipilih (mis. trigger signup lama):
+    // terapkan sekali, lalu kunci.
+    const { error: ratingError } = await supabase
+      .from("player_ratings")
+      .update({
+        current_rating: startingRating,
+        peak_rating: startingRating,
+        starting_rating_set_at: new Date().toISOString(),
+      })
+      .eq("user_id", userId)
+      .is("starting_rating_set_at", null)
+      .eq("matches_played", 0);
     if (ratingError) {
       throw new Error(`Gagal menyiapkan rating pemain: ${ratingError.message}`);
     }
@@ -139,9 +165,14 @@ export async function ensurePlayerRecordsWithClient(
 /**
  * Browser-side player sync. Safe to call from client components.
  */
-export async function ensurePlayerRecords(userId: string, email: string, fullName?: string) {
+export async function ensurePlayerRecords(
+  userId: string,
+  email: string,
+  fullName?: string,
+  startingLevel?: SkillLevel
+) {
   const supabase = createClient();
-  await ensurePlayerRecordsWithClient(supabase, userId, email, fullName);
+  await ensurePlayerRecordsWithClient(supabase, userId, email, fullName, startingLevel);
 }
 
 /**

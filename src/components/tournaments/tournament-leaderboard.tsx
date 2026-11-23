@@ -5,7 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Crown, Loader2, Medal, Trophy } from "lucide-react";
-import { IKA17_CATEGORIES, IKA17_MIN_MATCHES } from "@/lib/tournaments/ika17";
+import {
+  IKA17_CATEGORIES,
+  IKA17_MIN_MATCHES,
+  IKA17_MAIN_EVENT_SLOTS,
+} from "@/lib/tournaments/ika17";
 
 interface Standing {
   entryId: string;
@@ -21,7 +25,7 @@ interface Standing {
   rating: number | null;
 }
 
-type LevelFilter = "all" | "beginner" | "intermediate";
+type LevelFilter = "all" | "beginner" | "intermediate" | "advanced" | "expert";
 
 const LEVEL_LABEL: Record<string, string> = {
   beginner: "Beginner",
@@ -31,9 +35,13 @@ const LEVEL_LABEL: Record<string, string> = {
   unknown: "Level belum diisi",
 };
 
-function levelOf(standing: Standing): "beginner" | "intermediate" | "advanced" | "unknown" {
+function levelOf(
+  standing: Standing
+): "beginner" | "intermediate" | "advanced" | "expert" | "unknown" {
+  // `expert` sekarang berdiri sendiri supaya filter Expert bisa dipakai.
+  if (standing.level === "expert") return "expert";
+  if (standing.level === "advanced") return "advanced";
   if (standing.level === "intermediate") return "intermediate";
-  if (standing.level === "advanced" || standing.level === "expert") return "advanced";
   if (standing.level === "beginner") return "beginner";
   return "unknown";
 }
@@ -82,14 +90,13 @@ export function TournamentLeaderboard() {
     load(category);
   }, [category, load]);
 
-  const winners = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const level of ["beginner", "intermediate"] as const) {
-      const ranked = sortStandings(standings.filter((row) => levelOf(row) === level));
-      ranked.slice(0, 2).forEach((row, index) => {
-        map.set(row.entryId, `Juara ${index + 1} ${LEVEL_LABEL[level]}`);
-      });
-    }
+  // 8 besar tiap kategori lolos ke Main Event (bukan juara 1 & 2 per level).
+  // Syarat tambahan: minimal IKA17_MIN_MATCHES pertandingan tercatat.
+  const mainEventSlots = useMemo(() => {
+    const map = new Map<string, number>();
+    sortStandings(standings)
+      .slice(0, IKA17_MAIN_EVENT_SLOTS)
+      .forEach((row, index) => map.set(row.entryId, index + 1));
     return map;
   }, [standings]);
 
@@ -114,8 +121,8 @@ export function TournamentLeaderboard() {
               Leaderboard Turnamen
             </CardTitle>
             <CardDescription className="mt-1 text-xs">
-              Peringkat per kategori. Juara 1 &amp; 2 Beginner dan Juara 1 &amp; 2 Intermediate
-              lolos ke Main Event dengan syarat minimal {IKA17_MIN_MATCHES} pertandingan.
+              8 besar setiap kategori lolos ke Main Event, dengan syarat minimal{" "}
+              {IKA17_MIN_MATCHES} pertandingan tercatat selama periode liga.
             </CardDescription>
           </div>
           <Badge variant="outline" className="text-[10px] font-semibold">
@@ -149,6 +156,8 @@ export function TournamentLeaderboard() {
               ["all", "Semua Level"],
               ["beginner", "Beginner"],
               ["intermediate", "Intermediate"],
+              ["advanced", "Advanced"],
+              ["expert", "Expert"],
             ] as Array<[LevelFilter, string]>
           ).map(([value, label]) => (
             <Button
@@ -198,7 +207,7 @@ export function TournamentLeaderboard() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {visible.map((row, index) => {
-                  const winner = winners.get(row.entryId);
+                  const overallRank = mainEventSlots.get(row.entryId);
                   const qualifies = row.matchesPlayed >= IKA17_MIN_MATCHES;
                   const remaining = Math.max(0, IKA17_MIN_MATCHES - row.matchesPlayed);
                   const level = levelOf(row);
@@ -207,7 +216,7 @@ export function TournamentLeaderboard() {
                       <td className="py-2.5 pr-2 font-bold text-slate-500">{index + 1}</td>
                       <td className="py-2.5 pr-2">
                         <div className="flex items-center gap-1.5">
-                          {winner ? (
+                          {overallRank && overallRank <= 8 ? (
                             <Crown className="h-4 w-4 shrink-0 text-matchpoin-tennis" />
                           ) : (
                             <Medal className="h-3.5 w-3.5 shrink-0 text-slate-300" />
@@ -229,14 +238,14 @@ export function TournamentLeaderboard() {
                         {row.rating === null ? "-" : Math.round(row.rating)}
                       </td>
                       <td className="py-2.5 text-right">
-                        {winner ? (
+                        {overallRank && overallRank <= IKA17_MAIN_EVENT_SLOTS ? (
                           qualifies ? (
                             <Badge variant="success" className="text-[10px]">
-                              {winner} · Lolos
+                              8 besar · Lolos
                             </Badge>
                           ) : (
                             <Badge variant="outline" className="border-amber-200 bg-amber-50 text-[10px] text-amber-700">
-                              {winner} · butuh {remaining} match lagi
+                              8 besar · butuh {remaining} match lagi
                             </Badge>
                           )
                         ) : level === "advanced" ? (
@@ -256,9 +265,9 @@ export function TournamentLeaderboard() {
         )}
 
         <p className="text-[11px] leading-relaxed text-slate-500">
-          Juara ditentukan dari DTR tertinggi tiap level (Beginner dan Intermediate) per
-          kategori. Menang/kalah memengaruhi rating. Pemain wajib menyelesaikan minimal{" "}
-          {IKA17_MIN_MATCHES} pertandingan selama periode liga agar dinyatakan lolos ke Main Event.
+          Peringkat ditentukan dari DTR tertinggi per kategori. 8 besar setiap kategori lolos ke
+          Main Event. Menang/kalah memengaruhi rating, dan pemain wajib menyelesaikan minimal{" "}
+          {IKA17_MIN_MATCHES} pertandingan selama periode liga agar dinyatakan lolos.
         </p>
       </CardContent>
     </Card>

@@ -16,6 +16,7 @@ export interface DtrChangeResult {
 
 export const DTR_MIN_RATING: number;
 export const DTR_DEFAULT_RATING: number;
+export const DTR_ABSOLUTE_MIN_RATING: number;
 export const DTR_K_FACTOR: number;
 export const DTR_LOGISTIC_DIVISOR: number;
 export const DTR_STARTING_RATINGS: Record<string, number>;

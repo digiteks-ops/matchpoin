@@ -131,9 +131,6 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
       const bHost = b.userId === hostId || b.isOrganizer ? 0 : 1;
       return aHost - bHost || a.fullName.localeCompare(b.fullName);
     });
-  const organizerParticipates = match.participants.some(
-    (participant) => participant.userId === hostId || participant.isOrganizer
-  );
   const team1Members = sortTeamMembers(match.participants.filter(
     (participant) =>
       participant.userId === hostId ||
@@ -171,14 +168,17 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
     );
   }, [match.participants, match.pendingRequests, result?.submittedBy]);
 
+  // Kedua belah pihak boleh mengirim skor: host maupun lawan yang sudah
+  // terkonfirmasi. Pengirim pertama menjadi hasil "pending", pihak lain lalu
+  // mengonfirmasi atau menyanggahnya.
   const canSubmitResult =
-    (viewer.isOrganizer || (!organizerParticipates && viewer.isParticipant)) &&
+    (viewer.isOrganizer || viewer.isParticipant) &&
     match.status !== "cancelled" &&
     (!result || result.status === "pending");
   const canConfirm =
     Boolean(result) &&
     result?.status === "pending" &&
-    viewer.isParticipant &&
+    (viewer.isParticipant || viewer.isOrganizer) &&
     result?.submittedBy !== viewer.id;
 
   const callApi = async (
@@ -1061,7 +1061,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
               </p>
               <ol className="list-decimal list-inside space-y-1">
                 <li>Semua peserta terkonfirmasi (singles 2, doubles 4).</li>
-                <li>Host (penyelenggara) input skor resmi (Race to {raceTo}).</li>
+                <li>Host atau lawan terkonfirmasi input skor resmi (Race to {raceTo}).</li>
                 <li>Upload foto bukti wajib.</li>
                 <li>Pastikan skor sesuai, lalu submit untuk verifikasi.</li>
                 <li>Lawan punya 24 jam untuk konfirmasi/sanggah.</li>

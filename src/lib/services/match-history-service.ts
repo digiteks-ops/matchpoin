@@ -40,6 +40,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   womens_singles: "Tunggal Putri",
   mens_doubles: "Ganda Putra",
   womens_doubles: "Ganda Putri",
+  womens_doubles_intermediate: "Ganda Putri Beginner–Intermediate",
   mixed_doubles: "Ganda Campuran",
 };
 

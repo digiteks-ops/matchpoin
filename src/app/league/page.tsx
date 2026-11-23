@@ -8,6 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Clock, Trophy, Users, CheckCircle2, AlertCircle, Loader2, MapPin, ListChecks } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
+import {
+  IKA17_CATEGORIES,
+  IKA17_ELIGIBILITY_STATEMENT,
+  TOURNAMENT_LEVEL_LABELS,
+  ika17AllowedLevels,
+  ika17Category,
+  type TournamentLevel,
+} from "@/lib/tournaments/ika17";
 
 interface StandingRow {
   entryId: string;
@@ -47,17 +55,20 @@ interface LeagueRow {
   max_participants: number;
 }
 
-const CATEGORIES = [
-  { id: "mens_singles", label: "Men's Singles", desc: "Tunggal putra, 1 lawan 1." },
-  { id: "womens_singles", label: "Women's Singles", desc: "Tunggal putri, 1 lawan 1." },
-  { id: "mens_doubles", label: "Men's Doubles", desc: "Ganda putra, 2 lawan 2." },
-  { id: "womens_doubles", label: "Women's Doubles", desc: "Ganda putri, 2 lawan 2." },
-  { id: "mixed_doubles", label: "Mixed Doubles", desc: "Ganda campuran, 2 lawan 2." },
-] as const;
+// Satu sumber kategori: lihat src/lib/tournaments/ika17-core.mjs. Daftar lokal
+// sebelumnya masih memuat `womens_singles` dan tidak punya level/gender,
+// sehingga pendaftaran kategori baru ikut gagal.
+const CATEGORIES = IKA17_CATEGORIES;
+
+interface PartnerOption {
+  id: string;
+  name: string;
+  gender: string | null;
+}
 
 type RegStep = 1 | 2 | 3;
 
-const REG_OPEN = "2026-11-15";
+const REG_OPEN = "2026-12-01";
 const REG_CLOSE = "2026-12-31";
 
 function todayJakarta(): string {
@@ -99,11 +110,17 @@ export default function LeaguePage() {
   const [regCategory, setRegCategory] = useState<string>("mens_singles");
   const [regLeague, setRegLeague] = useState<LeagueRow | null>(null);
   const [regParticipantsCount, setRegParticipantsCount] = useState(0);
-  const [regProfile, setRegProfile] = useState<{ name: string; city: string; province: string } | null>(null);
+  const [regProfile, setRegProfile] = useState<{ name: string; city: string; province: string; gender: string | null } | null>(null);
   const [regAlready, setRegAlready] = useState(false);
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
   const [regSuccess, setRegSuccess] = useState(false);
+  // Kategori ganda butuh partner; semua kategori butuh level + pernyataan PORDA.
+  const [regPartnerId, setRegPartnerId] = useState("");
+  const [regPartners, setRegPartners] = useState<PartnerOption[]>([]);
+  const [regPartnersLoading, setRegPartnersLoading] = useState(false);
+  const [regLevel, setRegLevel] = useState<TournamentLevel>("beginner");
+  const [regEligibility, setRegEligibility] = useState(false);
 
   const [provinceFilter, setProvinceFilter] = useState("all");
   const [cityFilter, setCityFilter] = useState("all");
@@ -312,30 +329,39 @@ export default function LeaguePage() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
+      let gender: string | null = null;
       if (!user) {
         setRegProfile(null);
       } else {
         const { data: prof } = await supabase
           .from("player_profiles")
-          .select("display_name, users(full_name, cities(name, province))")
+          .select("display_name, users(full_name, gender, cities(name, province))")
           .eq("user_id", user.id)
           .maybeSingle();
         const city = pickCity((prof as any)?.users ?? null);
+        gender = (prof as any)?.users?.gender ?? null;
         setRegProfile({
           name: (prof as any)?.display_name || (prof as any)?.users?.full_name || "Pemain MATCHPOIN",
           city: city?.name ?? "",
           province: city?.province ?? "",
+          gender,
         });
       }
-      await prepareRegCategory(category, user?.id ?? null);
+      await prepareRegCategory(category, user?.id ?? null, gender);
     } finally {
       setRegLoading(false);
     }
   }
 
-  async function prepareRegCategory(cat: string, uid: string | null) {
+  async function prepareRegCategory(cat: string, uid: string | null, gender: string | null = null) {
     setRegError(null);
     setRegLoading(true);
+    // Reset pilihan per kategori: partner hanya berlaku untuk kategori ganda.
+    setRegPartnerId("");
+    setRegPartners([]);
+    setRegEligibility(false);
+    const allowedLevels = ika17AllowedLevels(cat);
+    setRegLevel(allowedLevels.length === 1 ? allowedLevels[0] : "beginner");
     try {
       const supabase = createClient();
       const { data: lg } = await supabase
@@ -355,17 +381,54 @@ export default function LeaguePage() {
       }
 
       // Quota counts entries, not rows: a doubles pair shares one entry_id.
-      // Include both confirmed and pending entries for quota/check
+      // Rows are limited to this category so a player registered in another
+      // category never inflates the quota or trips the duplicate check.
       const { data: partRows } = await supabase
         .from("tournament_participants")
-        .select("entry_id, user_id, status")
-        .eq("tournament_id", leagueRow.id);
+        .select("entry_id, user_id, status, category")
+        .eq("tournament_id", leagueRow.id)
+        .eq("category", cat);
 
-      const entries = (partRows ?? []) as { entry_id: string; user_id: string; status: string }[];
-      const activeEntries = entries.filter((e) => e.status !== 'rejected');
+      const entries = (partRows ?? []) as {
+        entry_id: string;
+        user_id: string;
+        status: string;
+        category: string | null;
+      }[];
+      const activeEntries = entries.filter((e) => e.status !== "rejected");
       setRegParticipantsCount(new Set(activeEntries.map((e) => e.entry_id)).size);
 
+      // Duplikat dihitung per kategori: pemain boleh ikut kategori lain.
       setRegAlready(Boolean(uid) && activeEntries.some((e) => e.user_id === uid));
+
+      // Kategori ganda: muat calon partner sejenis (campuran: lawan jenis).
+      const definition = ika17Category(cat);
+      if (definition?.doubles && uid) {
+        setRegPartnersLoading(true);
+        try {
+          const response = await fetch(
+            `/api/tournaments/${encodeURIComponent(leagueRow.id)}/partners?category=${encodeURIComponent(cat)}`,
+            { cache: "no-store" }
+          );
+          const payload = (await response.json()) as {
+            success?: boolean;
+            partners?: PartnerOption[];
+          };
+          const own = (payload.partners ?? []).filter((partner) => {
+            if (definition.genderRule === "male") return partner.gender === "male";
+            if (definition.genderRule === "female") return partner.gender === "female";
+            // Ganda campuran: partner harus lawan jenis dari pemain yang mendaftar.
+            if (gender === "male") return partner.gender === "female";
+            if (gender === "female") return partner.gender === "male";
+            return partner.gender === "male" || partner.gender === "female";
+          });
+          setRegPartners(own);
+        } catch {
+          setRegPartners([]);
+        } finally {
+          setRegPartnersLoading(false);
+        }
+      }
     } finally {
       setRegLoading(false);
     }
@@ -373,7 +436,7 @@ export default function LeaguePage() {
 
   async function onRegCategoryChange(cat: string) {
     setRegCategory(cat);
-    await prepareRegCategory(cat, currentUser?.id ?? null);
+    await prepareRegCategory(cat, currentUser?.id ?? null, regProfile?.gender ?? null);
   }
 
   async function confirmRegistration() {
@@ -382,7 +445,7 @@ export default function LeaguePage() {
     setRegLoading(true);
     try {
       if (!isRegistrationPeriodOpen()) {
-        setRegError(isRegistrationClosed() ? "Pendaftaran telah ditutup (batas 31 Desember 2026)." : "Pendaftaran dibuka mulai 15 November 2026.");
+        setRegError(isRegistrationClosed() ? "Pendaftaran telah ditutup (batas 31 Desember 2026)." : "Pendaftaran dibuka mulai 1 Desember 2026.");
         return;
       }
       if (regLeague.status !== "registration_open") {
@@ -397,13 +460,29 @@ export default function LeaguePage() {
         setRegError("Anda sudah terdaftar di kategori liga ini.");
         return;
       }
+      const definition = ika17Category(regCategory);
+      if (definition?.doubles && !regPartnerId) {
+        setRegError("Pilih partner untuk kategori ganda.");
+        return;
+      }
+      if (!ika17AllowedLevels(regCategory).includes(regLevel)) {
+        setRegError("Kategori ini khusus beginner: maksimal 2 tahun bermain.");
+        return;
+      }
+      if (!regEligibility) {
+        setRegError("Konfirmasi bahwa Anda belum pernah mengikuti PORDA, PORPROV, atau PON.");
+        return;
+      }
 
-      // All rules (open window, one entry per player, quota, gender for mixed
-      // doubles) are enforced by register_for_league() in the database.
       const res = await fetch("/api/tournaments/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tournamentId: regLeague.id }),
+        body: JSON.stringify({
+          tournamentId: regLeague.id,
+          partnerUserId: definition?.doubles ? regPartnerId : null,
+          playingExperience: regLevel,
+          eligibilityConfirmed: regEligibility,
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         success?: boolean;
@@ -416,7 +495,7 @@ export default function LeaguePage() {
       setRegSuccess(true);
       setRegStep(3);
       await loadLeagueData();
-      await prepareRegCategory(regCategory, currentUser.id);
+      await prepareRegCategory(regCategory, currentUser.id, regProfile?.gender ?? null);
     } finally {
       setRegLoading(false);
     }
@@ -503,12 +582,16 @@ export default function LeaguePage() {
               {regStep === 1 && (
                 <div className="space-y-3">
                   <p className="font-semibold text-slate-700">Langkah 1 — Pilih Kategori Liga</p>
+                  <p className="text-[11px] text-slate-500">
+                    Anda boleh mendaftar lebih dari satu kategori (mis. Single Man dan Double Man).
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {CATEGORIES.map((c) => (
                       <button key={c.id} onClick={() => onRegCategoryChange(c.id)}
-                        className={`text-left p-3 rounded-lg border transition-all ${regCategory === c.id ? "border-matchpoin-navy bg-slate-50" : "border-slate-200 hover:bg-slate-50"}`}>
+                        disabled={regLoading}
+                        className={`text-left p-3 rounded-lg border transition-all disabled:opacity-60 ${regCategory === c.id ? "border-matchpoin-navy bg-slate-50" : "border-slate-200 hover:bg-slate-50"}`}>
                         <div className="font-semibold text-slate-800">{c.label}</div>
-                        <div className="text-[11px] text-slate-500">{c.desc}</div>
+                        <div className="text-[11px] text-slate-500">{c.eligibilityLabel}</div>
                       </button>
                     ))}
                   </div>
@@ -546,10 +629,84 @@ export default function LeaguePage() {
                         <div><span className="text-slate-500">Lokasi:</span> <strong>{[regProfile?.city, regProfile?.province].filter(Boolean).join(", ") || "Belum diisi di profil"}</strong></div>
                         <div><span className="text-slate-500">Kuota saat ini:</span> <strong>{regParticipantsCount}/{regLeague?.max_participants ?? 12}</strong></div>
                       </div>
-                      <p className="text-slate-500">Pastikan data profil benar. Satu pemain hanya dapat terdaftar 1x per kategori liga.</p>
+
+                      {ika17Category(regCategory)?.doubles && (
+                        <div className="space-y-1">
+                          <label htmlFor="regPartner" className="font-semibold text-slate-700">Partner</label>
+                          <select
+                            id="regPartner"
+                            value={regPartnerId}
+                            onChange={(e) => setRegPartnerId(e.target.value)}
+                            disabled={regLoading || regPartnersLoading}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                          >
+                            <option value="">
+                              {regPartnersLoading ? "Memuat pemain..." : "Pilih partner"}
+                            </option>
+                            {regPartners.map((partner) => (
+                              <option key={partner.id} value={partner.id}>
+                                {partner.name}
+                                {partner.gender === "male" ? " (Putra)" : partner.gender === "female" ? " (Putri)" : ""}
+                              </option>
+                            ))}
+                          </select>
+                          {regPartners.length === 0 && !regPartnersLoading && (
+                            <p className="text-[11px] text-amber-700">
+                              Belum ada calon partner yang sesuai untuk kategori ini.
+                            </p>
+                          )}
+                          {ika17Category(regCategory)?.genderRule === "mixed" && !regProfile?.gender && (
+                            <p className="text-[11px] text-amber-700">
+                              Lengkapi jenis kelamin di profil agar partner ganda campuran dapat divalidasi.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="space-y-1">
+                        <span className="font-semibold text-slate-700">Pengalaman Bermain</span>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {(["beginner", "intermediate"] as TournamentLevel[]).map((level) => {
+                            const allowed = ika17AllowedLevels(regCategory).includes(level);
+                            return (
+                              <button
+                                key={level}
+                                type="button"
+                                disabled={!allowed}
+                                aria-pressed={regLevel === level}
+                                onClick={() => setRegLevel(level)}
+                                className={`rounded-lg border p-2 text-left text-[11px] disabled:cursor-not-allowed disabled:opacity-50 ${
+                                  regLevel === level && allowed
+                                    ? "border-matchpoin-navy bg-matchpoin-navy/5 font-semibold"
+                                    : "border-slate-200"
+                                }`}
+                              >
+                                {TOURNAMENT_LEVEL_LABELS[level]}
+                                {!allowed && (
+                                  <span className="mt-0.5 block text-[10px] font-semibold text-rose-600">
+                                    Tidak tersedia untuk kategori ini
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <label className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-2 text-[11px] text-rose-800">
+                        <input
+                          type="checkbox"
+                          checked={regEligibility}
+                          onChange={(e) => setRegEligibility(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 shrink-0 rounded border-rose-300 text-rose-600"
+                        />
+                        <span>Saya menyatakan {IKA17_ELIGIBILITY_STATEMENT}</span>
+                      </label>
+
+                      <p className="text-slate-500">Pastikan data profil benar. Satu pemain hanya dapat terdaftar 1x per kategori liga, tetapi boleh mengikuti kategori lain.</p>
                       <div className="flex justify-between gap-2">
                         <Button variant="outline" size="sm" onClick={() => setRegStep(1)} disabled={regLoading}>Kembali</Button>
-                        <Button variant="tennis" size="sm" className="text-matchpoin-navy font-bold" onClick={confirmRegistration} disabled={regLoading || !currentUser || regAlready || !regLeague}>
+                        <Button variant="tennis" size="sm" className="text-matchpoin-navy font-bold" onClick={confirmRegistration} disabled={regLoading || !currentUser || regAlready || !regLeague || (ika17Category(regCategory)?.doubles && !regPartnerId) || !ika17AllowedLevels(regCategory).includes(regLevel) || !regEligibility}>
                           {regLoading ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Mendaftarkan...</> : "Konfirmasi Pendaftaran"}
                         </Button>
                       </div>

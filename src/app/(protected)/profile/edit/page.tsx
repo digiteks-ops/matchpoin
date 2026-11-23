@@ -51,6 +51,8 @@ export default function EditProfilePage() {
   const [playFrequency, setPlayFrequency] = useState<PlayFrequency>("weekly");
   const [selfAssessedLevel, setSelfAssessedLevel] = useState<SkillLevel>("beginner");
   const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>("public");
+  // Kategori awal dikunci sekali; sesudahnya rating hanya bergerak lewat hasil tanding.
+  const [startingLevelLocked, setStartingLevelLocked] = useState(false);
 
   // Arrays for preferences
   const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
@@ -130,6 +132,16 @@ const loadProfile = useCallback(async () => {
         setPreferredCategories(profileData.preferred_categories || []);
         setPreferredTimes(profileData.preferred_times || []);
       }
+
+      const { data: ratingData } = await supabase
+        .from("player_ratings")
+        .select("matches_played, starting_rating_set_at")
+        .eq("user_id", authUser.id)
+        .maybeSingle();
+
+      setStartingLevelLocked(
+        Boolean(ratingData?.starting_rating_set_at) || (ratingData?.matches_played ?? 0) > 0
+      );
     } catch (err: any) {
       setErrorMessage(err?.message || "Gagal memuat profil.");
     } finally {
@@ -468,16 +480,18 @@ const loadProfile = useCallback(async () => {
                     id="selfAssessedLevel"
                     value={selfAssessedLevel}
                     onChange={(e) => setSelfAssessedLevel(e.target.value as SkillLevel)}
-                    className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+                    disabled={startingLevelLocked}
+                    className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis disabled:bg-slate-100 disabled:text-slate-500"
                   >
-                    <option value="beginner">Pemula (Beginner: DTR 1000 – 1499)</option>
-                    <option value="intermediate">Menengah (Intermediate: DTR 1500 – 1999)</option>
-                    <option value="advanced">Mahir (Advanced: DTR 2000 – 2499)</option>
-                    <option value="expert">Ahli (Expert: DTR 2500+)</option>
+                    <option value="beginner">Beginner: maksimal 2 tahun bermain</option>
+                    <option value="intermediate">Intermediate: lebih dari 2 tahun bermain</option>
+                    <option value="advanced">Advanced: pernah mengikuti PORDA, PORPROV, PON</option>
+                    <option value="expert">Expert: level turnamen</option>
                   </select>
                   <p className="text-[11px] text-slate-500">
-                    Level ini menentukan rating awal DTR sebelum pertandingan pertama. Setelah
-                    bertanding, kategori mengikuti rating terbaru secara otomatis.
+                    {startingLevelLocked
+                      ? "Kategori awal sudah ditetapkan saat pendaftaran. Rating kini bergerak mengikuti hasil pertandingan."
+                      : "Level ini menentukan rating awal DTR Anda. Pilihan hanya berlaku sekali, sebelum pertandingan pertama."}
                   </p>
                 </div>
 

@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logError } from "@/lib/errors";
+import { DTR_DEFAULT_RATING, dtrStartingRating } from "@/lib/rating/dtr-core.mjs";
+import type { SkillLevel } from "@/types/database.types";
 
 export interface PlayerSyncResult {
   created: boolean;
@@ -23,7 +25,8 @@ function fallbackName(email: string, fullName?: string): string {
 export async function ensurePlayerRecords(
   userId: string,
   email: string,
-  fullName?: string
+  fullName?: string,
+  startingLevel?: SkillLevel
 ): Promise<PlayerSyncResult> {
   const admin = createAdminClient();
   if (!admin) {
@@ -73,7 +76,7 @@ export async function ensurePlayerRecords(
       preferred_hand: "right",
       backhand: "two_handed",
       play_frequency: "weekly",
-      self_assessed_level: "beginner",
+      self_assessed_level: startingLevel ?? "beginner",
       completion_score: 40,
     });
 
@@ -82,25 +85,69 @@ export async function ensurePlayerRecords(
 
   const { data: existingRating } = await admin
     .from("player_ratings")
-    .select("user_id")
+    .select("user_id, matches_played, starting_rating_set_at")
     .eq("user_id", userId)
     .maybeSingle();
+
+  const startingRating = startingLevel ? dtrStartingRating(startingLevel) : DTR_DEFAULT_RATING;
 
   if (!existingRating) {
     const { error: ratingError } = await admin.from("player_ratings").insert({
       user_id: userId,
-      current_rating: 1000,
-      peak_rating: 1000,
+      current_rating: startingRating,
+      peak_rating: startingRating,
       matches_played: 0,
       wins: 0,
       losses: 0,
       draws: 0,
+      ...(startingLevel ? { starting_rating_set_at: new Date().toISOString() } : {}),
     });
 
     if (ratingError) logError("onboarding.insert_rating", ratingError, { userId });
+  } else if (
+    startingLevel &&
+    existingRating.matches_played === 0 &&
+    !existingRating.starting_rating_set_at
+  ) {
+    // Kategori awal hanya berlaku sekali, sebelum pertandingan pertama.
+    const { error: ratingError } = await admin
+      .from("player_ratings")
+      .update({
+        current_rating: startingRating,
+        peak_rating: startingRating,
+        starting_rating_set_at: new Date().toISOString(),
+      })
+      .eq("user_id", userId)
+      .is("starting_rating_set_at", null)
+      .eq("matches_played", 0);
+
+    if (ratingError) logError("onboarding.update_rating", ratingError, { userId });
   }
 
   return { created: !existingUser, skipped: false, viaAdmin: true };
 }
 
 export const ensurePlayerRecordsServer = ensurePlayerRecords;
+
+/**
+ * Mencatat "terakhir login" dari sisi server (dipakai callback OAuth).
+ *
+ * Memakai service role karena baris `player_profiles` pemain baru saja dibuat
+ * dan cookie sesi belum tentu sudah terkirim ke `auth.uid()`. Best effort:
+ * kegagalan dicatat di log, tidak pernah dilempar ke pemanggil.
+ */
+export async function recordLastSeenServer(userId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  if (!admin) return false;
+
+  const { error } = await admin
+    .from("player_profiles")
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq("user_id", userId);
+
+  if (error) {
+    logError("onboarding.record_last_seen", error, { userId });
+    return false;
+  }
+  return true;
+}

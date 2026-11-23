@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Logo } from "./logo";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
+import { recordLastSeen } from "@/lib/services/last-seen";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import {
   Menu,
@@ -44,16 +45,27 @@ export function Navbar() {
 
       supabase.auth.getUser().then(({ data: { user } }) => {
         setUser(user ? { id: user.id } : null);
-        if (user) void loadRoles(user.id);
+        if (user) {
+          void loadRoles(user.id);
+          // Sesi yang dipulihkan dari cookie tidak melewati halaman login, jadi
+          // "terakhir login" juga dicatat di sini (di-throttle 30 menit).
+          void recordLastSeen(user.id);
+        }
         setLoading(false);
       });
 
       const {
         data: { subscription },
-      } = supabase.auth.onAuthStateChange((_event, session) => {
+      } = supabase.auth.onAuthStateChange((event, session) => {
         setUser(session?.user ?? null);
-        if (session?.user) void loadRoles(session.user.id);
-        else setIsAdmin(false);
+        if (session?.user) {
+          void loadRoles(session.user.id);
+          // Halaman login sudah mencatat dengan `force`; di sini cukup throttle
+          // supaya refresh token tidak menulis ke database terus-menerus.
+          if (event === "SIGNED_IN") void recordLastSeen(session.user.id);
+        } else {
+          setIsAdmin(false);
+        }
       });
 
       return () => {

@@ -51,11 +51,15 @@ test("payload parser accepts a tournament id and optional partner", () => {
   const parsed = parseRegistrationPayload({
     tournamentId: "0f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b",
     partnerUserId: null,
+    playingExperience: "beginner",
+    eligibilityConfirmed: true,
   });
   assert.deepEqual(parsed, {
     ok: true,
     leagueId: "0f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b",
     partnerUserId: null,
+    playingExperience: "beginner",
+    eligibilityConfirmed: true,
   });
 });
 

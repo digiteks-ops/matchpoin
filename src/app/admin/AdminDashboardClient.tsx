@@ -130,7 +130,7 @@ export default function AdminDashboardClient({ initialStats, initialActivity, er
             icon={<Users className="w-5 h-5 text-emerald-600" />}
             label="Pemain Aktif (Publik)"
             value={stats.activePlayers}
-            href="/admin/settings?tab=players"
+            href="/admin/settings?tab=users"
             color="emerald"
           />
           <StatCard
@@ -218,13 +218,8 @@ export default function AdminDashboardClient({ initialStats, initialActivity, er
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Link href="/admin/settings?tab=users" className="p-4 rounded-xl border border-slate-200 hover:border-matchpoin-tense hover:shadow-sm transition-all text-center">
                 <Users className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                <p className="font-semibold text-slate-900">Manajemen Pengguna</p>
-                <p className="text-xs text-slate-500 mt-1">Lihat & kelola role pengguna</p>
-              </Link>
-              <Link href="/admin/settings?tab=players" className="p-4 rounded-xl border border-slate-200 hover:border-matchpoin-tense hover:shadow-sm transition-all text-center">
-                <Users className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
-                <p className="font-semibold text-slate-900">Manajemen Pemain</p>
-                <p className="text-xs text-slate-500 mt-1">Cari & lihat detail pemain</p>
+                <p className="font-semibold text-slate-900">Manajemen Pengguna &amp; Pemain</p>
+                <p className="text-xs text-slate-500 mt-1">Kelola role, rating, dan profil pemain</p>
               </Link>
               <Link href="/admin/settings?tab=matches" className="p-4 rounded-xl border border-slate-200 hover:border-matchpoin-tense hover:shadow-sm transition-all text-center">
                 <Calendar className="w-8 h-8 text-amber-600 mx-auto mb-2" />

@@ -1,3 +1,5 @@
+import { ika17AllowedLevels } from "../tournaments/ika17-core.mjs";
+
 const MAX_ID_LENGTH = 36;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 
@@ -17,14 +19,26 @@ export function isValidId(value) {
 }
 
 export function inferCategory(name) {
-  if (/mixed/i.test(name)) return "mixed_doubles";
-  if (/women.*doubles/i.test(name)) return "womens_doubles";
-  if (/doubles/i.test(name)) return "mens_doubles";
+  if (/mix/i.test(name)) return "mixed_doubles";
+  // Label resmi memakai "Double Woman"/"Double Man" (tunggal, bukan "Doubles"),
+  // jadi cocokkan "double" dan "doubles" sekaligus.
+  if (/wom[ae]n.*intermediate/i.test(name)) return "womens_doubles_intermediate";
+  if (/wom[ae]n/i.test(name) && /doubles?|ganda/i.test(name)) return "womens_doubles";
+  if (/doubles?|ganda/i.test(name)) return "mens_doubles";
   return "mens_singles";
 }
 
 export function isDoubles(category) {
-  return typeof category === "string" && category.endsWith("_doubles");
+  return typeof category === "string" && category.includes("_doubles");
+}
+
+/**
+ * Returns true when the category only accepts beginner (max 2 years playing).
+ * Derived from the shared IKA17 category table so it cannot drift.
+ */
+export function isBeginnerOnlyCategory(category) {
+  const levels = ika17AllowedLevels(category);
+  return levels.length === 1 && levels[0] === "beginner";
 }
 
 export function parseRegistrationPayload(payload) {
@@ -45,12 +59,39 @@ export function parseRegistrationPayload(payload) {
     return { ok: false, message: "Partner tidak valid." };
   }
 
-  return { ok: true, leagueId, partnerUserId: partnerUserId || null };
+  const playingExperience = payload.playingExperience;
+  if (playingExperience !== "beginner" && playingExperience !== "intermediate") {
+    return {
+      ok: false,
+      message:
+        "Pilih pengalaman bermain: beginner (maksimal 2 tahun) atau intermediate (lebih dari 2 tahun).",
+    };
+  }
+
+  if (payload.eligibilityConfirmed !== true) {
+    return {
+      ok: false,
+      message: "Konfirmasi bahwa Anda belum pernah mengikuti PORDA, PORPROV, atau PON.",
+    };
+  }
+
+  return {
+    ok: true,
+    leagueId,
+    partnerUserId: partnerUserId || null,
+    playingExperience,
+    eligibilityConfirmed: true,
+  };
 }
 
 /**
  * Applies the league registration business rules in one place so the API and
  * the service cannot drift apart.
+ *
+ * A player MAY register in several categories (for example Single Man plus
+ * Double Man). The duplicate checks below are therefore per category: they only
+ * look at entries already registered in THIS category. Cross-category blocking
+ * was the bug that stopped a second registration.
  */
 export function evaluateLeagueRegistration(input) {
   const {
@@ -63,6 +104,8 @@ export function evaluateLeagueRegistration(input) {
     partnerGender = null,
     userExists = true,
     partnerExists = true,
+    playingExperience = null,
+    eligibilityConfirmed = true,
     today,
   } = input;
 
@@ -70,6 +113,30 @@ export function evaluateLeagueRegistration(input) {
 
   const category = tournament.category || inferCategory(tournament.name || "");
   const doubles = isDoubles(category);
+
+  // Syarat level: beginner maksimal 2 tahun bermain, intermediate lebih dari 2.
+  if (playingExperience !== null && playingExperience !== undefined) {
+    if (playingExperience !== "beginner" && playingExperience !== "intermediate") {
+      return {
+        ok: false,
+        message:
+          "Pilih pengalaman bermain: beginner (maksimal 2 tahun) atau intermediate (lebih dari 2 tahun).",
+      };
+    }
+    if (isBeginnerOnlyCategory(category) && playingExperience !== "beginner") {
+      return {
+        ok: false,
+        message: "Kategori ini khusus beginner: maksimal 2 tahun bermain.",
+      };
+    }
+  }
+
+  if (eligibilityConfirmed === false) {
+    return {
+      ok: false,
+      message: "Konfirmasi bahwa Anda belum pernah mengikuti PORDA, PORPROV, atau PON.",
+    };
+  }
 
   if (!doubles && partnerUserId) {
     return { ok: false, message: "Kategori tunggal tidak dapat memilih partner." };

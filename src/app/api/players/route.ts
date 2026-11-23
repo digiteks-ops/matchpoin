@@ -3,6 +3,7 @@ import { logError } from "@/lib/errors";
 import {
   getActiveCities,
   getPublicPlayers,
+  normalizePublicPlayerOrder,
 } from "@/lib/supabase/public-player-service";
 import { signAvatarUrl } from "@/lib/storage/supabase";
 
@@ -17,7 +18,8 @@ export async function GET(request: Request) {
       { status: 400 }
     );
   }
-  const order = query.get("order") === "rating" ? "rating" : "name";
+  // `last_active` = urutkan dari yang paling baru login.
+  const order = normalizePublicPlayerOrder(query.get("order"));
 
   try {
     const [players, cities] = await Promise.all([

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { ensurePlayerRecordsServer } from "@/lib/services/player-sync";
+import { ensurePlayerRecordsServer, recordLastSeenServer } from "@/lib/services/player-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -42,13 +42,45 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?error=email_missing`);
   }
 
+  let createdPlayer = false;
+
   try {
     const fullName =
       (data.user.user_metadata?.full_name as string | undefined) ||
       (data.user.user_metadata?.name as string | undefined);
-    await ensurePlayerRecordsServer(data.user.id, data.user.email, fullName);
+    const metaLevel = data.user.user_metadata?.starting_level;
+    const startingLevel =
+      metaLevel === "beginner" ||
+      metaLevel === "intermediate" ||
+      metaLevel === "advanced" ||
+      metaLevel === "expert"
+        ? metaLevel
+        : undefined;
+    const sync = await ensurePlayerRecordsServer(
+      data.user.id,
+      data.user.email,
+      fullName,
+      startingLevel
+    );
+    createdPlayer = sync.created && !startingLevel;
   } catch (err) {
     console.error("OAuth player sync error:", err);
+  }
+
+  // Catat "terakhir login" untuk direktori pemain (/players). Best effort, dan
+  // dijalankan setelah baris profil dibuat agar tidak ada yang terlewat.
+  try {
+    await recordLastSeenServer(data.user.id);
+  } catch (err) {
+    console.error("OAuth last-seen error:", err);
+  }
+
+  // OAuth tidak membawa pilihan kategori: pemain baru diarahkan memilih sekali.
+  if (createdPlayer) {
+    const safeNextPath = next.startsWith("/") ? next : "/dashboard";
+    return NextResponse.redirect(
+      `${origin}/pilih-kategori?next=${encodeURIComponent(safeNextPath)}`
+    );
   }
 
   const safeNext = next.startsWith("/") ? next : "/dashboard";
