@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { buildAuthCallbackUrl } from "@/lib/auth/callback-url.mjs";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 
@@ -158,9 +159,7 @@ export function OAuthButtons({ redirectTo = "/dashboard", mode = "signin" }: OAu
 
     try {
       const supabase = createClient();
-      const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(
-        redirectTo
-      )}`;
+      const callbackUrl = buildAuthCallbackUrl(window.location.origin, redirectTo);
 
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,

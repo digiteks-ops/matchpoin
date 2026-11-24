@@ -8,6 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Logo } from "@/components/layout/logo";
 import { createClient } from "@/lib/supabase/client";
+import {
+  buildAuthCallbackUrl,
+  PASSWORD_RECOVERY_PATH,
+} from "@/lib/auth/callback-url.mjs";
 import { AlertCircle, ArrowLeft, Loader2, CheckCircle2, Mail } from "lucide-react";
 
 export default function ForgotPasswordPage() {
@@ -23,7 +27,13 @@ export default function ForgotPasswordPage() {
 
     try {
       const supabase = createClient();
-      const redirectUrl = `${window.location.origin}/reset-password`;
+      // Lewat /auth/callback agar `code` dari email ditukar menjadi sesi lebih
+      // dulu. Tanpa sesi, halaman /reset-password tidak bisa menyimpan sandi
+      // baru — itulah kenapa formulir ganti sandi tidak pernah muncul.
+      const redirectUrl = buildAuthCallbackUrl(
+        window.location.origin,
+        PASSWORD_RECOVERY_PATH
+      );
 
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
         redirectTo: redirectUrl,

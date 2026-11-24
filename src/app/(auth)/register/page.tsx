@@ -12,6 +12,7 @@ import { Logo } from "@/components/layout/logo";
 import { createClient } from "@/lib/supabase/client";
 import { ensurePlayerRecords } from "@/lib/services/player-service";
 import { recordLastSeen } from "@/lib/services/last-seen";
+import { mapSignUpError } from "@/lib/auth/auth-errors-core.mjs";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { dtrStartingRating } from "@/lib/rating/dtr-core.mjs";
 import type { SkillLevel } from "@/types/database.types";
@@ -89,7 +90,7 @@ export default function RegisterPage() {
       });
 
       if (error) {
-        setErrorMessage(error.message);
+        setErrorMessage(mapSignUpError(error.message));
         setIsLoading(false);
         return;
       }
@@ -119,7 +120,7 @@ export default function RegisterPage() {
         }, 1500);
       }
     } catch (err: any) {
-      setErrorMessage(err?.message || "Gagal melakukan pendaftaran. Silakan coba lagi.");
+      setErrorMessage(mapSignUpError(err?.message));
       setIsLoading(false);
     }
   };
@@ -176,7 +177,15 @@ export default function RegisterPage() {
                 </div>
               )}
 
+              {/* Daftar akun baru. Pemain yang sudah punya akun memakai
+                  halaman Masuk (tautan di bawah), bukan formulir ini. */}
               <OAuthButtons redirectTo="/dashboard" mode="signup" />
+              <p className="text-center text-[11px] text-slate-500">
+                Sudah punya akun?{" "}
+                <Link href="/login" className="font-bold text-matchpoin-navy hover:underline">
+                  Masuk di sini
+                </Link>
+              </p>
 
               <div className="space-y-2">
                 <Label htmlFor="fullName">Nama Lengkap</Label>

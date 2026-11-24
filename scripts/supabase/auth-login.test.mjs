@@ -7,6 +7,14 @@ const middleware = await readFile(new URL("../../src/middleware.ts", import.meta
 const authError = await readFile(new URL("../../src/app/(auth)/error.tsx", import.meta.url), "utf8");
 const loginPage = await readFile(new URL("../../src/app/(auth)/login/page.tsx", import.meta.url), "utf8");
 const envExample = await readFile(new URL("../../.env.example", import.meta.url), "utf8");
+const authErrors = await readFile(
+  new URL("../../src/lib/auth/auth-errors-core.mjs", import.meta.url),
+  "utf8"
+);
+const registerPage = await readFile(
+  new URL("../../src/app/(auth)/register/page.tsx", import.meta.url),
+  "utf8"
+);
 
 test("/auth/login redirects to the real /login route", () => {
   assert.match(
@@ -27,9 +35,15 @@ test("auth group has a friendly Indonesian error boundary", () => {
 });
 
 test("login page maps auth failures to Indonesian and never leaves a blank screen", () => {
-  assert.match(loginPage, /Email atau kata sandi yang Anda masukkan salah/);
-  assert.match(loginPage, /Email Anda belum diverifikasi/);
-  assert.match(loginPage, /Terjadi kesalahan saat masuk/);
+  // Pesan Indonesia sekarang berasal dari satu modul (auth-errors-core) supaya
+  // halaman Daftar dan Masuk tidak menampilkan teks mentah Supabase.
+  assert.match(loginPage, /mapSignInError/);
+  const errors = authErrors;
+  assert.match(errors, /Email atau kata sandi salah/);
+  assert.match(errors, /Email Anda belum diverifikasi/);
+  assert.match(errors, /Gagal masuk:/);
+  // Halaman Daftar memakai pemetaan terpisah, bukan pesan masuk.
+  assert.match(registerPage, /mapSignUpError/);
 });
 
 test("required Vercel environment variables are documented", () => {

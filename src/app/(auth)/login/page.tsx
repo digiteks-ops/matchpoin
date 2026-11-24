@@ -12,6 +12,7 @@ import { Logo } from "@/components/layout/logo";
 import { createClient } from "@/lib/supabase/client";
 import { ensurePlayerRecords } from "@/lib/services/player-service";
 import { recordLastSeen } from "@/lib/services/last-seen";
+import { mapSignInError } from "@/lib/auth/auth-errors-core.mjs";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { AlertCircle, ArrowLeft, Loader2 } from "lucide-react";
 
@@ -51,13 +52,7 @@ function LoginForm() {
       });
 
       if (error) {
-        if (error.message.includes("Invalid login credentials")) {
-          setErrorMessage("Email atau kata sandi yang Anda masukkan salah.");
-        } else if (error.message.includes("Email not confirmed")) {
-          setErrorMessage("Email Anda belum diverifikasi. Silakan periksa inbox email Anda.");
-        } else {
-          setErrorMessage(error.message);
-        }
+        setErrorMessage(mapSignInError(error.message));
         setIsLoading(false);
         return;
       }
@@ -77,7 +72,7 @@ function LoginForm() {
         router.refresh();
       }
     } catch (err: any) {
-      setErrorMessage(err?.message || "Terjadi kesalahan saat masuk. Silakan coba lagi.");
+      setErrorMessage(mapSignInError(err?.message));
       setIsLoading(false);
     }
   };

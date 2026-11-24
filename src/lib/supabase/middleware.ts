@@ -6,6 +6,7 @@ import {
   isProtectedAppPath,
   loginPathFor,
 } from "@/lib/auth/protected-routes.mjs";
+import { PASSWORD_RECOVERY_PATH } from "@/lib/auth/callback-url.mjs";
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
@@ -70,8 +71,11 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // If user is logged in and trying to visit login/register, redirect to dashboard
-  if (user && isAuthPath(pathname)) {
+  // /reset-password harus tetap bisa dibuka walau sesi pemulihan sudah aktif —
+  // justru sesi itulah yang membuat ganti kata sandi bisa disimpan. Sebelumnya
+  // halaman ini ikut dipantulkan ke /dashboard sehingga formulir ganti sandi
+  // tidak pernah muncul setelah pemain mengklik tautan dari email.
+  if (user && isAuthPath(pathname) && pathname !== PASSWORD_RECOVERY_PATH) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     url.search = "";
