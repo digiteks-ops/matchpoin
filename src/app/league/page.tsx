@@ -14,6 +14,8 @@ import {
   TOURNAMENT_LEVEL_LABELS,
   ika17AllowedLevels,
   ika17Category,
+  IKA17_REGISTRATION_OPEN,
+  IKA17_REGISTRATION_DEADLINE,
   type TournamentLevel,
 } from "@/lib/tournaments/ika17";
 
@@ -68,8 +70,9 @@ interface PartnerOption {
 
 type RegStep = 1 | 2 | 3;
 
-const REG_OPEN = "2026-12-01";
-const REG_CLOSE = "2026-12-31";
+// Sumber tunggal: src/lib/tournaments/ika17-core.mjs.
+const REG_OPEN = IKA17_REGISTRATION_OPEN;
+const REG_CLOSE = IKA17_REGISTRATION_DEADLINE;
 
 function todayJakarta(): string {
   return new Intl.DateTimeFormat("en-CA", {

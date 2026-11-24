@@ -70,7 +70,7 @@ async function registerWithoutRpc(input: {
 
   const tournamentResult = await admin
     .from("tournaments")
-    .select("id, name, category, status, max_participants, registration_deadline")
+    .select("id, name, category, status, max_participants, registration_deadline, registration_open_at")
     .eq("id", tournamentId)
     .maybeSingle();
   if (tournamentResult.error) return null;
@@ -82,6 +82,7 @@ async function registerWithoutRpc(input: {
         status: string | null;
         max_participants: number | null;
         registration_deadline: string | null;
+        registration_open_at: string | null;
       }
     | null;
   if (!tournament) {
@@ -119,6 +120,7 @@ async function registerWithoutRpc(input: {
       status: tournament.status,
       max_participants: tournament.max_participants,
       registration_deadline: tournament.registration_deadline,
+      registration_open_at: tournament.registration_open_at,
       name: tournament.name,
     },
     userId,

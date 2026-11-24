@@ -68,7 +68,8 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'message', 'Akun pemain tidak ditemukan.');
   END IF;
 
-  SELECT id, name, category, status, registration_deadline, max_participants, slug
+  SELECT id, name, category, status, registration_deadline, registration_open_at,
+         max_participants, slug
     INTO v_tournament
     FROM public.tournaments
    WHERE id = p_tournament_id;
@@ -79,6 +80,17 @@ BEGIN
 
   IF v_tournament.status <> 'registration_open' THEN
     RETURN jsonb_build_object('success', false, 'message', 'Pendaftaran untuk kategori ini sudah ditutup.');
+  END IF;
+
+  -- Periode pendaftaran: 1 - 31 Desember 2026 (sumber: ika17-core.mjs).
+  IF v_tournament.registration_open_at IS NOT NULL
+     AND (v_tournament.registration_open_at AT TIME ZONE 'Asia/Makassar')::date > CURRENT_DATE THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'message', 'Pendaftaran dibuka mulai ' ||
+        to_char((v_tournament.registration_open_at AT TIME ZONE 'Asia/Makassar')::date,
+                'FMDD FMMonth YYYY') || '.'
+    );
   END IF;
 
   IF v_tournament.registration_deadline IS NOT NULL

@@ -4,6 +4,7 @@ export interface LeagueRegistrationTournament {
   status?: string | null;
   max_participants?: number | null;
   registration_deadline?: string | null;
+  registration_open_at?: string | null;
 }
 
 export type ParsedRegistrationPayload =
@@ -42,6 +43,8 @@ export function isValidId(value: unknown): boolean;
 export function inferCategory(name: string): string;
 export function isDoubles(category: string): boolean;
 export function isBeginnerOnlyCategory(category: string): boolean;
+/** "2026-12-01" -> "1 Desember 2026". */
+export function formatRegistrationOpen(isoDate: string | null | undefined): string;
 export function parseRegistrationPayload(payload: unknown): ParsedRegistrationPayload;
 export function evaluateLeagueRegistration(
   input: LeagueRegistrationEvaluationInput

@@ -33,6 +33,21 @@ export function isDoubles(category) {
 }
 
 /**
+ * "2026-12-01" -> "1 Desember 2026". Dipakai di pesan agar tanggal buka terbaca
+ * sama di semua halaman.
+ */
+export function formatRegistrationOpen(isoDate) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(isoDate ?? ""));
+  if (!match) return "tanggal yang ditentukan";
+  const months = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+  ];
+  const month = months[Number(match[2]) - 1] ?? "";
+  return `${Number(match[3])} ${month} ${match[1]}`;
+}
+
+/**
  * Returns true when the category only accepts beginner (max 2 years playing).
  * Derived from the shared IKA17 category table so it cannot drift.
  */
@@ -143,6 +158,18 @@ export function evaluateLeagueRegistration(input) {
   }
   if (tournament.status !== "registration_open") {
     return { ok: false, message: "Pendaftaran untuk kategori ini sudah ditutup." };
+  }
+  // Periode pendaftaran: 1 - 31 Desember 2026. Sebelum tanggal buka, pemain
+  // belum boleh mendaftar — dulu /league memblokir tetapi /tournaments tidak,
+  // sehingga aturannya berbeda antar halaman.
+  if (tournament.registration_open_at && today) {
+    const openDate = String(tournament.registration_open_at).slice(0, 10);
+    if (today < openDate) {
+      return {
+        ok: false,
+        message: `Pendaftaran dibuka mulai ${formatRegistrationOpen(openDate)}.`,
+      };
+    }
   }
   if (tournament.registration_deadline && today && tournament.registration_deadline < today) {
     return { ok: false, message: "Pendaftaran untuk kategori ini sudah ditutup." };

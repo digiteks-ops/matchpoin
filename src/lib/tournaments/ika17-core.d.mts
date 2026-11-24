@@ -39,6 +39,8 @@ export const IKA17_START_DATE: string;
 export const IKA17_END_DATE: string;
 export const IKA17_MAIN_EVENT_START: string;
 export const IKA17_MAIN_EVENT_END: string;
+/** Periode pendaftaran liga: 1 - 31 Desember 2026. */
+export const IKA17_REGISTRATION_OPEN: string;
 export const IKA17_REGISTRATION_DEADLINE: string;
 export const IKA17_QUOTA: number;
 export const IKA17_MIN_MATCHES: number;

@@ -52,14 +52,21 @@ for (const file of files) {
   const sql = await readFile(path.join(migrationsDir, file), "utf8");
   const upper = sql.toUpperCase();
 
+  // Komentar tidak boleh dianggap SQL: migrasi 00024 memuat contoh manual
+  // `CREATE TABLE ... matches_status_backup` di dalam komentar, yang dulu
+  // dilaporkan sebagai tabel tanpa RLS padahal tabelnya tidak pernah dibuat.
+  const structural = sql
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/--.*$/gm, "");
+
   // Tables
-  for (const match of sql.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?public\.([a-z_][a-z0-9_]*)/gi)) {
+  for (const match of structural.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?public\.([a-z_][a-z0-9_]*)/gi)) {
     const name = match[1].toLowerCase();
     if (!tables.has(name)) tables.set(name, { rls: false, file });
   }
 
   // RLS enable
-  for (const match of sql.matchAll(/ALTER\s+TABLE\s+public\.([a-z_][a-z0-9_]*)\s+ENABLE\s+ROW\s+LEVEL\s+SECURITY/gi)) {
+  for (const match of structural.matchAll(/ALTER\s+TABLE\s+public\.([a-z_][a-z0-9_]*)\s+ENABLE\s+ROW\s+LEVEL\s+SECURITY/gi)) {
     const name = match[1].toLowerCase();
     const entry = tables.get(name) ?? { rls: false, file };
     entry.rls = true;

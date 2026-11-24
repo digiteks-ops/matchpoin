@@ -67,3 +67,46 @@ test("registration still works when the RPC is missing or has another signature"
   // Error RPC asli tetap dilaporkan bila fallback tidak bisa menangani.
   assert.match(route, /throw new Error\(error\.message\)/);
 });
+
+test("registration opens 1 December 2026 everywhere, not just on /league", async () => {
+  const { evaluateLeagueRegistration, formatRegistrationOpen } = await import(
+    "../../src/lib/mysql/competition-registration-core.mjs"
+  );
+  const base = {
+    tournament: {
+      category: "mens_singles",
+      status: "registration_open",
+      max_participants: 24,
+      registration_deadline: "2026-12-31",
+      registration_open_at: "2026-12-01",
+    },
+    userId: "u1",
+    partnerUserId: null,
+    registeredUserIds: [],
+    entryCount: 0,
+    playingExperience: "beginner",
+    eligibilityConfirmed: true,
+  };
+  // Sebelum tanggal buka: ditolak dengan pesan bertanggal.
+  const early = evaluateLeagueRegistration({ ...base, today: "2026-11-24" });
+  assert.equal(early.ok, false);
+  assert.match(early.message, /1 Desember 2026/);
+  // Di dalam periode: lolos.
+  for (const today of ["2026-12-01", "2026-12-15", "2026-12-31"]) {
+    assert.equal(evaluateLeagueRegistration({ ...base, today }).ok, true, today);
+  }
+  // Setelah tutup: ditolak.
+  const late = evaluateLeagueRegistration({ ...base, today: "2027-01-01" });
+  assert.equal(late.ok, false);
+  assert.match(late.message, /ditutup/);
+
+  assert.equal(formatRegistrationOpen("2026-12-01"), "1 Desember 2026");
+
+  // Tanggal buka dibaca dari satu sumber di seluruh aplikasi.
+  const { IKA17_REGISTRATION_OPEN } = await import("../../src/lib/tournaments/ika17-core.mjs");
+  assert.equal(IKA17_REGISTRATION_OPEN, "2026-12-01");
+  const leaguePage = await read("src/app/league/page.tsx");
+  assert.match(leaguePage, /REG_OPEN = IKA17_REGISTRATION_OPEN/);
+  // RPC juga memeriksa tanggal buka.
+  assert.match(migration, /registration_open_at AT TIME ZONE 'Asia\/Makassar'/);
+});

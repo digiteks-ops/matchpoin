@@ -20,6 +20,7 @@ interface TournamentRow extends RowDataPacket {
   max_participants: number;
   status: string;
   registration_deadline: string | null;
+  registration_open_at: string | null;
 }
 
 interface UserRow extends RowDataPacket {
@@ -261,7 +262,8 @@ export async function registerForCompetition(
 
   const [tournaments] = await connection.execute<TournamentRow[]>(
     `SELECT id, name, category, max_participants, status,
-            DATE_FORMAT(registration_deadline, '%Y-%m-%d') AS registration_deadline
+            DATE_FORMAT(registration_deadline, '%Y-%m-%d') AS registration_deadline,
+            DATE_FORMAT(registration_open_at, '%Y-%m-%d') AS registration_open_at
      FROM tournaments
      WHERE id = ? AND is_league = TRUE
      FOR UPDATE`,
