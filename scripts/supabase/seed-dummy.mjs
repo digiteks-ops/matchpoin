@@ -3,7 +3,7 @@
  * admin, sehingga semua halaman bisa diuji sebelum ada pemain asli.
  *
  * Yang dibuat:
- *   - auth.users + users + player_profiles + player_ratings untuk 24 pemain
+ *   - auth.users + users + player_profiles + player_ratings untuk 25 pemain
  *     dummy (semua ditandai is_dummy = TRUE)
  *   - pertandingan selesai (4-8 per pemain) + peserta + hasil + rating_history
  *   - pendaftaran liga IKA17 (pending/accepted) untuk 5 kategori
@@ -59,7 +59,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
   realtime: { enabled: false },
 });
 
-/** 24 pemain: nama, jenis kelamin, level, kota. */
+/** 25 pemain: nama, jenis kelamin, level, kota. */
 const PLAYERS = [
   ["Andi Pratama", "male", "beginner", "Makassar"],
   ["Budi Santoso", "male", "beginner", "Makassar"],
@@ -85,6 +85,7 @@ const PLAYERS = [
   ["Vino Bastian", "male", "beginner", "Makassar"],
   ["Wawan Setiawan", "male", "intermediate", "Maros"],
   ["Yusuf Hamzah", "male", "beginner", "Makassar"],
+  ["Zaki Firmansyah", "male", "expert", "Makassar"],
 ];
 
 function isoDaysAgo(days) {
@@ -146,11 +147,13 @@ async function reset() {
       "tournament_participants",
       "player_ratings",
       "player_profiles",
-      "users",
     ]) {
       const { error: childError } = await supabase.from(table).delete().in("user_id", userIds);
       if (childError) console.warn(`  ${table}: ${childError.message}`);
     }
+    // public.users memakai `id`, bukan `user_id`.
+    const { error: usersError } = await supabase.from("users").delete().in("id", userIds);
+    if (usersError) console.warn(`  users: ${usersError.message}`);
     // Akun auth terakhir: cascade ke sisa baris.
     let removed = 0;
     for (const id of userIds) {
@@ -226,9 +229,10 @@ async function createPlayer([fullName, gender, level, cityName]) {
 }
 
 /** Buat satu pertandingan selesai + riwayat rating untuk dua pemain. */
-async function createCompletedMatch(a, b, stateA, stateB, daysAgo) {
+async function createCompletedMatch(a, b, stateA, stateB, daysAgo, options = {}) {
   const matchId = randomUUID();
-  const winner = Math.random() < 0.5 ? "A" : "B";
+  const winner = options.winner ?? (Math.random() < 0.5 ? "A" : "B");
+  const label = options.label ? `${options.label} — ` : "";
   const change = calculateDtrSingles({ rating: stateA.rating }, { rating: stateB.rating }, winner);
   const aNew = change.playerA.newRating;
   const bNew = change.playerB.newRating;
@@ -236,7 +240,7 @@ async function createCompletedMatch(a, b, stateA, stateB, daysAgo) {
 
   const { error: matchError } = await supabase.from("matches").insert({
     id: matchId,
-    title: `[Uji] ${a.fullName} vs ${b.fullName}`,
+    title: `[Uji] ${label}${a.fullName} vs ${b.fullName}`,
     description: "Pertandingan data uji (dummy).",
     organizer_id: a.id,
     match_date: dateOnly(daysAgo),
@@ -290,6 +294,85 @@ async function createCompletedMatch(a, b, stateA, stateB, daysAgo) {
   stateB.played += 1;
   if (winner === "A") { stateA.wins += 1; stateB.losses += 1; }
   else { stateB.wins += 1; stateA.losses += 1; }
+}
+
+
+/**
+ * Pertandingan lintas level, dibuat "dari sisi admin": admin memilih kedua
+ * pemain dan hasil akhirnya, bukan pemain yang mengajukan.
+ *
+ * Tujuannya memperlihatkan perubahan poin DTR pada selisih rating besar:
+ * beginner vs intermediate dan beginner vs expert, dengan pemenang dari kedua
+ * sisi (beginner menang dan expert menang). Sesuai rumus DTR:
+ *   - pemain berating rendah yang menang mendapat kenaikan BESAR
+ *   - pemain berating tinggi yang menang hanya naik sedikit, dan turun banyak
+ *     bila kalah
+ */
+async function seedCrossLevelMatches(players, state) {
+  const find = (name) => players.find((player) => player.fullName === name);
+  const beginner = find("Andi Pratama");        // beginner
+  const intermediate = find("Cakra Wijaya");    // intermediate
+  const advanced = find("Gilang Permana");      // advanced
+  const expert = find("Zaki Firmansyah");       // expert
+
+  if (!beginner || !intermediate || !advanced || !expert) return [];
+
+  // Pertahankan level awal agar perubahan poin terlihat jelas.
+  // Pemain A selalu sisi pemain berating lebih rendah supaya label mudah dibaca.
+  const scenarios = [
+    {
+      a: beginner, b: intermediate, winner: "A", daysAgo: 3,
+      label: "Admin: Beginner MENANG vs Intermediate",
+      note: "Beginner mengalahkan Intermediate (poin beginner naik)",
+    },
+    {
+      a: beginner, b: intermediate, winner: "B", daysAgo: 4,
+      label: "Admin: Intermediate MENANG vs Beginner",
+      note: "Intermediate mengalahkan Beginner (poin beginner turun)",
+    },
+    {
+      a: beginner, b: advanced, winner: "A", daysAgo: 5,
+      label: "Admin: Beginner MENANG vs Advanced",
+      note: "Beginner mengalahkan Advanced (upset, kenaikan besar)",
+    },
+    {
+      a: beginner, b: expert, winner: "A", daysAgo: 6,
+      label: "Admin: Beginner MENANG vs Expert",
+      note: "Beginner mengalahkan Expert (upset terbesar)",
+    },
+    {
+      a: beginner, b: expert, winner: "B", daysAgo: 7,
+      label: "Admin: Expert MENANG vs Beginner",
+      note: "Expert mengalahkan Beginner (selisih 1250 poin: 0 poin, sesuai rumus)",
+    },
+    {
+      a: advanced, b: expert, winner: "B", daysAgo: 8,
+      label: "Admin: Expert MENANG vs Advanced",
+      note: "Expert mengalahkan Advanced (menang tipis, naik sedikit)",
+    },
+  ];
+
+  const results = [];
+  for (const scenario of scenarios) {
+    const aState = state.get(scenario.a.id);
+    const bState = state.get(scenario.b.id);
+    const beforeA = aState.rating;
+    const beforeB = bState.rating;
+
+    await createCompletedMatch(scenario.a, scenario.b, aState, bState, scenario.daysAgo, {
+      winner: scenario.winner,
+      label: scenario.label,
+    });
+
+    results.push({
+      note: scenario.note,
+      a: scenario.a.fullName,
+      b: scenario.b.fullName,
+      beforeA, afterA: aState.rating,
+      beforeB, afterB: bState.rating,
+    });
+  }
+  return results;
 }
 
 /** Pertandingan OPEN dengan satu permohonan pending (uji Terima/Tolak host). */
@@ -458,6 +541,25 @@ async function main() {
     if (state.get(bId).played < goals.get(bId)) queue.push(bId);
   }
   console.log(`  ${matches} pertandingan selesai + riwayat rating dibuat.`);
+
+  // Pertandingan lintas level (skenario admin) ------------------------------
+  const crossLevel = await seedCrossLevelMatches(players, state);
+  if (crossLevel.length) {
+    console.log("");
+    console.log("  Perubahan poin lintas level (skenario admin):");
+    for (const row of crossLevel) {
+      const deltaA = Math.round(row.afterA) - Math.round(row.beforeA);
+      const deltaB = Math.round(row.afterB) - Math.round(row.beforeB);
+      const sign = (n) => (n > 0 ? `+${n}` : String(n));
+      console.log(`    ${row.note}`);
+      console.log(
+        `      ${row.a}: ${Math.round(row.beforeA)} → ${Math.round(row.afterA)} (${sign(deltaA)})`
+      );
+      console.log(
+        `      ${row.b}: ${Math.round(row.beforeB)} → ${Math.round(row.afterB)} (${sign(deltaB)})`
+      );
+    }
+  }
 
   // 3) Rating akhir per pemain ------------------------------------------------
   for (const [userId, value] of state) {
