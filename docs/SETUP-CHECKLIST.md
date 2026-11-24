@@ -95,12 +95,15 @@ Or install the Chrome Lighthouse extension and audit `/`, `/login`,
 
 ---
 
-## Google / Facebook login — 5 manual steps (cannot be automated)
-1. Supabase → Authentication → Providers → Google/Facebook: paste Client ID/Secret.
-2. Google Cloud Console → OAuth Client (Web): redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`; origins `http://localhost:3000`, `https://matchpoin.vercel.app`.
-3. Meta for Developers → Facebook Login: same callback as Valid OAuth Redirect URI; App Domains `<project-ref>.supabase.co` + `matchpoin.vercel.app`; Privacy Policy URL `https://matchpoin.vercel.app/privacy`; Data Deletion URL `https://matchpoin.vercel.app/privacy#hapus-data`; switch app to Live.
-4. Supabase → Authentication → URL Configuration: Site URL `https://matchpoin.vercel.app`; redirect URLs `https://matchpoin.vercel.app/auth/callback`, `http://localhost:3000/auth/callback`.
-5. Test on production: Google new account, Facebook new account, cancel consent (must show the Indonesian message), Facebook without email (must be asked to use Google/email).
+## Google login — 5 manual steps (cannot be automated)
+
+1. Supabase → Authentication → Providers → Google: paste Client ID + Client Secret, Save.
+2. Supabase → Authentication → Providers → Facebook: leave **disabled** (Facebook login sengaja tidak dipakai).
+3. Google Cloud Console → Credentials → OAuth client ID (Web application): Authorized redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`; JavaScript origins `http://localhost:3000`, `https://matchpoin.vercel.app`.
+4. Supabase → Authentication → URL Configuration: Site URL `https://matchpoin.vercel.app`; redirect URLs `https://matchpoin.vercel.app/auth/callback`, `https://matchpoin.vercel.app/reset-password`, `http://localhost:3000/auth/callback`, `http://localhost:3000/reset-password`.
+5. Test on production: Google new account, cancel consent (must show the Indonesian message).
+
+Full guide: `docs/SUPABASE-AUTH-SETUP.md`.
 
 ## Mobile checklist
 - Upload a profile photo straight from the camera (iPhone + Android); confirm compression to ≤300 KB and that the old photo disappears from Storage.

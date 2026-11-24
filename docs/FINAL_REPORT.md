@@ -7,7 +7,7 @@ Stack: Next.js 14 App Router + TypeScript + Tailwind + Supabase (Auth, Postgres,
 
 | Area | Result |
 | --- | --- |
-| Auth | Email/password, Google & Facebook OAuth with profile auto-creation (`00018`), Indonesian error states, `/auth/login` → `/login` redirect, auth error boundary |
+| Auth | Email/password, Google OAuth with profile auto-creation (`00018`), Indonesian error states, `/auth/login` → `/login` redirect, auth error boundary |
 | Roles & admin | `role` column + self-escalation trigger, `is_admin()` helpers, admin-only registration RLS (`00017`), dedicated `/admin` layout with server-side guards, filters, bulk accept/decline, stats, activity log |
 | Tournaments | Liga Tennis IKA17 categories, pending → accepted/rejected workflow, audit log, quota counts accepted only, optional decline reason (`00014`, `00016`) |
 | Matches | Singles private + Open Match (open opponent slot), doubles rosters, race-safe joins (`join_match` row lock), host notification on join, host name + avatar on cards |

@@ -14,8 +14,7 @@ test("privacy page is Indonesian and covers required disclosures", () => {
   for (const phrase of [
     "Kebijakan Privasi MATCHPOIN",
     "Data yang kami kumpulkan",
-    "Google atau",
-    "Facebook",
+    "Google",
     "Supabase",
     "Vercel",
     "hapus-data",

@@ -28,7 +28,7 @@ const LEVELS: { value: SkillLevel; label: string; hint: string }[] = [
 
 /**
  * One-time starting category picker, used when an account was created through
- * OAuth (Google/Facebook) where the registration form never ran.
+ * OAuth (Google) where the registration form never ran.
  */
 export default function StartingLevelPage() {
   return (

@@ -66,10 +66,10 @@ export default function TermsPage() {
 
       <h2>7. Layanan pihak ketiga</h2>
       <p>
-        Login dapat menggunakan Google atau Facebook dan infrastruktur kami berjalan
-        di Supabase dan Vercel. Penggunaan layanan tersebut juga tunduk pada ketentuan
-        penyedia masing-masing. Kami tidak bertanggung jawab atas gangguan yang berasal
-        dari layanan pihak ketiga.
+        Login dapat menggunakan Google dan infrastruktur kami berjalan di Supabase dan
+        Vercel. Penggunaan layanan tersebut juga tunduk pada ketentuan penyedia
+        masing-masing. Kami tidak bertanggung jawab atas gangguan yang berasal dari
+        layanan pihak ketiga.
       </p>
 
       <h2>8. Pembatasan tanggung jawab</h2>

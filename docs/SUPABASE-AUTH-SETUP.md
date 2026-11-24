@@ -1,190 +1,351 @@
-# Setup Authentication Supabase — URL Configuration & Providers
+# Tutorial Detail: Login Google + Lupa Password (Supabase Auth)
 
-Panduan langkah demi langkah untuk membuat **Daftar/Masuk dengan Google & Facebook**
-dan **lupa password** berfungsi di produksi.
+Panduan langkah demi langkah, dari nol sampai tombol **"Masuk dengan Google"**
+dan tautan **lupa password** benar-benar berfungsi di produksi.
 
-Data proyek MATCHPOIN:
+> **Login Facebook sudah dihapus** dari aplikasi. Tombolnya tidak ada lagi di
+> `/login` dan `/register`, dan provider Facebook di Supabase sebaiknya
+> dibiarkan **nonaktif**. Alasan: banyak akun Facebook tidak membagikan email
+> sehingga proses daftar/masuk gagal di tengah jalan.
+
+---
+
+## 0. Data proyek (pakai ini, jangan dikarang)
 
 | Item | Nilai |
 | --- | --- |
-| Project ref | `flbiltsyobllkxydyufq` |
+| Project ref Supabase | `flbiltsyobllkxydyufq` |
 | URL Supabase | `https://flbiltsyobllkxydyufq.supabase.co` |
+| Callback Supabase (untuk Google) | `https://flbiltsyobllkxydyufq.supabase.co/auth/v1/callback` |
 | Domain produksi | `https://matchpoin.vercel.app` |
 | Domain lokal | `http://localhost:3000` |
-| Callback aplikasi | `/auth/callback` (ada di `src/app/auth/callback/route.ts`) |
-| Callback Supabase (untuk provider) | `https://flbiltsyobllkxydyufq.supabase.co/auth/v1/callback` |
+| Callback aplikasi | `https://matchpoin.vercel.app/auth/callback` |
+| Halaman ganti password | `https://matchpoin.vercel.app/reset-password` |
+
+Alur yang terjadi di balik layar (supaya tidak bingung saat ada error):
+
+```
+Pengguna klik "Masuk dengan Google"
+        │
+        ▼
+Supabase Auth  ──redirect──▶  accounts.google.com  (pilih akun, setujui izin)
+        ▲                              │
+        │                              │ redirect ke:
+        │                              │ https://flbiltsyobllkxydyufq.supabase.co/auth/v1/callback
+        │                              ▼
+        └──────────────────  Supabase menukar code → session
+                                       │
+                                       │ redirect ke (harus terdaftar di Redirect URLs):
+                                       ▼
+                    https://matchpoin.vercel.app/auth/callback?code=...
+                                       │
+                                       ▼
+              Aplikasi tukar code → session → /dashboard
+```
+
+Jadi ada **dua** alamat callback yang berbeda dan sering tertukar:
+
+| Alamat | Didaftarkan di mana | Isinya |
+| --- | --- | --- |
+| `https://flbiltsyobllkxydyufq.supabase.co/auth/v1/callback` | Google Cloud Console | milik Supabase |
+| `https://matchpoin.vercel.app/auth/callback` | Supabase → URL Configuration | milik aplikasi MATCHPOIN |
 
 ---
 
-## Bagian 1 — URL Configuration (wajib, lakukan pertama)
+## BAGIAN 1 — URL Configuration (kerjakan paling awal)
 
-Tanpa langkah ini, tautan lupa password dan login Google/Facebook akan
-kembali ke halaman error atau ke `localhost`.
+Ini yang membuat tautan reset password tidak nyasar ke `localhost` dan
+membuat callback OAuth diterima.
 
-1. Buka [supabase.com/dashboard](https://supabase.com/dashboard) → pilih project
-   **matchpoin**.
-2. Menu kiri → **Authentication** → **URL Configuration**.
-3. **Site URL** — isi:
+### Langkah 1.1 — Buka halaman pengaturan
+1. Buka <https://supabase.com/dashboard>.
+2. Login dengan akun Supabase Anda.
+3. Klik project **matchpoin** (ref `flbiltsyobllkxydyufq`).
+4. Di menu kiri, klik **Authentication** (ikon gembok/orang).
+5. Di submenu, klik **URL Configuration**.
+
+### Langkah 1.2 — Isi Site URL
+Pada kolom **Site URL**, isi **persis**:
+
+```
+https://matchpoin.vercel.app
+```
+
+- Tanpa garis miring di akhir.
+- Harus `https://`, bukan `http://`.
+- **Bukan** `http://localhost:3000`. Kalau diisi localhost, semua email reset
+  password akan mengarah ke laptop Anda, bukan ke website.
+
+### Langkah 1.3 — Tambahkan Redirect URLs
+Di bagian **Redirect URLs**, klik **Add URL** lalu tempel satu alamat per
+baris. Tambahkan **keempat-empatnya**:
+
+```
+https://matchpoin.vercel.app/auth/callback
+https://matchpoin.vercel.app/reset-password
+http://localhost:3000/auth/callback
+http://localhost:3000/reset-password
+```
+
+Kenapa masing-masing perlu:
+
+| URL | Dipakai untuk |
+| --- | --- |
+| `.../auth/callback` | Login Google **dan** tautan reset password (aplikasi menukar `code` di sini) |
+| `.../reset-password` | Halaman form "Buat Password Baru" setelah email reset diklik |
+| `localhost:3000/...` | Hanya untuk uji di komputer sendiri saat `npm run dev` |
+
+Kalau nanti memakai domain sendiri (mis. `https://matchpoin.id`), tambahkan
+juga:
+
+```
+https://matchpoin.id/auth/callback
+https://matchpoin.id/reset-password
+```
+
+### Langkah 1.4 — Simpan
+Klik tombol **Save** di kanan atas. Tidak ada proses deploy; berlaku langsung.
+
+### Langkah 1.5 — Uji
+1. Buka `https://matchpoin.vercel.app/forgot-password`.
+2. Isi email akun Anda → kirim.
+3. Buka email → klik tautan.
+4. **Hasil yang benar:** terbuka halaman **"Buat Password Baru"** dengan dua
+   kolom password.
+
+Kalau yang terbuka malah beranda atau halaman error, lihat tabel
+troubleshooting di Bagian 4.
+
+---
+
+## BAGIAN 2 — Provider Google (step by step)
+
+Bagian ini terdiri dari dua tempat: **Google Cloud Console** (membuat
+kredensial) dan **Supabase Dashboard** (menempelkan kredensial).
+
+### 2A. Google Cloud Console — buat project
+
+1. Buka <https://console.cloud.google.com> dengan akun Google Anda.
+2. Di bar atas, klik dropdown project → **New Project**.
+3. Project name: `MATCHPOIN` → **Create**.
+4. Tunggu notifikasi "Project created" → pastikan dropdown project di bar atas
+   sekarang menunjukkan **MATCHPOIN**.
+
+### 2B. Google Cloud Console — OAuth consent screen
+
+Layar ini yang muncul saat pengguna diminta "setujui izin".
+
+1. Menu kiri → **APIs & Services** → **OAuth consent screen**
+   (di UI baru: **Google Auth Platform** → **Branding**).
+2. User Type: pilih **External** → **Create**.
+3. Isi:
+   - **App name**: `MATCHPOIN`
+   - **User support email**: email Anda
+   - **Developer contact information**: email Anda
+   - Logo, homepage, privacy policy: opsional, boleh dikosongkan dulu
+4. **Save and Continue**.
+5. Tab **Scopes** → **Add or remove scopes** → centang:
+   - `.../auth/userinfo.email`
+   - `.../auth/userinfo.profile`
+   - `openid`
+
+   → **Update** → **Save and Continue**.
+6. Tab **Test users** → **Add users** → masukkan email Google yang akan Anda
+   pakai untuk menguji → **Save and Continue**.
+7. **Back to Dashboard**.
+
+> **Penting:** selama status aplikasi masih **Testing**, hanya email di daftar
+> Test users yang bisa masuk. Pemain lain akan melihat
+> *"Access blocked: MATCHPOIN has not completed the Google verification process"*.
+> Karena itu langkah 2E di bawah (Publish app) **wajib** dilakukan sebelum
+> dirilis ke pemain sungguhan.
+
+### 2C. Google Cloud Console — buat OAuth Client ID
+
+1. Menu kiri → **APIs & Services** → **Credentials**.
+2. Klik **+ Create Credentials** → **OAuth client ID**.
+3. **Application type**: **Web application**.
+4. **Name**: `MATCHPOIN Web`.
+5. **Authorized JavaScript origins** → **Add URI**, tambahkan **dua** baris:
    ```
+   http://localhost:3000
    https://matchpoin.vercel.app
    ```
-   Site URL adalah alamat default bila `redirectTo` tidak dikirim. Di produksi
-   harus domain Vercel, bukan localhost.
-4. **Redirect URLs** — klik **Add URL** untuk setiap baris berikut (harus
-   persis, termasuk `https://` dan tanpa garis miring di akhir):
-
+   (Tanpa `/` di akhir, tanpa path.)
+6. **Authorized redirect URIs** → **Add URI**, tambahkan **satu** baris:
    ```
-   https://matchpoin.vercel.app/auth/callback
-   https://matchpoin.vercel.app/reset-password
-   http://localhost:3000/auth/callback
-   http://localhost:3000/reset-password
+   https://flbiltsyobllkxydyufq.supabase.co/auth/v1/callback
    ```
+   Ini **bukan** alamat Vercel. Kalau salah di sini, akan muncul
+   `Error 400: redirect_uri_mismatch`.
+7. Klik **Create**.
+8. Muncul dialog berisi **Client ID** dan **Client Secret**.
+   - Klik **Download JSON** (cadangan) **atau** salin dua nilai itu sekarang.
+   - **Client Secret hanya ditampilkan sekali.** Kalau hilang, buat client baru
+     atau klik **Reset secret**.
 
-   Penjelasan:
-   - `/auth/callback` — dipakai login Google/Facebook **dan** tautan lupa
-     password (aplikasi menukar `code` menjadi session di sini, lalu
-     meneruskan ke `/reset-password`).
-   - `/reset-password` — halaman ganti password setelah email reset diklik.
-   - Dua entri `localhost` hanya untuk pengembangan; boleh dihapus saat
-     produksi benar-benar jalan, tetapi tidak berbahaya bila dibiarkan.
+Contoh bentuk nilainya (milik Anda akan berbeda):
 
-   Bila memakai domain sendiri nanti (mis. `https://matchpoin.id`), tambahkan
-   juga:
-   ```
-   https://matchpoin.id/auth/callback
-   https://matchpoin.id/reset-password
-   ```
-5. Klik **Save**.
+```
+Client ID     : 123456789012-abcdefghijklmnop.apps.googleusercontent.com
+Client Secret : GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxx
+```
 
-### Cek cepat setelah Save
+### 2D. Supabase — tempel Client ID + Secret
 
-- Buka `https://matchpoin.vercel.app/forgot-password`, isi email sendiri,
-  kirim, lalu klik tautan di email. Harusnya terbuka halaman
-  **Buat Password Baru**, bukan halaman error atau beranda.
-- Bila tautan mengarah ke `localhost:3000` padahal dibuka dari email di HP,
-  berarti **Site URL** masih `http://localhost:3000` — ulangi langkah 3.
+1. Kembali ke <https://supabase.com/dashboard> → project **matchpoin**.
+2. Menu kiri → **Authentication** → **Providers** (di UI baru:
+   **Sign In / Providers**).
+3. Cari dan klik **Google**.
+4. Nyalakan toggle **Enable Sign in with Google**.
+5. Tempel:
+   - **Client ID (for OAuth)** ← Client ID dari langkah 2C
+   - **Client Secret (for OAuth)** ← Client Secret dari langkah 2C
+6. Perhatikan kolom **Callback URL (for OAuth)** yang ditampilkan Supabase.
+   Nilainya harus **sama persis** dengan redirect URI yang Anda isi di langkah
+   2C butir 6. Kalau berbeda, salin nilai dari Supabase ini dan tempel ke
+   Google Cloud Console (jangan sebaliknya).
+7. Klik **Save**.
+
+Tidak perlu mengisi apa pun di `.env.local` atau Vercel. Secret disimpan di
+Supabase, bukan di kode aplikasi.
+
+### 2E. Publikasikan aplikasi Google (agar semua pemain bisa masuk)
+
+1. Google Cloud Console → **APIs & Services** → **OAuth consent screen**.
+2. Di bagian **Publishing status**, cek masih **Testing**.
+3. Klik **Publish app** → **Confirm**.
+4. Status berubah menjadi **In production**.
+
+Selama masih **Testing**, hanya Test users yang bisa masuk — inilah penyebab
+paling umum dari *"tombol Google jalan di laptop saya, tapi pemain lain tidak
+bisa"*.
+
+### 2F. Uji login Google
+
+1. Buka `https://matchpoin.vercel.app/login`.
+2. Klik **Masuk dengan Google**.
+3. Muncul overlay "Mengalihkan ke Google..." → halaman pilih akun Google.
+4. Pilih akun → setujui izin.
+5. **Hasil yang benar:** mendarat di `/dashboard` dan sudah dalam keadaan login.
+6. Untuk pengguna baru: diarahkan sekali ke `/pilih-kategori` untuk memilih
+   level awal (beginner / intermediate / advanced / expert).
+7. Uji juga tombol **Batal**: klik Google → tutup jendela pilih akun →
+   harus muncul pesan Indonesia *"Anda membatalkan proses masuk. Silakan coba
+   lagi."*, bukan halaman kosong.
+
+### 2G. (Opsional) Nonaktifkan Facebook
+
+1. Supabase → **Authentication** → **Providers** → **Facebook**.
+2. Matikan toggle-nya → **Save**.
+
+Aplikasi tidak lagi menampilkan tombol Facebook, jadi langkah ini hanya
+merapikan dashboard. Tidak berpengaruh ke fungsionalitas.
 
 ---
 
-## Bagian 2 — Provider Google
+## BAGIAN 3 — Email (untuk lupa password & verifikasi daftar)
 
-### 2a. Buat OAuth Client di Google Cloud Console
+Login Google tidak butuh ini, tetapi **lupa password** dan **verifikasi email
+pendaftaran** membutuhkannya.
 
-1. Buka [console.cloud.google.com](https://console.cloud.google.com) → buat
-   project baru (mis. `MATCHPOIN`) atau pilih yang sudah ada.
-2. Menu → **APIs & Services** → **OAuth consent screen**:
-   - User type: **External** → **Create**.
-   - App name: `MATCHPOIN`, email dukungan: email Anda.
-   - Scopes: cukup `userinfo.email` dan `userinfo.profile` (default).
-   - Test users: tambahkan email Anda selama status masih **Testing**.
-   - Setelah selesai uji, klik **Publish app** agar pemain lain bisa masuk.
-3. Menu → **APIs & Services** → **Credentials** → **Create Credentials** →
-   **OAuth client ID**:
-   - Application type: **Web application**.
-   - Name: `MATCHPOIN Web`.
-   - **Authorized JavaScript origins**:
-     ```
-     http://localhost:3000
-     https://matchpoin.vercel.app
-     ```
-   - **Authorized redirect URIs** — ini WAJIB alamat Supabase, bukan alamat
-     aplikasi:
-     ```
-     https://flbiltsyobllkxydyufq.supabase.co/auth/v1/callback
-     ```
-   - Klik **Create** → salin **Client ID** dan **Client Secret**.
+### 3.1 — Atur SMTP
 
-### 2b. Tempel ke Supabase
+1. Supabase → **Authentication** → **Emails** / **SMTP Settings**.
+2. Isi host, port (587), username, password, dan **sender email** dari penyedia
+   email Anda (Resend, SendGrid, Gmail app password, dsb).
+3. Kalau memakai Gmail, **From email** harus sama dengan akun Gmail-nya,
+   kalau tidak email akan ditolak.
+4. **Save**.
 
-1. Supabase Dashboard → **Authentication** → **Providers** (atau
-   **Sign In / Providers**) → **Google** → aktifkan.
-2. Tempel **Client ID** dan **Client Secret** dari langkah 2a → **Save**.
-3. Salin nilai **Callback URL (for OAuth)** yang ditampilkan Supabase dan
-   pastikan sama persis dengan redirect URI di Google Cloud.
+> Supabase punya pengirim bawaan untuk uji coba, tapi dibatasi beberapa email
+> per jam dan sering masuk folder **Spam**. Untuk produksi, pakai SMTP sendiri.
 
-### Kalau gagal, pesannya begini
+### 3.2 — Cek template reset password
 
-| Pesan | Penyebab | Perbaikan |
+1. Supabase → **Authentication** → **Email Templates** → **Reset Password**.
+2. Pastikan tautannya memakai variabel bawaan Supabase:
+   ```
+   {{ .ConfirmationURL }}
+   ```
+3. Jangan mengganti variabel itu dengan tautan manual; aplikasi mengandalkan
+   `code` dari Supabase untuk menukar session.
+
+### 3.3 — Kalau ingin verifikasi email saat daftar
+
+Supabase → **Authentication** → **Sign In / Providers** → **Email** →
+aktifkan **Confirm email**. Ini tidak memengaruhi login Google.
+
+---
+
+## BAGIAN 4 — Troubleshooting (gejala → penyebab → perbaikan)
+
+### Login Google
+
+| Pesan / gejala | Penyebab | Perbaikan |
 | --- | --- | --- |
-| `redirect_uri_mismatch` | Redirect URI di Google tidak sama dengan callback Supabase | Tambahkan `https://flbiltsyobllkxydyufq.supabase.co/auth/v1/callback` |
-| `Access blocked: app not verified` | App masih status Testing | Tambahkan email sebagai Test user, atau Publish app |
-| Aplikasi kembali ke `/login?error=oauth_failed` | Client Secret salah / provider belum Save | Ulangi 2b |
+| `Error 400: redirect_uri_mismatch` | Redirect URI di Google ≠ callback Supabase | Isi `https://flbiltsyobllkxydyufq.supabase.co/auth/v1/callback` di **Authorized redirect URIs** |
+| `Access blocked: MATCHPOIN has not completed the Google verification process` | App masih **Testing**, email belum terdaftar sebagai Test user | Tambah email ke Test users **atau** klik **Publish app** (langkah 2E) |
+| `Error 403: access_denied` | Pengguna menutup jendela / menolak izin | Normal. Aplikasi menampilkan pesan Indonesia |
+| Balik ke `/login?error=oauth_failed` | Client Secret salah, salah tempel, atau provider belum di-**Save** | Ulangi langkah 2D |
+| Balik ke `/login?error=email_missing` | Akun Google tidak membagikan email (langka, biasanya akun Workspace terbatas) | Daftar dengan email & password |
+| Tombol langsung memunculkan "belum diaktifkan" | Provider Google masih OFF di Supabase | Aktifkan di langkah 2D butir 4 |
+| Halaman putih setelah pilih akun | Redirect URL aplikasi belum terdaftar | Tambahkan `https://matchpoin.vercel.app/auth/callback` di URL Configuration |
 
----
+### Lupa password
 
-## Bagian 3 — Provider Facebook
-
-Facebook lebih ketat: aplikasi harus **Live** dan wajib punya URL kebijakan
-privasi.
-
-### 3a. Buat App di Meta for Developers
-
-1. Buka [developers.facebook.com/apps](https://developers.facebook.com/apps) →
-   **Create App**.
-2. Use case: **Authenticate and request data from users with Facebook Login** →
-   tipe **Consumer** → beri nama `MATCHPOIN` → **Create app**.
-3. Di dashboard app → **Add product** → **Facebook Login** → **Set up**.
-4. **Facebook Login** → **Settings**:
-   - **Client OAuth Login**: ON
-   - **Web OAuth Login**: ON
-   - **Enforce HTTPS**: ON
-   - **Valid OAuth Redirect URIs**:
-     ```
-     https://flbiltsyobllkxydyufq.supabase.co/auth/v1/callback
-     ```
-   - **Save changes**.
-5. **Settings** → **Basic**:
-   - **App Domains**: `flbiltsyobllkxydyufq.supabase.co` dan
-     `matchpoin.vercel.app` (satu per baris bila kolom mendukung).
-   - **Privacy Policy URL**: `https://matchpoin.vercel.app/privacy`
-   - **User Data Deletion**: `https://matchpoin.vercel.app/privacy#hapus-data`
-   - **Category**: Sports.
-   - Salin **App ID** dan **App Secret** (tombol **Show**).
-6. **App Mode**: ubah dari **Development** ke **Live** (toggle di atas
-   dashboard). Selama Development, hanya admin/tester app yang bisa masuk.
-
-### 3b. Tempel ke Supabase
-
-1. Supabase Dashboard → **Authentication** → **Providers** → **Facebook** →
-   aktifkan.
-2. Tempel **App ID** sebagai Client ID dan **App Secret** sebagai Client Secret
-   → **Save**.
-
-### Catatan penting soal email Facebook
-
-Sebagian akun Facebook tidak membagikan email. Aplikasi menangani ini: sesi
-dibatalkan dan pengguna diarahkan ke `/login?error=email_missing` dengan pesan
-untuk memakai email/password. Ini perilaku yang disengaja, bukan bug.
-
-| Pesan | Penyebab | Perbaikan |
+| Pesan / gejala | Penyebab | Perbaikan |
 | --- | --- | --- |
-| `URL Blocked: This redirect failed...` | Valid OAuth Redirect URI belum diisi | Ulangi 3a langkah 4 |
-| `App not active` | App masih Development | Ubah ke **Live** |
-| Login berhasil di Facebook tapi balik ke `/login?error=email_missing` | Akun FB tanpa email | Masuk dengan email/password |
+| Email tidak pernah sampai | SMTP belum diatur / masuk Spam | Bagian 3.1, cek folder Spam |
+| Tautan mengarah ke `localhost:3000` | **Site URL** masih localhost | Ubah ke `https://matchpoin.vercel.app` (langkah 1.2) |
+| Halaman **"Tautan Tidak Valid"** | Tautan sudah dipakai / kedaluwarsa (default 1 jam), atau `/reset-password` tidak ada di Redirect URLs | Minta tautan baru, dan tambahkan URL-nya (langkah 1.3) |
+| Berhasil isi password tapi tidak bisa login | Password < 6 karakter atau email salah ketik | Ulangi dari `/forgot-password` |
+| Setelah simpan password malah terlempar ke beranda | Middleware menganggap sesi sudah aktif — di kode ini dibiarkan agar halaman tetap terbuka | Tidak perlu tindakan |
 
 ---
 
-## Bagian 4 — Urutan uji yang disarankan
+## BAGIAN 5 — Checklist akhir (centang satu per satu)
 
-1. **Lupa password**: `/forgot-password` → email masuk → tautan → halaman
-   "Buat Password Baru" → simpan → login dengan password baru.
-2. **Daftar email**: `/register` → isi data → pilih self rating (wajib) →
-   cek email verifikasi → login.
-3. **Google**: `/login` → tombol Google → pilih akun → mendarat di
-   `/dashboard`. Pemain baru otomatis diarahkan memilih kategori sekali.
-4. **Facebook**: sama seperti Google. Bila akun tanpa email, pastikan muncul
-   pesan yang jelas, bukan halaman kosong.
+**Supabase → Authentication → URL Configuration**
+- [ ] Site URL = `https://matchpoin.vercel.app`
+- [ ] `https://matchpoin.vercel.app/auth/callback` terdaftar
+- [ ] `https://matchpoin.vercel.app/reset-password` terdaftar
+- [ ] `http://localhost:3000/auth/callback` terdaftar (untuk dev)
+- [ ] `http://localhost:3000/reset-password` terdaftar (untuk dev)
+
+**Google Cloud Console**
+- [ ] OAuth consent screen terisi, scopes email + profile
+- [ ] OAuth client tipe **Web application** dibuat
+- [ ] Authorized JavaScript origins: `http://localhost:3000`, `https://matchpoin.vercel.app`
+- [ ] Authorized redirect URI: `https://flbiltsyobllkxydyufq.supabase.co/auth/v1/callback`
+- [ ] Publishing status = **In production**
+
+**Supabase → Authentication → Providers**
+- [ ] Google: **enabled**, Client ID & Secret terisi, **Save**
+- [ ] Facebook: **disabled**
+
+**Login → uji di production**
+- [ ] "Masuk dengan Google" untuk akun baru → sampai `/dashboard`
+- [ ] Batalkan proses → muncul pesan "Anda membatalkan proses masuk..."
+- [ ] Lupa password → email masuk → halaman "Buat Password Baru" → login dengan password baru
+- [ ] Daftar dengan email → verifikasi → login
 
 ---
 
-## Bagian 5 — Migrasi database
+## BAGIAN 6 — Migrasi database
 
-Semua migrasi `supabase/migrations/00034`–`00039` sudah diterapkan di project
-live (kolom `is_dummy` dan `last_seen_at` sudah ada dan terbaca). Bila suatu
-saat memakai project Supabase baru, jalankan seluruh file migrasi berurutan di
-**SQL Editor**, mulai dari nomor terkecil.
+Seluruh migrasi `supabase/migrations/00034`–`00039` **sudah** diterapkan di
+project live. Buktinya, kolom penanda berikut terbaca dari database:
 
-Verifikasi cepat lewat terminal:
+- `public.users.is_dummy`
+- `public.player_profiles.is_dummy`
+- `public.player_profiles.last_seen_at`
+- `public.public_players.is_dummy`
+
+Kalau suatu saat membuat project Supabase baru, jalankan **semua** file migrasi
+berurutan di **SQL Editor**, dari nomor terkecil ke terbesar.
+
+Verifikasi cepat dari terminal:
 
 ```bash
 node --env-file=.env.local -e '
@@ -193,4 +354,11 @@ const sb=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_
 (async()=>{for(const [t,c] of [["users","is_dummy"],["player_profiles","last_seen_at"],["public_players","is_dummy"]]){
  const {error}=await sb.from(t).select(c).limit(1);
  console.log(`${t}.${c}:`, error? "BELUM ADA":"OK");}})()'
+```
+
+Akhir, uji juga login dengan akun dummy untuk melihat data seed:
+
+```
+email    : dummy-andi.pratama@matchpoin.test
+password : Matchpoin123!
 ```

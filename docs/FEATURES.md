@@ -10,7 +10,7 @@ Status legend: **PASS** = verified by build/unit test; **MANUAL** = requires liv
 | 2 | Login | `/login`, `/api/auth` | PASS | Form validation + Indonesian error mapping |
 | 3 | Logout | `/auth/logout` | PASS | `test:logout` 9/9 |
 | 4 | Password reset | `/forgot-password`, `/reset-password` | MANUAL | Supabase Auth email |
-| 5 | OAuth (Google/Facebook) | `/auth/callback` | MANUAL | Providers configured in Supabase |
+| 5 | OAuth (Google) | `/auth/callback` | MANUAL | Providers configured in Supabase |
 | 6 | Session persists after refresh | middleware | PASS | `updateSession` refresh + cookie rotation |
 | 7 | Protected pages | `/dashboard`, `/profile`, `/matches/new`, `/notifications`, `/admin` | PASS | `protected-routes.mjs` + middleware |
 | 8 | Profile view/edit | `/profile`, `/profile/edit`, `/api/profile` | PASS | Supabase service; no MySQL |
@@ -37,7 +37,7 @@ Status legend: **PASS** = verified by build/unit test; **MANUAL** = requires liv
 | 27 | Notifications (list/read + realtime broadcast) | `/notifications`, `/api/notifications*` | PASS | Supabase table + Realtime broadcast |
 | 28 | RLS isolation | all tables | MANUAL | Policies in 00001–00013, rewritten chat policies in 00015, registration RLS in 00017; verify on deployed DB |
 | 29 | MySQL data import | `scripts/supabase/migrate-mysql-data.mjs` | MANUAL | Backup-first, idempotent, count + FK validation |
-| 30 | Google/Facebook login | `/login`, `/register`, `/auth/callback` | PASS | Supabase OAuth, profiles trigger (00018), Indonesian error states; `test:supabase-oauth` |
+| 30 | Google login | `/login`, `/register`, `/auth/callback` | PASS | Supabase OAuth, profiles trigger (00018), Indonesian error states; `test:supabase-oauth` |
 | 31 | Avatar + match-result uploads | `/profile/edit`, match result form | PASS | Client compression ≤300 KB/WebP, `avatars`/`match-results` buckets + policies (00019), old-file cleanup; `test:supabase-storage` |
 
 ## Manual verification checklist (Phase 4)

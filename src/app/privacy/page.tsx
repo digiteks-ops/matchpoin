@@ -4,7 +4,7 @@ import { LegalPage, LEGAL_CONTACT_EMAIL } from "@/components/legal/legal-page";
 export const metadata: Metadata = {
   title: "Kebijakan Privasi — MATCHPOIN",
   description:
-    "Bagaimana MATCHPOIN mengumpulkan, menggunakan, menyimpan, dan menghapus data pemain, termasuk login Google/Facebook dan foto pertandingan.",
+    "Bagaimana MATCHPOIN mengumpulkan, menggunakan, menyimpan, dan menghapus data pemain, termasuk login Google dan foto pertandingan.",
 };
 
 export default function PrivacyPage() {
@@ -28,8 +28,8 @@ export default function PrivacyPage() {
           terenkripsi (hash) bila Anda mendaftar dengan email.
         </li>
         <li>
-          <strong>Data login pihak ketiga:</strong> bila Anda memilih Google atau
-          Facebook, kami menerima nama, email terverifikasi, dan foto profil dari
+          <strong>Data login pihak ketiga:</strong> bila Anda memilih masuk dengan
+          Google, kami menerima nama, email terverifikasi, dan foto profil dari
           penyedia tersebut. Kami tidak menerima kata sandi provider Anda.
         </li>
         <li>
@@ -100,7 +100,7 @@ export default function PrivacyPage() {
         <li>Mengakses dan memperbarui data profil melalui halaman Profil.</li>
         <li>Meminta salinan atau koreksi data dengan menghubungi kami.</li>
         <li>Meminta penghapusan akun (lihat bagian 6).</li>
-        <li>Menarik izin login Google/Facebook dengan memutus koneksi di pengaturan akun provider.</li>
+        <li>Menarik izin login Google dengan memutus koneksi di pengaturan akun Google Anda.</li>
       </ul>
 
       <h2>8. Anak-anak</h2>

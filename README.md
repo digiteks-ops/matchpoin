@@ -11,7 +11,7 @@ MATCHPOIN helps tennis players in Makassar (and beyond) arrange their own matche
 ### Implemented
 - Next.js 14 App Router + TypeScript + Tailwind, mobile-first UI.
 - Supabase Auth (email/password), protected routes, server-side session refresh.
-- Google/Facebook OAuth code + PKCE callback (`/auth/callback`), shown only when providers are enabled in Supabase.
+- Google OAuth code + PKCE callback (`/auth/callback`), shown only when providers are enabled in Supabase.
 - Public player directory built from `player_profiles` + `player_ratings` (no email/phone exposure).
 - Leaderboard from public ratings.
 - Match scheduling: list, create, detail, join request, organizer accept/reject, cancel.
@@ -30,7 +30,7 @@ MATCHPOIN helps tennis players in Makassar (and beyond) arrange their own matche
   - Result submission returns `42501` (`match_results` has no policy).
   - `apply_match_rating_change` does not exist (404), so confirmed results cannot persist ratings.
   - The signup trigger (`on_auth_user_created`) is missing. The app covers this with server-side onboarding (`src/lib/services/player-sync.ts`, service role), so registration and creating a match already work; the trigger is the belt-and-braces fix.
-- **Enable Google/Facebook providers** in Supabase → Authentication → Providers, and add the redirect URL:
+- **Enable the Google provider** in Supabase → Authentication → Providers, and add the redirect URL:
   - App: `https://<your-domain>/auth/callback` (production), `http://localhost:3000/auth/callback` (development)
   - Supabase: `https://<project-ref>.supabase.co/auth/v1/callback`
 - **Storage bucket `avatars`** must allow authenticated uploads (used for avatars and match photos).
@@ -165,7 +165,7 @@ approach.
 2. Apply the live schema. The repo's `00001`–`00003` migrations are stale and **must not be run**.
 3. Apply `supabase/migrations/00004_match_workflow.sql`.
 4. Create a public Storage bucket named `avatars`.
-5. Enable Google and Facebook providers and register the redirect URLs above.
+5. Enable the Google provider and register the redirect URLs above.
 
 ### Environment
 | Variable | Purpose |
@@ -204,25 +204,23 @@ FROM public.users u WHERE p.id = u.id AND u.email = 'matchpoin.id@gmail.com';
 
 You can also grant the RBAC role through the service-role RPC (`assign_role`) or `npm run db:seed-admin`. Players cannot change their own `role` through the API: the `guard_role_column` trigger rejects any such update, and the `authenticated`/`anon` roles have no column-level `UPDATE` on `role`.
 
-### Google & Facebook login (Supabase OAuth)
+### Google login (Supabase OAuth)
 
-The app uses Supabase Auth OAuth, so provider secrets are stored in the Supabase dashboard, never in this repository. The buttons on `/login` and `/register` read the enabled providers from Supabase at runtime.
+The app uses Supabase Auth OAuth, so provider secrets are stored in the Supabase dashboard, never in this repository. The Google button on `/login` and `/register` checks at runtime whether the provider is enabled in Supabase.
 
 1. Apply `supabase/migrations/00018_oauth_profiles_trigger.sql` (creates a `profiles` row on first login with name, email and provider avatar).
-2. Supabase → Authentication → Providers → enable **Google** and/or **Facebook**, paste the provider credentials, and save.
+2. Supabase → Authentication → Providers → enable **Google**, paste the Client ID and Client Secret, and save.
 3. Supabase → Authentication → URL Configuration:
    - Site URL: `https://matchpoin.vercel.app`
    - Redirect URLs: `https://matchpoin.vercel.app/auth/callback`, `http://localhost:3000/auth/callback`
 4. Google Cloud Console → APIs & Services → Credentials → Create OAuth client ID (Web application):
    - Authorized JavaScript origins: `http://localhost:3000`, `https://matchpoin.vercel.app`
    - Authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback`
-5. Meta for Developers → Create app → Facebook Login → Settings:
-   - Valid OAuth Redirect URIs: `https://<project-ref>.supabase.co/auth/v1/callback`
-   - App settings → Basic → App Domains: `<project-ref>.supabase.co` (and `matchpoin.vercel.app`)
-   - Provide a Privacy Policy URL (`https://matchpoin.vercel.app/privacy`) and Data Deletion URL (`https://matchpoin.vercel.app/privacy#hapus-data`), then switch the app to **Live**.
-6. Optional environment variables for documentation/CI only (the running app does not read them): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`.
+Full step-by-step guide (in Indonesian): [`docs/SUPABASE-AUTH-SETUP.md`](docs/SUPABASE-AUTH-SETUP.md).
 
-Identity linking: Supabase links a Google/Facebook identity to an existing account when the provider email is verified and "Link accounts with the same email" is enabled. A Facebook user without an email is signed out and asked to use Google or email sign-up.
+5. Optional environment variables for documentation/CI only (the running app does not read them): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+
+Identity linking: Supabase links a Google identity to an existing account when the provider email is verified and "Link accounts with the same email" is enabled. A provider account without an email is signed out and asked to register with email.
 
 ---
 

@@ -35,8 +35,9 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?error=oauth_failed`);
   }
 
-  // Facebook accounts may not expose an email. Sign out so the half-created
-  // session cannot be used silently, and ask the player to use email instead.
+  // Some Google accounts do not share an email (rare, e.g. restricted
+  // Workspace). Sign out so the half-created session cannot be used silently,
+  // and ask the player to register with email instead.
   if (!data.user.email) {
     await supabase.auth.signOut();
     return NextResponse.redirect(`${origin}/login?error=email_missing`);

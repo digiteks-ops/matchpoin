@@ -20,8 +20,7 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   oauth_denied: "Anda membatalkan proses masuk dengan penyedia. Silakan coba lagi.",
   oauth_failed: "Gagal masuk dengan penyedia. Silakan coba lagi atau gunakan email.",
   missing_code: "Proses masuk tidak selesai. Silakan coba lagi.",
-  email_missing:
-    "Facebook tidak memberikan alamat email. Silakan masuk dengan Google atau daftar dengan email.",
+  email_missing: "Penyedia login tidak memberikan alamat email. Silakan daftar dengan email.",
 };
 
 function LoginForm() {

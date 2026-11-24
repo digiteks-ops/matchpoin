@@ -28,7 +28,7 @@ test("signup trigger also fills public.profiles with provider data", () => {
   assert.match(migration, /ON CONFLICT \(id\) DO NOTHING/);
 });
 
-test("Facebook users without email are handled without failing signup", () => {
+test("provider accounts without email are handled without failing signup", () => {
   assert.match(migration, /@noemail\.matchpoin\.local/);
   assert.match(callback, /if \(!data\.user\.email\)/);
   assert.match(callback, /error=email_missing/);
@@ -39,26 +39,25 @@ test("callback handles denied consent, missing code and exchange failure in Indo
   assert.match(callback, /error=missing_code/);
   assert.match(callback, /error=oauth_failed/);
   assert.match(loginPage, /Anda membatalkan proses masuk dengan penyedia/);
-  assert.match(loginPage, /Facebook tidak memberikan alamat email/);
+  assert.match(loginPage, /Penyedia login tidak memberikan alamat email/);
 });
 
-test("OAuth buttons are always rendered and labelled Lanjutkan", () => {
+test("OAuth buttons are always rendered and only offer Google", () => {
   assert.match(buttons, /const label = mode === "signup" \? "Daftar" : "Masuk"/);
   assert.match(buttons, /\{label\} dengan Google/);
-  assert.match(buttons, /\{label\} dengan Facebook/);
-  assert.doesNotMatch(buttons, /if \(!enabled\.google && !enabled\.facebook\) return null/);
+  // Facebook dihapus: banyak akun Facebook tanpa email.
+  assert.doesNotMatch(buttons, /Facebook/);
+  assert.doesNotMatch(buttons, /handleOAuth\("facebook"\)/);
 });
 
 test("OAuth redirect shows a branded waiting overlay", () => {
   assert.match(buttons, /Mengalihkan ke \{PROVIDER_DISPLAY\[provider\]\}/);
   assert.match(buttons, /function GoogleLogo/);
-  assert.match(buttons, /function FacebookLogo/);
   assert.match(buttons, /aria-live="polite"/);
 });
 
-test("README documents the Google/Meta console setup and redirect URIs", () => {
-  assert.match(readme, /Google & Facebook login \(Supabase OAuth\)/);
+test("README documents the Google console setup and redirect URIs", () => {
+  assert.match(readme, /Google login \(Supabase OAuth\)/);
   assert.match(readme, /auth\/v1\/callback/);
   assert.match(readme, /GOOGLE_CLIENT_ID/);
-  assert.match(readme, /FACEBOOK_APP_ID/);
 });

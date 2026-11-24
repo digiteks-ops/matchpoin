@@ -6,7 +6,9 @@ import { buildAuthCallbackUrl } from "@/lib/auth/callback-url.mjs";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 
-type Provider = "google" | "facebook";
+// Hanya Google yang dipakai; provider lain sengaja tidak ditawarkan karena
+// banyak akunnya tidak membagikan email sehingga daftar/masuk gagal di tengah.
+type Provider = "google";
 
 interface OAuthButtonsProps {
   redirectTo?: string;
@@ -15,7 +17,6 @@ interface OAuthButtonsProps {
 
 const PROVIDER_LABEL: Record<Provider, string> = {
   google: "Google",
-  facebook: "Facebook",
 };
 
 function mapOAuthError(provider: Provider, message: string): string {
@@ -55,24 +56,8 @@ function GoogleLogo({ className = "h-5 w-5 shrink-0" }: { className?: string }) 
   );
 }
 
-function FacebookLogo({ className = "h-5 w-5 shrink-0" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" width="20" height="20" className={className} aria-hidden="true">
-      <path
-        fill="#1877F2"
-        d="M24 12a12 12 0 1 0-13.9 11.9v-8.4H7.1V12h3V9.4c0-3 1.8-4.6 4.5-4.6 1.3 0 2.6.2 2.6.2v2.9h-1.5c-1.5 0-1.9.9-1.9 1.8V12h3.3l-.5 3.5h-2.8v8.4A12 12 0 0 0 24 12z"
-      />
-      <path
-        fill="#fff"
-        d="M16.7 15.5l.5-3.5h-3.3V9.7c0-.9.4-1.8 1.9-1.8h1.5V5s-1.3-.2-2.6-.2c-2.7 0-4.5 1.6-4.5 4.6V12h-3v3.5h3v8.4a12.1 12.1 0 0 0 3.7 0v-8.4h2.8z"
-      />
-    </svg>
-  );
-}
-
 const PROVIDER_DISPLAY: Record<Provider, string> = {
   google: "Google",
-  facebook: "Facebook",
 };
 
 function OAuthRedirectOverlay({ provider }: { provider: Provider }) {
@@ -85,7 +70,7 @@ function OAuthRedirectOverlay({ provider }: { provider: Provider }) {
     >
       <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-2xl">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50">
-          {provider === "google" ? <GoogleLogo className="h-7 w-7 shrink-0" /> : <FacebookLogo className="h-7 w-7 shrink-0" />}
+          <GoogleLogo className="h-7 w-7 shrink-0" />
         </div>
         <h2 className="mt-4 text-base font-bold text-slate-900">
           Mengalihkan ke {PROVIDER_DISPLAY[provider]}...
@@ -106,7 +91,6 @@ function OAuthRedirectOverlay({ provider }: { provider: Provider }) {
 export function OAuthButtons({ redirectTo = "/dashboard", mode = "signin" }: OAuthButtonsProps) {
   const [enabled, setEnabled] = useState<Record<Provider, boolean | null>>({
     google: null,
-    facebook: null,
   });
   const [isLoading, setIsLoading] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -125,14 +109,11 @@ export function OAuthButtons({ redirectTo = "/dashboard", mode = "signin" }: OAu
         });
         if (!res.ok) return;
         const json = (await res.json()) as {
-          external?: { google?: boolean; facebook?: boolean };
+          external?: { google?: boolean };
         };
 
         if (!cancelled) {
-          setEnabled({
-            google: Boolean(json.external?.google),
-            facebook: Boolean(json.external?.facebook),
-          });
+          setEnabled({ google: Boolean(json.external?.google) });
         }
       } catch {
         // Keep both buttons usable; the provider call will surface a clear error.
@@ -200,21 +181,6 @@ export function OAuthButtons({ redirectTo = "/dashboard", mode = "signin" }: OAu
         >
           <GoogleLogo />
           {label} dengan Google
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full justify-start gap-2"
-          disabled={isLoading !== null}
-          onClick={() => handleOAuth("facebook")}
-          title={
-            enabled.facebook === false
-              ? "Provider Facebook belum diaktifkan di Supabase"
-              : "Lanjutkan dengan Facebook"
-          }
-        >
-          <FacebookLogo />
-          {label} dengan Facebook
         </Button>
       </div>
 
