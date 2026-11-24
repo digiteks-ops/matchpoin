@@ -106,7 +106,26 @@ https://matchpoin.id/reset-password
 ### Langkah 1.4 — Simpan
 Klik tombol **Save** di kanan atas. Tidak ada proses deploy; berlaku langsung.
 
-### Langkah 1.5 — Uji
+### Langkah 1.5 — Pastikan tidak ada entri wildcard
+
+Kembali ke daftar **Redirect URLs**. Entri seperti `**`, `https://**`, atau
+`https://*` membuat Supabase menerima **domain apa pun** sebagai tujuan
+callback.
+
+Cara menguji:
+
+```bash
+npm run audit:auth
+```
+
+Kalau muncul peringatan **"Redirect URLs terlalu terbuka"**, hapus entri
+wildcard dan sisakan empat URL spesifik di Langkah 1.3.
+
+Dampak sebenarnya terbatas — penyerang tidak memiliki `code_verifier` PKCE
+korban, jadi `code` tidak bisa ditukar menjadi sesi — tetapi daftar tertutup
+jauh lebih mudah diaudit.
+
+### Langkah 1.6 — Uji
 1. Buka `https://matchpoin.vercel.app/forgot-password`.
 2. Isi email akun Anda → kirim.
 3. Buka email → klik tautan.
@@ -234,13 +253,18 @@ bisa"*.
    harus muncul pesan Indonesia *"Anda membatalkan proses masuk. Silakan coba
    lagi."*, bukan halaman kosong.
 
-### 2G. (Opsional) Nonaktifkan Facebook
+### 2G. Matikan Facebook & sign-in anonim (wajib untuk rilis)
 
-1. Supabase → **Authentication** → **Providers** → **Facebook**.
-2. Matikan toggle-nya → **Save**.
+Aplikasi hanya memakai Google dan email. Dua hal ini sebaiknya dimatikan agar
+tidak ada jalan masuk yang tidak dipakai:
 
-Aplikasi tidak lagi menampilkan tombol Facebook, jadi langkah ini hanya
-merapikan dashboard. Tidak berpengaruh ke fungsionalitas.
+1. Supabase → **Authentication** → **Providers** → **Facebook** → matikan
+   toggle → **Save**.
+2. Supabase → **Authentication** → **Providers** → **Anonymous sign-ins** →
+   matikan toggle → **Save**.
+
+Nomor 2 penting: selama aktif, siapa pun bisa membuat sesi tanpa akun. Aplikasi
+tidak memakai fitur ini sama sekali.
 
 ---
 
@@ -304,6 +328,39 @@ aktifkan **Confirm email**. Ini tidak memengaruhi login Google.
 
 ---
 
+## BAGIAN 4B — Cek otomatis sekali jalan
+
+Semua pemeriksaan di atas bisa dijalankan ulang kapan saja tanpa membuka
+dashboard:
+
+```bash
+npm run audit:auth
+```
+
+Script ini memeriksa: provider Google/email aktif, client ID terbaca, callback
+Google diterima Google Cloud, Google menolak `redirect_uri` asing, Site URL
+bukan localhost, tidak ada wildcard di Redirect URLs, serta deploy produksi
+memakai project Supabase yang sama dan tombol Google tampil.
+
+Contoh keluaran sehat:
+
+```
+[OK  ] Provider Google: aktif
+[OK  ] Client ID Google: 79069845555-...apps.googleusercontent.com
+[OK  ] Callback Google: https://flbiltsyobllkxydyufq.supabase.co/auth/v1/callback
+[OK  ] Izin redirect di Google Cloud: callback Supabase diterima Google
+[OK  ] Validasi Google: redirect_uri asing ditolak (sesuai harapan)
+[OK  ] Site URL: mengarah ke https://matchpoin.vercel.app
+[OK  ] Redirect URLs: domain asing ditolak / dikembalikan ke Site URL
+[OK  ] Tombol Google di produksi: tampil di /login
+[OK  ] Tombol Facebook: sudah tidak ada
+
+0 gagal, 0 peringatan.
+```
+
+Skrip ini **tidak** bisa: menyalakan provider, mem-publish app Google, atau
+mengisi SMTP — semuanya butuh akun dashboard Anda.
+
 ## BAGIAN 5 — Checklist akhir (centang satu per satu)
 
 **Supabase → Authentication → URL Configuration**
@@ -323,6 +380,8 @@ aktifkan **Confirm email**. Ini tidak memengaruhi login Google.
 **Supabase → Authentication → Providers**
 - [ ] Google: **enabled**, Client ID & Secret terisi, **Save**
 - [ ] Facebook: **disabled**
+- [ ] Anonymous sign-ins: **disabled**
+- [ ] `npm run audit:auth` → 0 gagal
 
 **Login → uji di production**
 - [ ] "Masuk dengan Google" untuk akun baru → sampai `/dashboard`

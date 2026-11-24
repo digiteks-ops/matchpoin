@@ -39,6 +39,7 @@
     "test:supabase-rls": "node --test scripts/supabase/rls-hardening.test.mjs",
     "test:unit": "node --test scripts/unit",
     "audit:rls": "node scripts/supabase/rls-audit.mjs",
+    "audit:auth": "node --env-file=.env.local scripts/supabase/check-auth-config.mjs",
     "test:e2e:playwright": "playwright test",
     "verify:live": "node scripts/verify-live.mjs",
     "db:explain": "node --env-file=.env.local scripts/supabase/explain-hot-queries.mjs",
