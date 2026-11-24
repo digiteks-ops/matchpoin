@@ -94,7 +94,6 @@ export default function PlayersDirectoryPage() {
   const [selectedProvince, setSelectedProvince] = useState<string>("all");
   const [selectedCityId, setSelectedCityId] = useState<string>("all");
   const [selectedLevel, setSelectedLevel] = useState<string>("all");
-  const [selectedFormat, setSelectedFormat] = useState<string>("all");
   // Default: pemain yang paling baru login tampil paling atas.
   const [sortBy, setSortBy] = useState<PlayerSort>("last_active");
 
@@ -271,21 +270,6 @@ export default function PlayersDirectoryPage() {
         return false;
       }
 
-      if (selectedFormat !== "all") {
-        const categories = p.preferredCategories ?? [];
-        if (selectedFormat === "singles") {
-          if (!categories.some((c) => c === "singles" || c === "mens_singles" || c === "womens_singles")) {
-            return false;
-          }
-        } else if (selectedFormat === "doubles") {
-          if (!categories.some((c) => c === "doubles" || c === "mens_doubles" || c === "womens_doubles")) {
-            return false;
-          }
-        } else if (selectedFormat === "mixed_doubles") {
-          if (!categories.includes("mixed_doubles")) return false;
-        }
-      }
-
       return true;
     });
 
@@ -314,22 +298,20 @@ export default function PlayersDirectoryPage() {
       );
     }
     return sorted;
-  }, [players, searchQuery, selectedProvince, selectedCityId, selectedLevel, selectedFormat, sortBy]);
+  }, [players, searchQuery, selectedProvince, selectedCityId, selectedLevel, sortBy]);
 
   const clearFilters = () => {
     setSearchQuery("");
     setSelectedProvince("all");
     setSelectedCityId("all");
     setSelectedLevel("all");
-    setSelectedFormat("all");
   };
 
   const hasActiveFilters =
     searchQuery.trim() !== "" ||
     selectedProvince !== "all" ||
     selectedCityId !== "all" ||
-    selectedLevel !== "all" ||
-    selectedFormat !== "all";
+    selectedLevel !== "all";
 
   return (
     <div className="flex-1 bg-slate-50 py-8 md:py-12">
@@ -437,18 +419,6 @@ export default function PlayersDirectoryPage() {
                   {option.label}
                 </option>
               ))}
-            </select>
-
-            <select
-              value={selectedFormat}
-              onChange={(e) => setSelectedFormat(e.target.value)}
-              className="h-10 w-full md:w-44 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
-              aria-label="Filter format"
-            >
-              <option value="all">Semua Format</option>
-              <option value="singles">Tunggal</option>
-              <option value="doubles">Ganda</option>
-              <option value="mixed_doubles">Ganda Campuran</option>
             </select>
 
             <select
