@@ -366,7 +366,9 @@ export default function ProfilePage() {
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base font-bold text-slate-800">Statistik & Riwayat</CardTitle>
-              <CardDescription className="text-xs">Pertandingan yang telah tercatat.</CardDescription>
+              <CardDescription className="text-xs">
+                5 pertandingan terakhir beserta perubahan rating DTR.
+              </CardDescription>
             </div>
             <Link href="/matches">
               <Button variant="outline" size="sm" className="text-xs">
@@ -411,7 +413,7 @@ export default function ProfilePage() {
 
             {stats && stats.recentMatches.length > 0 && (
               <div className="space-y-1.5 pt-1">
-                {stats.recentMatches.slice(0, 3).map((entry) => (
+                {stats.recentMatches.slice(0, 5).map((entry) => (
                   <Link
                     key={`${entry.id}-${entry.matchDate}`}
                     href={`/matches/${entry.id}`}
@@ -426,6 +428,25 @@ export default function ProfilePage() {
                         <p className="font-bold text-slate-800">{entry.scoreA}–{entry.scoreB}</p>
                       ) : (
                         <p className="text-slate-400">-</p>
+                      )}
+                      {entry.ratingChange !== null && (
+                        <p
+                          className={`text-[10px] font-bold ${
+                            entry.ratingChange > 0
+                              ? "text-emerald-600"
+                              : entry.ratingChange < 0
+                              ? "text-rose-600"
+                              : "text-slate-500"
+                          }`}
+                          title={
+                            entry.ratingBefore !== null && entry.ratingAfter !== null
+                              ? `${Math.round(entry.ratingBefore)} → ${Math.round(entry.ratingAfter)}`
+                              : undefined
+                          }
+                        >
+                          DTR {entry.ratingChange > 0 ? "+" : ""}
+                          {Math.round(entry.ratingChange)}
+                        </p>
                       )}
                       <p
                         className={`text-[10px] font-semibold ${

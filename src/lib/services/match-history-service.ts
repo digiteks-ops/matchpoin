@@ -17,6 +17,10 @@ export interface MatchHistoryEntry {
   resultStatus: "pending" | "confirmed" | "under_review" | "none";
   photoUrls: string[];
   createdAt: string;
+  /** Perubahan rating DTR pada pertandingan ini (null bila belum dihitung). */
+  ratingChange: number | null;
+  ratingBefore: number | null;
+  ratingAfter: number | null;
 }
 
 export interface PlayerStats {
@@ -184,6 +188,10 @@ export async function getMatchHistory(
       resultStatus,
       photoUrls,
       createdAt: match.created_at,
+      // Diisi setelah rating_history dibaca (lihat getPlayerStats).
+      ratingChange: null,
+      ratingBefore: null,
+      ratingAfter: null,
     };
   });
 }
@@ -235,6 +243,41 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats> {
 
   const history = await getMatchHistory(userId, 100);
 
+  // Perubahan rating per pertandingan: diambil dari rating_history, yang ditulis
+  // saat hasil dikonfirmasi. Pemain bisa melihat naik/turun rating tiap match.
+  const { data: ratingRows } = await supabase
+    .from("rating_history")
+    .select("match_id, old_rating, new_rating, rating_change")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  const ratingByMatch = new Map(
+    (ratingRows ?? []).map((row) => [
+      row.match_id as string,
+      {
+        before: row.old_rating === null ? null : Number(row.old_rating),
+        after: row.new_rating === null ? null : Number(row.new_rating),
+        change:
+          row.rating_change !== null && row.rating_change !== undefined
+            ? Number(row.rating_change)
+            : row.old_rating !== null && row.new_rating !== null
+            ? Number(row.new_rating) - Number(row.old_rating)
+            : null,
+      },
+    ])
+  );
+
+  const withRating = history.map((entry) => {
+    const change = ratingByMatch.get(entry.id);
+    return {
+      ...entry,
+      ratingChange: change?.change ?? null,
+      ratingBefore: change?.before ?? null,
+      ratingAfter: change?.after ?? null,
+    };
+  });
+
   const wins = history.filter((m) => m.result === "win").length;
   const losses = history.filter((m) => m.result === "loss").length;
   const total = wins + losses;
@@ -269,6 +312,7 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats> {
     doublesLosses: doubles.filter((m) => m.result === "loss").length,
     currentRating: Number(rating?.current_rating ?? 1000),
     bestRating: Number(rating?.peak_rating ?? rating?.current_rating ?? 1000000),
-    recentMatches: history.slice(0, 5),
+    // Maksimal 5 pertandingan terakhir, sesuai tampilan profil.
+    recentMatches: withRating.slice(0, 5),
   };
 }
