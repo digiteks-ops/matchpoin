@@ -7,6 +7,7 @@ import {
 } from "@/lib/mysql/competition-registration-core.mjs";
 import { todayInPlatformTimeZone } from "@/lib/utils";
 import { logError } from "@/lib/errors";
+import { LEAGUE_WHATSAPP_GROUP_URL } from "@/lib/notifications/whatsapp-core.mjs";
 import {
   notifyAdminsPendingRegistration,
   notifyTournamentRegistration,
@@ -60,9 +61,10 @@ async function registerWithoutRpc(input: {
   tournamentId: string;
   partnerUserId: string | null;
   eligibilityConfirmed: boolean;
+  whatsappNumber: string;
   rpcMessage: string;
 }): Promise<Response | null> {
-  const { userId, tournamentId, partnerUserId, eligibilityConfirmed } = input;
+  const { userId, tournamentId, partnerUserId, eligibilityConfirmed, whatsappNumber } = input;
 
   const admin = createAdminClient();
   if (!admin) return null;
@@ -187,6 +189,8 @@ async function registerWithoutRpc(input: {
     entryId,
     category: evaluation.category,
     status: "pending",
+    whatsappNumber,
+    whatsappGroupUrl: LEAGUE_WHATSAPP_GROUP_URL,
     message: evaluation.doubles
       ? "Pendaftaran ganda berhasil dikirim. Menunggu persetujuan admin."
       : "Pendaftaran berhasil dikirim. Menunggu persetujuan admin.",
@@ -231,12 +235,24 @@ export async function POST(request: Request) {
   if (!parsed.ok) {
     return NextResponse.json({ success: false, message: parsed.message }, { status: 400 });
   }
-  const { leagueId, partnerUserId, eligibilityConfirmed } = parsed;
+  const { leagueId, partnerUserId, eligibilityConfirmed, whatsappNumber } = parsed;
 
   try {
     const tournamentId = await resolveTournamentId(leagueId);
     if (!tournamentId) {
       return NextResponse.json({ success: false, message: "Liga tidak ditemukan." }, { status: 404 });
+    }
+
+    // Nomor WhatsApp wajib tersimpan di profil: dipakai panitia untuk koordinasi
+    // dan dasar pengiriman notifikasi WhatsApp. Disimpan sebelum RPC supaya
+    // pendaftaran yang ditolak pun tetap memperbaiki data kontak.
+    try {
+      const admin = createAdminClient();
+      if (admin) {
+        await admin.from("users").update({ phone: whatsappNumber }).eq("id", user.id);
+      }
+    } catch (phoneError) {
+      logError("league.register.phone", phoneError, { userId: user.id });
     }
 
     const { data, error } = await supabase.rpc("register_for_competition", {
@@ -256,6 +272,7 @@ export async function POST(request: Request) {
         tournamentId,
         partnerUserId,
         eligibilityConfirmed,
+        whatsappNumber,
         rpcMessage: error.message,
       });
       if (fallback) return fallback;
@@ -288,6 +305,8 @@ export async function POST(request: Request) {
       entryId: result.entry_id,
       category: result.category,
       status: result.status ?? "pending",
+      whatsappNumber,
+      whatsappGroupUrl: LEAGUE_WHATSAPP_GROUP_URL,
       message: result.message,
     });
   } catch (err: unknown) {

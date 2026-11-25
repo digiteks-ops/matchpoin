@@ -17,6 +17,8 @@ import {
   IKA17_REGISTRATION_OPEN,
   IKA17_REGISTRATION_DEADLINE,
 } from "@/lib/tournaments/ika17";
+import { isValidWhatsapp } from "@/lib/mysql/competition-registration-core.mjs";
+import { LEAGUE_WHATSAPP_GROUP_URL } from "@/lib/notifications/whatsapp-core.mjs";
 
 interface StandingRow {
   entryId: string;
@@ -122,6 +124,10 @@ export default function LeaguePage() {
   const [regPartners, setRegPartners] = useState<PartnerOption[]>([]);
   const [regPartnersLoading, setRegPartnersLoading] = useState(false);
   const [regEligibility, setRegEligibility] = useState(false);
+  // Nomor WhatsApp wajib: dipakai panitia dan menjadi syarat gabung grup liga.
+  const [regWhatsapp, setRegWhatsapp] = useState("");
+  // Status tombol grup WhatsApp di langkah sukses (sudah dibuka atau belum).
+  const [autoJoinedGroup, setAutoJoinedGroup] = useState(false);
 
   const [provinceFilter, setProvinceFilter] = useState("all");
   const [cityFilter, setCityFilter] = useState("all");
@@ -336,11 +342,17 @@ export default function LeaguePage() {
       } else {
         const { data: prof } = await supabase
           .from("player_profiles")
-          .select("display_name, users(full_name, gender, cities(name, province))")
+          .select("display_name, users(full_name, gender, phone, cities(name, province))")
           .eq("user_id", user.id)
           .maybeSingle();
         const city = pickCity((prof as any)?.users ?? null);
         gender = (prof as any)?.users?.gender ?? null;
+        // Prefill nomor WhatsApp yang sudah tersimpan di profil agar pemain
+        // tidak perlu mengetik ulang setiap kali mendaftar kategori baru.
+        const savedPhone = (prof as any)?.users?.phone;
+        if (typeof savedPhone === "string" && savedPhone.trim()) {
+          setRegWhatsapp(savedPhone.trim());
+        }
         setRegProfile({
           name: (prof as any)?.display_name || (prof as any)?.users?.full_name || "Pemain MATCHPOIN",
           city: city?.name ?? "",
@@ -460,6 +472,10 @@ export default function LeaguePage() {
         setRegError("Pilih partner untuk kategori ganda.");
         return;
       }
+      if (!isValidWhatsapp(regWhatsapp)) {
+        setRegError("Nomor WhatsApp wajib diisi dengan format yang benar, mis. 08123456789.");
+        return;
+      }
       if (!regEligibility) {
         setRegError("Konfirmasi bahwa Anda belum pernah mengikuti PORDA, PORPROV, atau PON.");
         return;
@@ -472,11 +488,13 @@ export default function LeaguePage() {
           tournamentId: regLeague.id,
           partnerUserId: definition?.doubles ? regPartnerId : null,
           eligibilityConfirmed: regEligibility,
+          whatsappNumber: regWhatsapp,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         success?: boolean;
         message?: string;
+        whatsappGroupUrl?: string;
       };
       if (!res.ok || !data.success) {
         setRegError(data.message || "Pendaftaran gagal. Coba lagi.");
@@ -484,6 +502,12 @@ export default function LeaguePage() {
       }
       setRegSuccess(true);
       setRegStep(3);
+      // Join otomatis: buka undangan grup WhatsApp begitu pendaftaran diterima.
+      // Dipanggil sinkron di dalam handler klik agar tidak diblokir pemblokir
+      // popup browser.
+      const groupUrl = data.whatsappGroupUrl || LEAGUE_WHATSAPP_GROUP_URL;
+      const groupWindow = window.open(groupUrl, "_blank", "noopener,noreferrer");
+      setAutoJoinedGroup(Boolean(groupWindow));
       await loadLeagueData();
       await prepareRegCategory(regCategory, currentUser.id, regProfile?.gender ?? null);
     } finally {
@@ -667,6 +691,27 @@ export default function LeaguePage() {
                         </p>
                       </div>
 
+                      <div className="space-y-1">
+                        <label htmlFor="regWhatsapp" className="font-semibold text-slate-700">
+                          No. WhatsApp <span className="text-rose-600">*</span>
+                        </label>
+                        <input
+                          id="regWhatsapp"
+                          type="tel"
+                          inputMode="tel"
+                          autoComplete="tel"
+                          placeholder="08xxxxxxxxxx"
+                          value={regWhatsapp}
+                          onChange={(e) => setRegWhatsapp(e.target.value)}
+                          disabled={regLoading}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                        />
+                        <p className="text-[11px] text-slate-500">
+                          Dipakai panitia untuk koordinasi jadwal. Setelah mendaftar Anda otomatis
+                          diarahkan ke grup WhatsApp liga.
+                        </p>
+                      </div>
+
                       <label className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-2 text-[11px] text-rose-800">
                         <input
                           type="checkbox"
@@ -680,7 +725,7 @@ export default function LeaguePage() {
                       <p className="text-slate-500">Pastikan data profil benar. Satu pemain hanya dapat terdaftar 1x per kategori liga, tetapi boleh mengikuti kategori lain.</p>
                       <div className="flex justify-between gap-2">
                         <Button variant="outline" size="sm" onClick={() => setRegStep(1)} disabled={regLoading}>Kembali</Button>
-                        <Button variant="tennis" size="sm" className="text-matchpoin-navy font-bold" onClick={confirmRegistration} disabled={regLoading || !currentUser || regAlready || !regLeague || (ika17Category(regCategory)?.doubles && !regPartnerId) || !regEligibility}>
+                        <Button variant="tennis" size="sm" className="text-matchpoin-navy font-bold" onClick={confirmRegistration} disabled={regLoading || !currentUser || regAlready || !regLeague || (ika17Category(regCategory)?.doubles && !regPartnerId) || !isValidWhatsapp(regWhatsapp) || !regEligibility}>
                           {regLoading ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Mendaftarkan...</> : "Konfirmasi Pendaftaran"}
                         </Button>
                       </div>
@@ -697,6 +742,32 @@ export default function LeaguePage() {
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
                     Status: Menunggu Persetujuan. Anda akan mendapat notifikasi setelah Super Admin meninjau pendaftaran.
                   </p>
+
+                  {/* "Join otomatis": pendaftaran yang berhasil langsung membuka
+                      undangan grup WhatsApp. Target membuka tab baru sehingga
+                      halaman status pendaftaran tetap terbuka. */}
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-left">
+                    <p className="text-xs font-semibold text-emerald-800">
+                      Langkah terakhir: gabung grup WhatsApp liga
+                    </p>
+                    <p className="mt-1 text-[11px] text-emerald-700">
+                      Info jadwal, lawan, dan pengumuman panitia dibagikan di grup ini.
+                    </p>
+                    <a
+                      href={LEAGUE_WHATSAPP_GROUP_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setAutoJoinedGroup(true)}
+                      className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+                    >
+                      {autoJoinedGroup ? "Buka Grup Lagi" : "Gabung Grup WhatsApp"}
+                    </a>
+                    {autoJoinedGroup && (
+                      <p className="mt-1 text-[10px] text-emerald-700">
+                        Tautan grup sudah dibuka. Selesaikan pendaftaran di WhatsApp.
+                      </p>
+                    )}
+                  </div>
                   <div className="flex justify-center gap-2">
                     <Button variant="outline" size="sm" onClick={() => { setCategory(regCategory); setRegOpen(false); }}>Lihat Klasemen Kategori</Button>
                     <Button variant="tennis" size="sm" className="text-matchpoin-navy font-bold" onClick={() => setRegOpen(false)}>Selesai</Button>

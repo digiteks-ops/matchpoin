@@ -147,3 +147,6 @@ export function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
+
+// Normalisasi URL gambar tinggal di modul murni supaya bisa diuji `node --test`.
+export { normalizeImageUrl } from "./image-url-core.mjs";

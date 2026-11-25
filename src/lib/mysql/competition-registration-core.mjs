@@ -1,6 +1,29 @@
 const MAX_ID_LENGTH = 36;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 
+/** Nomor WhatsApp Indonesia setelah dinormalkan ke awalan 62. */
+const WA_PATTERN = /^62(8[1-9][0-9]{6,11})$/;
+
+/**
+ * Menormalkan nomor WhatsApp Indonesia ke `628xxxxxxxxx`.
+ * Disalin dari `notifications/whatsapp-core.mjs` karena modul ini dipakai jalur
+ * API/MySQL yang tidak boleh bergantung pada kode TypeScript.
+ */
+export function normalizeWhatsapp(input) {
+  if (typeof input !== "string") return "";
+  const digits = input.replace(/[^0-9]/g, "");
+  if (!digits) return "";
+  let normalized = digits;
+  if (normalized.startsWith("0")) normalized = `62${normalized.slice(1)}`;
+  else if (normalized.startsWith("8")) normalized = `62${normalized}`;
+  else if (normalized.startsWith("620")) normalized = `62${normalized.slice(3)}`;
+  return WA_PATTERN.test(normalized) ? normalized : "";
+}
+
+export function isValidWhatsapp(input) {
+  return normalizeWhatsapp(input) !== "";
+}
+
 export function normalizeId(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -69,11 +92,22 @@ export function parseRegistrationPayload(payload) {
     };
   }
 
+  // Nomor WhatsApp wajib: dipakai panitia untuk koordinasi jadwal dan menjadi
+  // syarat gabung grup WhatsApp liga.
+  const whatsappNumber = normalizeWhatsapp(payload.whatsappNumber);
+  if (!whatsappNumber) {
+    return {
+      ok: false,
+      message: "Nomor WhatsApp wajib diisi dengan format yang benar, mis. 08123456789.",
+    };
+  }
+
   return {
     ok: true,
     leagueId,
     partnerUserId: partnerUserId || null,
     eligibilityConfirmed: true,
+    whatsappNumber,
   };
 }
 

@@ -52,13 +52,24 @@ test("payload parser accepts a tournament id and optional partner", () => {
     tournamentId: "0f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b",
     partnerUserId: null,
     eligibilityConfirmed: true,
+    whatsappNumber: "08123456789",
   });
   assert.deepEqual(parsed, {
     ok: true,
     leagueId: "0f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b",
     partnerUserId: null,
     eligibilityConfirmed: true,
+    whatsappNumber: "628123456789",
   });
+});
+
+test("payload parser requires a WhatsApp number", () => {
+  const parsed = parseRegistrationPayload({
+    tournamentId: "0f1d2c3b-4a59-4e6f-8a7b-9c0d1e2f3a4b",
+    eligibilityConfirmed: true,
+  });
+  assert.equal(parsed.ok, false);
+  assert.match(parsed.message, /WhatsApp wajib/);
 });
 
 test("success: an eligible player can register", () => {
@@ -87,7 +98,7 @@ test("already registered: the same player cannot register twice", () => {
   assert.match(result.message, /sudah terdaftar/i);
 });
 
-test("quota full: registration is rejected when accepted entries fill the quota", () => {
+test("quota full: no longer blocks registration (limit removed)", () => {
   const result = evaluateLeagueRegistration({
     tournament: { ...openLeague, max_participants: 24 },
     userId: "user-b",
@@ -96,8 +107,8 @@ test("quota full: registration is rejected when accepted entries fill the quota"
     entryCount: 24,
     today: "2026-11-20",
   });
-  assert.equal(result.ok, false);
-  assert.match(result.message, /penuh/i);
+  // Batas 24 peserta dihapus: jumlah pendaftar tidak lagi menutup pendaftaran.
+  assert.equal(result.ok, true);
 });
 
 test("doubles require a partner and cannot use yourself", () => {

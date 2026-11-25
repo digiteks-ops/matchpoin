@@ -37,6 +37,7 @@ test("accepts the seeded slug league identifiers", () => {
   const parsed = parseRegistrationPayload({
     tournamentId: "ika17-mens-singles",
     eligibilityConfirmed: true,
+    whatsappNumber: "08123456789",
   });
 
   assert.equal(parsed.ok, true);
@@ -49,6 +50,7 @@ test("accepts UUID league identifiers and trims input", () => {
     tournamentId: "  ika17-mixed-doubles  ",
     partnerUserId: `  ${PARTNER}  `,
     eligibilityConfirmed: true,
+    whatsappNumber: "08123456789",
   });
 
   assert.equal(parsed.ok, true);
@@ -58,6 +60,7 @@ test("accepts UUID league identifiers and trims input", () => {
   const uuid = parseRegistrationPayload({
     tournamentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     eligibilityConfirmed: true,
+    whatsappNumber: "08123456789",
   });
   assert.equal(uuid.ok, true);
 });
@@ -157,13 +160,14 @@ test("duplicate partner registration is rejected", () => {
   });
 });
 
-test("full quota is rejected", () => {
+test("registration is no longer capped by a quota", () => {
+  // Batas 24 peserta sudah dihapus: pendaftaran hanya ditutup oleh periode dan
+  // status liga, bukan oleh jumlah pendaftar.
   const result = evaluate({ entryCount: 24 });
 
-  assert.deepEqual(result, {
-    ok: false,
-    message: "Kuota kategori ini sudah penuh.",
-  });
+  assert.equal(result.ok, true);
+  assert.equal(result.category, "mens_singles");
+  assert.equal(result.doubles, false);
 });
 
 test("closed registration status and deadline are rejected", () => {

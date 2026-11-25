@@ -3,7 +3,7 @@
 import React, { useRef, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
-import { assertValidImageFile, compressImage, formatFileSize } from "@/lib/utils/image";
+import { assertValidImageFile, compressImage, formatFileSize, normalizeImageUrl } from "@/lib/utils/image";
 import { Button } from "@/components/ui/button";
 import { Camera, Loader2, X, AlertCircle } from "lucide-react";
 
@@ -84,7 +84,9 @@ export function PhotoUpload({
         const {
           data: { publicUrl },
         } = supabase.storage.from(RESULTS_BUCKET).getPublicUrl(path);
-        uploaded.push(publicUrl);
+        // URL dari getPublicUrl bisa mengandung garis miring ganda, yang ditolak
+        // mesin optimasi gambar Next.js. Simpan versi yang sudah dirapikan.
+        uploaded.push(normalizeImageUrl(publicUrl));
       }
 
       onChange([...value, ...uploaded]);

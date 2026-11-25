@@ -12,8 +12,9 @@ export type ParsedRegistrationPayload =
       ok: true;
       leagueId: string;
       partnerUserId: string | null;
-      playingExperience: "beginner" | "intermediate";
       eligibilityConfirmed: true;
+      /** Sudah dinormalkan ke `628xxxxxxxxx`. */
+      whatsappNumber: string;
     }
   | { ok: false; message: string };
 
@@ -39,6 +40,9 @@ export interface LeagueRegistrationEvaluationInput {
 export const BEGINNER_ONLY_CATEGORIES: string[];
 
 export function normalizeId(value: unknown): string;
+/** `0812-3456-7890` -> `6281234567890`; kosong bila tidak sah. */
+export function normalizeWhatsapp(input: unknown): string;
+export function isValidWhatsapp(input: unknown): boolean;
 export function isValidId(value: unknown): boolean;
 export function inferCategory(name: string): string;
 export function isDoubles(category: string): boolean;

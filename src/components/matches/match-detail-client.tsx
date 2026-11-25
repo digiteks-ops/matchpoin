@@ -15,6 +15,7 @@ import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import type { OpenMatchDetail } from "@/lib/services/match-service";
 import type { MatchResultView } from "@/lib/services/rating-service";
 import { formatIndonesianDate, formatIndonesianTime } from "@/lib/utils";
+import { normalizeImageUrl } from "@/lib/utils/image";
 import { ERROR_GENERIC, ERROR_NETWORK, isOffline, logError } from "@/lib/errors";
 import {
   ArrowLeft,
@@ -717,9 +718,11 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                         </p>
                         <div className="flex flex-wrap gap-2">
                           {result.photoUrls.map((url) => (
-                            <a key={url} href={url} target="_blank" rel="noreferrer" className="block relative w-20 h-20 rounded-lg overflow-hidden">
+                            // normalizeImageUrl: URL lama tersimpan dengan garis
+                            // miring ganda dan ditolak optimizer Next.js.
+                            <a key={url} href={normalizeImageUrl(url)} target="_blank" rel="noreferrer" className="block relative w-20 h-20 rounded-lg overflow-hidden">
                               <Image
-                                src={url}
+                                src={normalizeImageUrl(url)}
                                 alt="Foto pertandingan"
                                 fill
                                 className="object-cover border border-slate-200"

@@ -26,6 +26,8 @@ import {
   IKA17_START_DATE,
   ika17Category,
 } from "@/lib/tournaments/ika17";
+import { isValidWhatsapp } from "@/lib/mysql/competition-registration-core.mjs";
+import { LEAGUE_WHATSAPP_GROUP_URL } from "@/lib/notifications/whatsapp-core.mjs";
 
 interface TournamentRow {
   id: string;
@@ -78,6 +80,8 @@ export default function TournamentsPage() {
   const [regError, setRegError] = useState<string | null>(null);
   const [regSuccess, setRegSuccess] = useState<string | null>(null);
   const [eligibilityConfirmed, setEligibilityConfirmed] = useState(false);
+  // Nomor WhatsApp wajib saat mendaftar liga.
+  const [whatsappNumber, setWhatsappNumber] = useState("");
 
   useEffect(() => {
     const supabase = createClient();
@@ -90,6 +94,14 @@ export default function TournamentsPage() {
         .eq("user_id", user.id)
         .maybeSingle();
       setCurrentGender((data as { gender?: string | null } | null)?.gender ?? null);
+      // Prefill nomor WhatsApp dari profil (kolom phone di tabel users).
+      const { data: prof } = await supabase
+        .from("player_profiles")
+        .select("users(phone)")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const saved = (prof as any)?.users?.phone;
+      if (typeof saved === "string" && saved.trim()) setWhatsappNumber(saved.trim());
     });
   }, []);
 
@@ -148,6 +160,9 @@ export default function TournamentsPage() {
     setRegError(null);
     setRegSuccess(null);
     setPartners([]);
+    // Persetujuan eligibility dipindah ke dalam modal. Dulu checkbox ada di
+    // kartu kategori dan baris ini me-reset-nya, sehingga tombol kirim di modal
+    // selalu nonaktif dan pendaftaran ganda tidak pernah bisa di-submit.
     setEligibilityConfirmed(false);
 
     const definition = ika17Category(row.category);
@@ -208,6 +223,16 @@ export default function TournamentsPage() {
       setRegError("Pilih partner untuk kategori ganda.");
       return;
     }
+    if (!isValidWhatsapp(whatsappNumber)) {
+      setRegError("Nomor WhatsApp wajib diisi dengan format yang benar, mis. 08123456789.");
+      return;
+    }
+    if (!eligibilityConfirmed) {
+      setRegError(
+        "Centang pernyataan bahwa Anda belum pernah mengikuti PORDA, PORPROV, atau PON."
+      );
+      return;
+    }
 
     setRegLoading(true);
     try {
@@ -218,13 +243,24 @@ export default function TournamentsPage() {
           tournamentId: selected.id,
           partnerUserId: definition.doubles ? partnerUserId : null,
           eligibilityConfirmed,
+          whatsappNumber,
         }),
       });
-      const payload = (await response.json()) as { success?: boolean; message?: string };
+      const payload = (await response.json()) as {
+        success?: boolean;
+        message?: string;
+        whatsappGroupUrl?: string;
+      };
       if (!response.ok || !payload.success) {
         throw new Error(payload.message || "Pendaftaran gagal.");
       }
       setRegSuccess(payload.message || "Pendaftaran berhasil dikirim.");
+      // Join otomatis grup WhatsApp liga setelah pendaftaran diterima.
+      window.open(
+        payload.whatsappGroupUrl || LEAGUE_WHATSAPP_GROUP_URL,
+        "_blank",
+        "noopener,noreferrer"
+      );
       setPartnerUserId("");
       await loadTournaments();
     } catch (err) {
@@ -368,21 +404,19 @@ export default function TournamentsPage() {
                       )}
                     </div>
 
-                  <label className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-                    <input
-                      type="checkbox"
-                      checked={eligibilityConfirmed}
-                      onChange={(event) => setEligibilityConfirmed(event.target.checked)}
-                      className="mt-0.5 h-4 w-4 shrink-0 rounded border-rose-300 text-rose-600 focus:ring-rose-500"
-                    />
+                  {/* Syarat eligibility adalah informasi di kartu; persetujuan yang mengikat
+                      dicentang di dalam modal pendaftaran, karena state di sini
+                      tidak terbaca setelah modal dibuka. */}
+                  <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>
                       <strong>
-                        Saya menyatakan {IKA17_ELIGIBILITY_STATEMENT}
+                        Syarat: {IKA17_ELIGIBILITY_STATEMENT}
                       </strong>{" "}
                       Pernyataan ini menjadi dasar verifikasi admin. Peserta yang pernah tampil di
                       ajang tersebut tidak eligible.
                     </span>
-                  </label>
+                  </div>
 
                   <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                       <p className="flex items-start gap-1.5">
@@ -556,6 +590,27 @@ export default function TournamentsPage() {
                     </span>
                   </div>
 
+                  <div className="space-y-2">
+                    <label htmlFor="reg-whatsapp" className="text-sm font-semibold text-slate-800">
+                      No. WhatsApp <span className="text-rose-600">*</span>
+                    </label>
+                    <input
+                      id="reg-whatsapp"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      placeholder="08xxxxxxxxxx"
+                      value={whatsappNumber}
+                      onChange={(event) => setWhatsappNumber(event.target.value)}
+                      disabled={regLoading}
+                      className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:border-matchpoin-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
+                    />
+                    <p className="text-[11px] text-slate-500">
+                      Wajib diisi. Nomor ini dipakai panitia untuk koordinasi jadwal dan dipakai
+                      untuk mengirim notifikasi WhatsApp.
+                    </p>
+                  </div>
+
                   <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                     Pendaftaran akan dikirim dengan status <strong>pending</strong>. Anda dapat
                     melihat statusnya di kartu kategori setelah admin memproses.
@@ -565,6 +620,22 @@ export default function TournamentsPage() {
                       {IKA17_MIN_MATCHES} pertandingan selama periode liga.
                     </span>
                   </div>
+
+                  {/* Persetujuan eligibility harus ada di dalam modal: checkbox di
+                      kartu kategori tidak ikut terbaca setelah modal dibuka. */}
+                  <label className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+                    <input
+                      type="checkbox"
+                      checked={eligibilityConfirmed}
+                      onChange={(event) => setEligibilityConfirmed(event.target.checked)}
+                      disabled={regLoading}
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded border-rose-300 text-rose-600 focus:ring-rose-500"
+                    />
+                    <span>
+                      <strong>Saya menyatakan {IKA17_ELIGIBILITY_STATEMENT}</strong> Pernyataan ini
+                      menjadi dasar verifikasi admin.
+                    </span>
+                  </label>
                 </>
               )}
 
@@ -587,6 +658,7 @@ export default function TournamentsPage() {
                     disabled={
                       regLoading ||
                       !eligibilityConfirmed ||
+                      !isValidWhatsapp(whatsappNumber) ||
                       (ika17Category(selected.category)?.doubles && !partnerUserId)
                     }
                   >

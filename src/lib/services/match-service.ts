@@ -22,6 +22,11 @@ import {
   type UmpirePreference,
 } from "@/lib/matches/constants";
 import { MPR_STARTING_RATING } from "@/lib/rating/mpr-core.mjs";
+import { notifyChallengeViaWhatsapp } from "@/lib/notifications/whatsapp-service";
+import {
+  buildChallengeMessage,
+  LEAGUE_WHATSAPP_GROUP_URL,
+} from "@/lib/notifications/whatsapp-core.mjs";
 
 export * from "@/lib/matches/constants";
 
@@ -484,7 +489,68 @@ export async function createOpenMatch(
 
   await resyncPlayerCount(supabase, matchData.id);
 
+  // Notifikasi WhatsApp ke lawan yang ditantang. Pelengkap saja: kegagalan
+  // gateway atau lawan tanpa nomor tidak boleh menggagalkan pembuatan match.
+  await notifyChallengedOpponents({
+    supabase,
+    organizerId: userId,
+    inviteeIds: referencedPlayers,
+    matchId: matchData.id,
+    title,
+    matchDate: input.matchDate,
+    startTime,
+    courtName: manualCourtName || null,
+    category: input.category,
+  });
+
   return matchData.id;
+}
+
+/**
+ * Mengirim WhatsApp "Anda ditantang bertanding" ke setiap lawan yang dipilih
+ * host. Berjalan setelah match tersimpan; semua kegagalan ditelan dan dicatat.
+ */
+async function notifyChallengedOpponents(input: {
+  supabase: ReturnType<typeof createClient>;
+  organizerId: string;
+  inviteeIds: string[];
+  matchId: string;
+  title: string;
+  matchDate: string;
+  startTime: string;
+  courtName: string | null;
+  category: string;
+}): Promise<void> {
+  if (input.inviteeIds.length === 0) return;
+  try {
+    const { data: host } = await input.supabase
+      .from("public_players")
+      .select("display_name, full_name")
+      .eq("user_id", input.organizerId)
+      .maybeSingle();
+    const hostRow = host as { display_name?: string | null; full_name?: string | null } | null;
+    const hostName = hostRow?.display_name || hostRow?.full_name || "Seorang pemain";
+
+    const message = buildChallengeMessage({
+      hostName,
+      matchTitle: input.title,
+      matchDate: input.matchDate,
+      startTime: input.startTime,
+      courtName: input.courtName,
+      categoryLabel: MATCH_CATEGORY_LABELS[input.category as MatchCategory] ?? null,
+      appUrl: process.env.NEXT_PUBLIC_APP_URL?.trim() || null,
+      matchId: input.matchId,
+      groupUrl: LEAGUE_WHATSAPP_GROUP_URL,
+    });
+
+    await Promise.all(
+      input.inviteeIds.map((inviteeId) =>
+        notifyChallengeViaWhatsapp({ inviteeId, message })
+      )
+    );
+  } catch (error) {
+    logError("match.create.whatsapp", error, { matchId: input.matchId });
+  }
 }
 
 /**
