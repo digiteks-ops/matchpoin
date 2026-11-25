@@ -76,3 +76,33 @@ Local DB credentials are invalid (`Unregistered API key`), so `/matches` timing 
 3. Smoke-test on production: Google login (new + cancel), avatar upload, match-result upload, player registration → admin approve, admin `/admin` guard, non-admin 403 on approve/reject.
 4. Only after sign-off: optional Phase 2 cleanup (remove dormant MySQL modules) and the MySQL→Supabase data import.
 
+
+## MPR rating system (2026-11-25)
+
+- DTR (Dynamic Tennis Rating) diganti MPR (MatchPoin Rating). Core ada di `src/lib/rating/mpr-core.mjs` (dipakai rating engine, simulasi admin, dan script CLI); nama file lama `dtr-core` dihapus.
+- Rating awal semua pemain baru = **1300**, apa pun kategori awal yang dipilih saat mendaftar. Kategori hanya disimpan sebagai `self_assessed_level` (`player_ratings.starting_rating_set_at` mengunci pilihan sekali).
+- K tetap 100 sehingga laga seimbang bergerak +50 / -50; kemenangan atas lawan lebih tinggi mendekati +100, kekalahan dari lawan lebih rendah mendekati -100. Doubles memakai rata-rata tim dan kedua rekan mendapat perubahan yang sama.
+- Batas tingkat MPR: Beginner 0-1299, Intermediate 1300-1699, Advanced 1700-1899, Expert 1900+. Satu sumber: `MPR_CATEGORIES`; UI (`rating-tier-core.mjs`) menurunkan rentang dari situ.
+- `supabase/migrations/00041_mpr_rating.sql`: default kolom rating 1300, policy RLS insert 1300, `apply_dtr_starting_rating` dan `handle_new_user` memakai 1300, dan view `public_players` mempublikasikan rating semua pemain (tidak lagi disensor `show_rating`). Migrasi ini belum diterapkan ke Supabase.
+- Verifikasi: `npm run test:unit` 107/107, `npm run test:rating` lulus, `npx tsc --noEmit` bersih, `npm run lint` bersih.
+
+## Liga IKA17 tanpa pilih level (2026-11-25)
+
+- Kategori liga kini 4: **Single Man**, **Double Man**, **Double Woman**, **Double Mix**. womens_doubles_intermediate dihapus dan digabung ke womens_doubles (migrasi `00042_league_classes_from_rating.sql`).
+- Pendaftaran tidak lagi memilih level. Pemain hanya memilih kategori dan partner (untuk ganda) serta menyatakan belum pernah ikut PORDA/PORPROV/PON.
+- Kelas liga dibentuk otomatis dari hasil pertandingan: **Beginner** bila MPR < 1300, **Intermediate** bila MPR >= 1300 (`ika17ClassOfRating`, batasnya diambil dari tier Intermediate `MPR_CATEGORIES`). Kategori ganda memakai rata-rata MPR kedua pemain (`ika17TeamRating`), baik untuk kelas maupun peringkat.
+- 8 besar Beginner **dan** 8 besar Intermediate setiap kategori lolos ke Main Event, dengan syarat minimal 17 pertandingan (`IKA17_MIN_MATCHES`). Kuota setiap kategori 24 peserta/tim (`IKA17_QUOTA`).
+- File yang berubah: `src/lib/tournaments/ika17-core.mjs` + `ika17.ts` + `ika17-core.d.mts` (sumber tunggal 4 kategori, kelas, rata-rata MPR), `competition-registration-core.mjs` (tanpa validasi level), `/api/tournaments/register` (tidak mengirim level), `/tournaments` dan `/league` (tanpa pemilih level, teks aturan baru), `tournament-leaderboard.tsx` (filter kelas + 8 besar per kelas), `competition-service.ts` (level/rating dari MPR tim), `seed-admin.mjs` dan `seed-dummy.mjs` (4 kategori, tanpa level).
+- `register_for_competition` versi 00042 mempertahankan signature 5 parameter (`p_playing_experience` diabaikan, disimpan NULL) agar pemanggil lama tidak patah; kolom `playing_experience` tetap ada untuk data historis.
+- Verifikasi: `npm run test:unit` 107/107, `npx tsc --noEmit` bersih, `npm run lint` bersih, `npm run build` sukses. Migrasi 00042 belum diterapkan ke Supabase.
+
+## MPR +40/-40, kalibrasi 2 match, aktivitas /matches (2026-11-25)
+
+- Skala MPR disesuaikan: **Beginner 0-1099, Intermediate 1100-1599, Advanced 1600-1999, Expert 2000+**. Pemain baru mulai dari **1000** (kategori Beginner).
+- Sistem poin: K tetap **80** sehingga laga seimbang bergerak **+40 / -40**; dinamis terhadap selisih rating lawan (menang lawan lebih tinggi mendekati +80, kalah dari lawan lebih rendah mendekati -80). Doubles tetap memakai rata-rata MPR tim.
+- **Kalibrasi 2 pertandingan** (`MPR_CALIBRATION_MATCHES`): rating tetap bergerak, tetapi belum dianggap ranking resmi sampai 2 match selesai. UI menampilkan badge "Kalibrasi" di leaderboard dan penanda "(K)" di kartu pemain.
+- `/matches` kini punya bagian **Aktivitas Pertandingan Terbaru** yang terbuka untuk semua pemain: daftar pertandingan selesai, pemain kedua tim, skor, dan pemenang. Implementasi di `src/lib/services/match-activity-service.ts` (hanya `status = completed`, memakai `public_players` untuk nama/avatar/MPR).
+- File uji baru: `scripts/unit/match-activity.test.mjs`. Nilai K/tier/starting rating diperbarui di `mpr.test.mjs`, `rating-tier.test.mjs`, `starting-rating.test.mjs`, `simulation.test.mjs`, `tournament-categories.test.mjs`, dan `scripts/test-rating.mjs`.
+- Feed aktivitas menghormati RLS: match `is_private = true` hanya terlihat oleh host/peserta, sehingga tamu hanya melihat match publik. Data dummy lama semuanya private; `seed-dummy.mjs` kini membuat match uji sebagai publik.
+- Perbaikan bug seed: `current_players` diisi 2/1 saat insert match membuat trigger roster melampaui `max_players` sehingga insert `match_participants` gagal diam-diam (77 match selesai tanpa peserta). Nilai awal diubah ke 0 dan error insert peserta sekarang dilaporkan.
+- Verifikasi: `npm run test:unit` 113/113, `npm run test:rating` lulus, `npx tsc --noEmit` bersih, `npm run lint` bersih, `npm run build` sukses.

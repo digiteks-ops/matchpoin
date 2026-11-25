@@ -18,8 +18,8 @@ MATCHPOIN helps tennis players in Makassar (and beyond) arrange their own matche
 - Invitations: invite a player from the directory or their profile, accept/decline on the dashboard or match page, organizer can revoke.
 - Match results: submit score + photos, 48-hour opponent dispute window, confirm, auto-confirm, under-review state.
 - Photo upload with client-side compression to ≤ 1 MB per image.
-- Rating engine (Elo-style, 1.00–10.00) with provisional players, singles/doubles, upset weighting.
-- Match history, player statistics, dashboard with rating, record, upcoming matches, invites, and recent results.
+- Rating engine MPR (Elo-style, 1000+ scale) with 2-match calibration, singles/doubles, upset weighting.
+- Match history, player statistics, dashboard with rating, record, upcoming matches, invites, and recent results. `/matches` shows public recent match activity (players, scores, winner).
 - Profile completion, avatar upload, editable tennis profile.
 - Security headers, `.gitignore`, server-only Supabase client usage in services.
 - Server-side onboarding (`player-sync.ts`) that creates the `users` / `player_profiles` / `player_ratings` rows a new account needs before it can create a match.
@@ -100,9 +100,12 @@ Invites are stored as `match_participants` rows with `metadata.status = 'invited
 4. On confirmation, `applyVerifiedMatchRatings` computes ratings from the current `player_ratings` rows and persists them through `apply_match_rating_change` (SECURITY DEFINER), then marks the match `completed`.
 
 ### Rating
-- DTR (Dynamic Tennis Rating): Modified Elo with a fixed K-factor of 30.
-- Expected score: `1 / (1 + 10 ^ ((opponentRating - playerRating) / 400))`.
-- Ratings use the 1000+ scale for **starting** ratings (Beginner 1000, Intermediate 1500, Advanced 2000, Expert 2500), but there is no lower bound during play: a player who keeps losing drops below 1000. Categories: Beginner <1500, Intermediate 1500–1999, Advanced 2000–2499, Expert 2500+.
+- MPR (MatchPoin Rating): Modified Elo with a fixed K-factor of 80, so an even match is worth exactly **+40 / −40**.
+- Expected score: `1 / (1 + 10 ^ ((opponentRating - playerRating) / 400))`. Delta is `K × (score − expected)`, which makes the movement dynamic: beating a higher-rated opponent earns close to +80, beating a lower-rated one earns very little, losing to a lower-rated opponent costs close to −80, and losing to a higher-rated one costs very little.
+- Every new player starts at **1000** regardless of the self-assessed category chosen at registration (that choice is stored only as `self_assessed_level`). There is no lower bound during play: a player who keeps losing drops below 1000.
+- Categories (single source of truth: `MPR_CATEGORIES` in `src/lib/rating/mpr-core.mjs`): Beginner 0–1099, Intermediate 1100–1599, Advanced 1600–1999, Expert 2000+.
+- New players are in **calibration** for their first 2 matches: the rating still moves, but it is not an official ranking until calibration ends (`MPR_CALIBRATION_MATCHES`).
+- Every player's rating is published to every player: `public_players` no longer masks rating columns behind `show_rating`, and the directory, leaderboard, and profile pages show all players.
 - The starting category is picked once, on the registration form (or the `/pilih-kategori` page for OAuth signups) and stored on `player_ratings.starting_rating_set_at`. Editing "Penilaian Level Sendiri" afterwards no longer resets the rating.
 - Singles and Doubles share one combined rating; doubles use team averages and both teammates receive the same adjustment.
 - Walkovers and cancelled matches do not change ratings.
@@ -232,7 +235,7 @@ npm run build      # production build
 npm run start      # production server
 npm run lint       # ESLint
 npm run typecheck  # tsc --noEmit
-npm run test:rating # rating engine test suite (20 assertions)
+npm run test:rating # MPR rating engine verification script
 npm run test:stats # node scripts/test-player-stats.mjs <userId-uuid>
 node scripts/e2e-flows.mjs # 38 end-to-end checks against a running server
 ```

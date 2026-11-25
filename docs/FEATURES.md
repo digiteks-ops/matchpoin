@@ -16,18 +16,18 @@ Status legend: **PASS** = verified by build/unit test; **MANUAL** = requires liv
 | 8 | Profile view/edit | `/profile`, `/profile/edit`, `/api/profile` | PASS | Supabase service; no MySQL |
 | 9 | Avatar upload | `/api/assets/*` | MANUAL | Supabase Storage signed upload |
 | 10 | Player directory + detail | `/players`, `/players/[id]`, `/api/players` | PASS | Reads `public_players` view |
-| 11 | Leaderboard | `/leaderboard`, `/api/leaderboard` | PASS | Rating visibility respected |
-| 12 | Match list/detail | `/matches`, `/matches/[id]`, `/api/matches` | PASS | Supabase `getOpenMatches`/`getMatchDetail` |
+| 11 | Leaderboard | `/leaderboard`, `/api/leaderboard` | PASS | MPR semua pemain terpublish |
+| 12 | Match list/detail | `/matches`, `/matches/[id]`, `/api/matches` | PASS | Supabase `getOpenMatches`/`getMatchDetail`; `/matches` also shows public recent match activity (completed matches, both teams, score, winner) via `match-activity-service` |
 | 13 | Create match (roster) | `/matches/new`, `/api/matches/create` | PASS | Singles 1v1 and doubles 2v2; shared roster builder; migration 00014 drops the legacy `matches.court_id` NOT NULL constraint |
 | 14 | Join / accept / reject / leave / cancel | `/api/matches/[id]/*` | PASS | Existing Supabase workflows |
 | 15 | Invitations | `/api/invites*` | PASS | Send, list, respond, revoke |
 | 16 | Match result submit/confirm/dispute | `/api/matches/[id]/*` | PASS | `rating-service` (formula untouched) |
 | 17 | Walkover / cancellation | `/api/matches/[id]/walkover` | PASS | Supabase RPCs from 00009 |
-| 18 | Rating engine | services | PASS | `test:rating` |
+| 18 | Rating engine (MPR) | services | PASS | Start 1000, K=80 (+40/-40 balanced), 2-match calibration, tiers 0-1099 / 1100-1599 / 1600-1999 / 2000+; `test:rating` |
 | 19 | Match history + stats | `/api/profile/history` | PASS | `getPlayerStats` |
 | 20 | Dashboard | `/dashboard` | PASS | Profile, rating, upcoming, invites |
-| 21 | Tournament/league registration | `/tournaments`, `/league`, `/api/tournaments/register` | PASS | IKA17 5 categories, quota 24 accepted, pending/accepted/rejected, gender and partner rules |
-| 22 | League overview/standings | `/league`, `/api/leagues/[category]` | PASS | Supabase reads |
+| 21 | Tournament/league registration | `/tournaments`, `/league`, `/api/tournaments/register` | PASS | IKA17 4 categories (Single Man, Double Man, Double Woman, Double Mix), no level selection, quota 24 per category, pending/accepted/rejected, gender and partner rules |
+| 22 | League overview/standings | `/league`, `/api/leagues/[category]` | PASS | Supabase reads; class (Beginner < 1300 MPR, Intermediate >= 1300) derived from match results, doubles use team average MPR |
 | 23 | Admin dashboard | `/admin` | PASS | Supabase counts + audit log |
 | 24 | Admin settings (users/players/matches/tournaments) | `/admin/settings` | PASS | Supabase reads |
 | 25 | Admin registration approvals | `/admin/tournaments`, `/api/admin/*` | PASS | Admin/super_admin guard, atomic RPC, quota enforcement + audit |
