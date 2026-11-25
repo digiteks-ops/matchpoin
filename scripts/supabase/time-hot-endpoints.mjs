@@ -120,14 +120,14 @@ const checks = [
   },
 ];
 
-console.log(`MATCHPOIN REST timings â€” ${new Date().toISOString()}\n`);
+console.log(`MATCHPOIN REST timings — ${new Date().toISOString()}\n`);
 const results = [];
 let failed = 0;
 for (const check of checks) {
   try {
     const { ms, rows } = await median(check.run);
     results.push({ label: check.label, medianMs: ms, rows });
-    console.log(`â€¢ ${check.label}: ${ms} ms${rows === null ? "" : ` (${rows} rows)`}`);
+    console.log(`• ${check.label}: ${ms} ms${rows === null ? "" : ` (${rows} rows)`}`);
   } catch (error) {
     failed += 1;
     results.push({ label: check.label, error: error.message });

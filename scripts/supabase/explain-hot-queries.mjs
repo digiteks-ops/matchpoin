@@ -83,7 +83,7 @@ function summarize(plan) {
   };
 }
 
-console.log(`MATCHPOIN query timings â€” ${new Date().toISOString()}\n`);
+console.log(`MATCHPOIN query timings — ${new Date().toISOString()}\n`);
 const results = [];
 let failed = 0;
 
@@ -101,7 +101,7 @@ for (const query of QUERIES) {
   const summary = summarize(data);
   results.push({ label: query.label, ...summary });
   console.log(
-    `â€¢ ${query.label}: ${summary.executionMs} ms (plan ${summary.planningMs} ms, ` +
+    `• ${query.label}: ${summary.executionMs} ms (plan ${summary.planningMs} ms, ` +
       `${summary.topNode}${summary.seqScan ? ", SEQ SCAN" : ""})`
   );
 }

@@ -23,7 +23,7 @@ const created = { auth: [], matches: [] };
 
 function record(name, ok, detail = "") {
   results.push({ name, ok, detail });
-  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` â€” ${detail}` : ""}`);
+  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
 }
 
 async function j(url, options = {}) {

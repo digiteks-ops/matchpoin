@@ -256,7 +256,7 @@ const loadProfile = useCallback(async () => {
             <ArrowLeft className="w-3.5 h-3.5" />
             Kembali ke Profil Saya
           </Link>
-          <span className="text-xs text-slate-400">Tahap 3 â€¢ Pengaturan Profil</span>
+          <span className="text-xs text-slate-400">Tahap 3 • Pengaturan Profil</span>
         </div>
 
         <form onSubmit={handleSave} className="space-y-6">
@@ -545,9 +545,9 @@ const loadProfile = useCallback(async () => {
                 <Label>Waktu Bermain Pilihan</Label>
                 <div className="flex flex-wrap gap-2">
                   {[
-                    { id: "pagi", label: "Pagi (06:00 â€“ 09:00)" },
-                    { id: "sore", label: "Sore (15:30 â€“ 18:00)" },
-                    { id: "malam", label: "Malam (19:00 â€“ 22:00)" },
+                    { id: "pagi", label: "Pagi (06:00 – 09:00)" },
+                    { id: "sore", label: "Sore (15:30 – 18:00)" },
+                    { id: "malam", label: "Malam (19:00 – 22:00)" },
                     { id: "weekend", label: "Akhir Pekan (Sabtu/Minggu)" },
                   ].map((time) => {
                     const isSelected = preferredTimes.includes(time.id);

@@ -247,7 +247,7 @@ if (process.argv.includes("--json")) {
   console.log(JSON.stringify({ summary, findings }, null, 2));
 } else {
   console.log(
-    `RLS audit â€” ${files.length} migrations, ${tables.size} tables, ${policies.size} policies, ` +
+    `RLS audit — ${files.length} migrations, ${tables.size} tables, ${policies.size} policies, ` +
       `${definerFunctions.size} definer functions, ${adminPages.length} admin pages, ` +
       `${adminApiRoutes.length} admin API routes`
   );

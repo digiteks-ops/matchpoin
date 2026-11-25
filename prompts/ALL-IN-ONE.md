@@ -4,10 +4,10 @@ Urutan: tempel 00 dulu, lalu 01 (opsional), 02, 03, 04 di sesi model masing-masi
 
 ---
 
-# 00 â€” CONTEXT (paste first in every session)
+# 00 — CONTEXT (paste first in every session)
 
 ```
-Repo: D:\idea-to-code\matchpoin-v1 Â· branch refactor/supabase-lean
+Repo: D:\idea-to-code\matchpoin-v1 · branch refactor/supabase-lean
 Stack: Next.js 14 App Router + TS + Supabase + Vercel.
 Baca: docs/HANDOFF.md, docs/PROGRESS.md, docs/FINAL_REPORT.md, docs/SETUP-CHECKLIST.md.
 
@@ -22,7 +22,7 @@ Akun uji (SUDAH BENAR, tidak perlu cek password):
 Nama tampilan: Andi Abdiar Wahab / Rizky Tennis.
 
 Sudah diterapkan: migrasi 00023_notifications_message.sql (diverifikasi; db:time notifications OK).
-Rotasi service key DITOLAK user â€” risiko diterima, key tidak pernah masuk repo, jangan minta lagi.
+Rotasi service key DITOLAK user — risiko diterima, key tidak pernah masuk repo, jangan minta lagi.
 
 E2E: playwright.config.ts sudah punya webServer (auto-start dev saat baseURL localhost).
 Kegagalan terakhir (13 FAIL) = ERR_CONNECTION_REFUSED karena server mati, BUKAN bug kode.
@@ -35,7 +35,7 @@ Model guidance: Plan=reasoning tinggi; Implement=coding kuat variant high; Verif
 
 ---
 
-# 01 â€” VIKEY PLAN (read-only audit)
+# 01 — VIKEY PLAN (read-only audit)
 
 ```
 MODE: PLAN ONLY. Tidak boleh edit file, tidak boleh commit, JANGAN jalankan Playwright (mahal).
@@ -54,7 +54,7 @@ Akhir: daftar 5 langkah manual user (urut).
 
 ---
 
-# 02 â€” VIKEY CODING (implementasi inti)
+# 02 — VIKEY CODING (implementasi inti)
 
 ```
 MODE: IMPLEMENT. Gunakan konteks 00 + docs/HANDOFF.md. Scope hanya profile.spec; jangan refactor lain.
@@ -66,7 +66,7 @@ jangan sentuh .env, jangan melemahkan asersi atau menambah skip.
 TUGAS: root-cause tests/e2e/profile.spec.ts merah.
 1) Reproduksi: npx playwright test tests/e2e/profile.spec.ts --reporter=line (maks 3 percobaan).
 2) Bukti wajib: status PUT /api/profile; nilai users.full_name + player_profiles.display_name sebelum/sesudah.
-3) Jika tesnya salah â†’ perbaiki spec. Jika aplikasinya salah â†’ perbaiki kode (tanpa migrasi).
+3) Jika tesnya salah → perbaiki spec. Jika aplikasinya salah → perbaiki kode (tanpa migrasi).
 4) Jika sudah hijau tanpa perubahan kode: laporkan, JANGAN commit kosong.
 5) Regression test bila ada perubahan kode; jalankan typecheck, lint, test:unit, profile.spec.
 
@@ -75,7 +75,7 @@ Commit maksimal 1x dengan pesan jelas. Akhir: ringkasan 10 baris (root cause, fi
 
 ---
 
-# 03 â€” VIKEY MOCIN (stabilisasi E2E)
+# 03 — VIKEY MOCIN (stabilisasi E2E)
 
 ```
 MODE: IMPLEMENT SPESIFIKASI TES SAJA. Jangan ubah fitur aplikasi.
@@ -93,7 +93,7 @@ Akhir: tabel hasil (test | status | alasan) + daftar bug KODE yang tersisa (jika
 
 ---
 
-# 04 â€” VIKEY AGENT GPT (verifikasi & finalisasi)
+# 04 — VIKEY AGENT GPT (verifikasi & finalisasi)
 
 ```
 MODE: VERIFY / FINALIZE. Jangan tambah fitur, jangan refactor. Hanya perbaiki bug blocking.
