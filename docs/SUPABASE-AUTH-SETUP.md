@@ -323,6 +323,7 @@ aktifkan **Confirm email**. Ini tidak memengaruhi login Google.
 | Email tidak pernah sampai | SMTP belum diatur / masuk Spam | Bagian 3.1, cek folder Spam |
 | Tautan mengarah ke `localhost:3000` | **Site URL** masih localhost | Ubah ke `https://matchpoin.vercel.app` (langkah 1.2) |
 | Halaman **"Tautan Tidak Valid"** | Tautan sudah dipakai / kedaluwarsa (default 1 jam), atau `/reset-password` tidak ada di Redirect URLs | Minta tautan baru, dan tambahkan URL-nya (langkah 1.3) |
+| Muncul **"Gagal masuk dengan penyedia. Silakan coba lagi atau gunakan email"** setelah klik tautan reset | Bug lama: Supabase mengirim token pemulihan di **fragment** (`#access_token=...`), fragment tidak sampai ke server sehingga route `/auth/callback` melihat `code` kosong dan menganggapnya kegagalan OAuth | Sudah diperbaiki. Pastikan deploy memakai versi terbaru (commit `fix(auth): tautan reset...`). Ciri sudah benar: setelah klik tautan langsung tampil **Buat Password Baru** |
 | Berhasil isi password tapi tidak bisa login | Password < 6 karakter atau email salah ketik | Ulangi dari `/forgot-password` |
 | Setelah simpan password malah terlempar ke beranda | Middleware menganggap sesi sudah aktif — di kode ini dibiarkan agar halaman tetap terbuka | Tidak perlu tindakan |
 

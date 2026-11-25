@@ -84,3 +84,46 @@ test("register and login are clearly separate flows", async () => {
   assert.match(register, /href="\/login"/);
   assert.match(login, /href="\/register"/);
 });
+
+test("recovery links use the fragment, so the callback must not treat them as errors", async () => {
+  const callback = await read("src/app/auth/callback/route.ts");
+
+  // Supabase mengirim #access_token=...&type=recovery; fragment tidak pernah
+  // sampai ke server sehingga `code` kosong. Tanpa pengecualian ini pengguna
+  // melihat "gagal masuk dengan penyedia" padahal sedang reset kata sandi.
+  assert.match(callback, /PASSWORD_RECOVERY_PATH/);
+  assert.match(callback, /if \(!code\)/);
+  assert.match(callback, /searchParams\.get\("type"\) === "recovery"/);
+  assert.match(callback, /\$\{origin\}\$\{PASSWORD_RECOVERY_PATH\}\?error=expired/);
+
+  const page = await read("src/app/(auth)/reset-password/page.tsx");
+  // Token di fragment ditukar di browser; halaman harus menunggu, bukan
+  // langsung menyatakan tautan tidak valid.
+  assert.match(page, /hasFragmentToken/);
+  assert.match(page, /"waiting"/);
+  assert.match(page, /window\.location\.hash/);
+});
+
+test("Google sign-up asks for the starting category once, from the database", async () => {
+  const callback = await read("src/app/auth/callback/route.ts");
+
+  // `created` dari ensurePlayerRecords selalu false karena trigger
+  // handle_new_user sudah membuat baris users lebih dulu.
+  assert.match(callback, /needsStartingRating/);
+  assert.match(callback, /starting_rating_set_at/);
+  assert.match(callback, /matches_played/);
+  assert.match(callback, /pilih-kategori/);
+
+  // Pilihan hanya sekali: route API menolak bila sudah pernah ditetapkan
+  // atau sudah ada pertandingan.
+  const route = await read("src/app/api/profile/starting-level/route.ts");
+  assert.match(route, /Kategori awal sudah pernah ditetapkan/);
+  assert.match(route, /\.is\("starting_rating_set_at", null\)/);
+  assert.match(route, /\.eq\("matches_played", 0\)/);
+});
+
+test("OAuth redirect goes through the server callback so `next` is honoured", async () => {
+  const buttons = await read("src/components/auth/oauth-buttons.tsx");
+  assert.match(buttons, /skipBrowserRedirect: true/);
+  assert.match(buttons, /window\.location\.assign\(oauthData\.url\)/);
+});

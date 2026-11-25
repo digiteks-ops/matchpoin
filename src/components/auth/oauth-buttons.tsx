@@ -142,13 +142,23 @@ export function OAuthButtons({ redirectTo = "/dashboard", mode = "signin" }: OAu
       const supabase = createClient();
       const callbackUrl = buildAuthCallbackUrl(window.location.origin, redirectTo);
 
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      // skipBrowserRedirect + redirect manual: /auth/callback perlu membaca
+      // hasil OAuth dari server. Bila dibiarkan default, supabase-js memproses
+      // token di browser lebih dulu dan parameter `next` (mis. /pilih-kategori
+      // untuk pemain baru) hilang.
+      const { data: oauthData, error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: callbackUrl,
+          skipBrowserRedirect: true,
           ...(provider === "google" ? { queryParams: { prompt: "select_account" } } : {}),
         },
       });
+
+      if (!oauthError && oauthData?.url) {
+        window.location.assign(oauthData.url);
+        return;
+      }
 
       if (oauthError) {
         setError(mapOAuthError(provider, oauthError.message));

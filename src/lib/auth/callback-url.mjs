@@ -6,6 +6,16 @@
 // dibuka pemain langsung sampai di formulir ganti sandi DENGAN sesi aktif.
 // Sebelumnya resetPasswordForEmail memakai redirectTo=/reset-password langsung,
 // sehingga `code` tidak pernah ditukar dan halaman ganti sandi tidak muncul.
+//
+// PENTING: Supabase mengirim tautan pemulihan (dan implicit OAuth) dalam bentuk
+// fragment:
+//
+//   /auth/callback?next=/reset-password#access_token=...&refresh_token=...&type=recovery
+//
+// Fragment tidak pernah dikirim ke server, jadi route callback hanya melihat
+// `?next=/reset-password` tanpa `code`. Karena itu halaman /reset-password
+// wajib bisa menangani token di fragment sendiri (detectSessionInUrl pada
+// supabase-js). Jangan menganggap semua kunjungan tanpa `code` sebagai error.
 
 /** Path formulir ganti kata sandi. */
 export const PASSWORD_RECOVERY_PATH = "/reset-password";
