@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { assertValidImageFile, compressImage } from "@/lib/utils/image";
-import { DTR_DEFAULT_RATING, dtrStartingRating } from "@/lib/rating/dtr-core.mjs";
+import { MPR_DEFAULT_RATING, mprStartingRating } from "@/lib/rating/mpr-core.mjs";
 import type { DbUser, PlayerProfile, PlayerRating, SkillLevel } from "@/types/database.types";
 
 type AnySupabase = SupabaseClient<any, any, any>;
@@ -122,7 +122,7 @@ export async function ensurePlayerRecordsWithClient(
     .eq("user_id", userId)
     .maybeSingle();
 
-  const startingRating = startingLevel ? dtrStartingRating(startingLevel) : DTR_DEFAULT_RATING;
+  const startingRating = startingLevel ? mprStartingRating(startingLevel) : MPR_DEFAULT_RATING;
 
   if (!existingRating) {
     const { error: ratingError } = await supabase.from("player_ratings").insert({

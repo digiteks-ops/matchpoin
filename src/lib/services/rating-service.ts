@@ -7,7 +7,7 @@ import {
   type PlayerRatingState,
   type RatingChangeResult,
 } from "@/lib/rating/rating-engine";
-import { DTR_DEFAULT_RATING } from "@/lib/rating/dtr-core.mjs";
+import { MPR_DEFAULT_RATING } from "@/lib/rating/mpr-core.mjs";
 
 export type MatchFormat = "singles" | "doubles" | "mixed_doubles";
 
@@ -527,15 +527,15 @@ export async function applyVerifiedMatchRatings(
   const result = await getResult(matchId);
   if (!result || result.status !== "confirmed") {
     throw new Error(
-      "Integritas Rating: hanya pertandingan dengan status 'confirmed' yang dapat mengubah DTR."
+      "Integritas Rating: hanya pertandingan dengan status 'confirmed' yang dapat mengubah MPR."
     );
   }
 
-  // DTR only uses real win/loss results. Walkovers never change rating.
+  // MPR only uses real win/loss results. Walkovers never change rating.
   if (result.is_walkover === true || metadataObject(result.metadata).is_walkover === true) {
     return {
       success: true,
-      message: "Walkover (WO) tidak mengubah rating DTR.",
+      message: "Walkover (WO) tidak mengubah rating MPR.",
       isDuplicate: true,
       results: [],
     };
@@ -572,12 +572,12 @@ export async function applyVerifiedMatchRatings(
     (ratingRows ?? []).map((r) => [
       r.user_id,
       {
-        currentRating: Number(r.current_rating ?? DTR_DEFAULT_RATING),
+        currentRating: Number(r.current_rating ?? MPR_DEFAULT_RATING),
         matchesPlayed: Number(r.matches_played ?? 0),
         wins: Number(r.wins ?? 0),
         losses: Number(r.losses ?? 0),
         draws: Number(r.draws ?? 0),
-        peakRating: Number(r.peak_rating ?? r.current_rating ?? DTR_DEFAULT_RATING),
+        peakRating: Number(r.peak_rating ?? r.current_rating ?? MPR_DEFAULT_RATING),
       },
     ])
   );
@@ -592,8 +592,8 @@ export async function applyVerifiedMatchRatings(
       .insert(
         missingRatings.map((id) => ({
           user_id: id,
-          current_rating: DTR_DEFAULT_RATING,
-          peak_rating: DTR_DEFAULT_RATING,
+          current_rating: MPR_DEFAULT_RATING,
+          peak_rating: MPR_DEFAULT_RATING,
         }))
       );
 
@@ -603,12 +603,12 @@ export async function applyVerifiedMatchRatings(
 
     missingRatings.forEach((id) => {
       ratingMap.set(id, {
-        currentRating: DTR_DEFAULT_RATING,
+        currentRating: MPR_DEFAULT_RATING,
         matchesPlayed: 0,
         wins: 0,
         losses: 0,
         draws: 0,
-        peakRating: DTR_DEFAULT_RATING,
+        peakRating: MPR_DEFAULT_RATING,
       });
     });
   }
@@ -617,7 +617,7 @@ export async function applyVerifiedMatchRatings(
     const r = ratingMap.get(p.user_id);
     return {
       userId: p.user_id,
-      currentRating: r?.currentRating ?? DTR_DEFAULT_RATING,
+      currentRating: r?.currentRating ?? MPR_DEFAULT_RATING,
       matchesPlayed: r?.matchesPlayed ?? 0,
     };
   };
@@ -777,7 +777,7 @@ export async function applyVerifiedMatchRatings(
 
   return {
     success: true,
-    message: "DTR berhasil diperbarui dan dicatat dalam histori pertandingan.",
+    message: "MPR berhasil diperbarui dan dicatat dalam histori pertandingan.",
     isDuplicate: false,
     results: resultsToPersist.map((r) => ({
       userId: r.result.userId,

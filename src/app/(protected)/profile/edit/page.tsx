@@ -491,7 +491,7 @@ const loadProfile = useCallback(async () => {
                   <p className="text-[11px] text-slate-500">
                     {startingLevelLocked
                       ? "Kategori awal sudah ditetapkan saat pendaftaran. Rating kini bergerak mengikuti hasil pertandingan."
-                      : "Level ini menentukan rating awal DTR Anda. Pilihan hanya berlaku sekali, sebelum pertandingan pertama."}
+                      : "Level ini disimpan sebagai kategori awal. Rating MPR tetap mulai dari 1000, lalu bergerak mengikuti hasil pertandingan."}
                   </p>
                 </div>
 

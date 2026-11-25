@@ -115,15 +115,12 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
   const hostId = match.organizerId;
   const hostStoredTeam: 1 | 2 = 1;
   const side2Team: 1 | 2 = 2;
-  const activeRoster = [
-    ...match.participants,
-    ...match.pendingRequests,
-    ...match.invitedPlayers,
-  ];
-  const team1Active = activeRoster.filter((player) => (player.team ?? 1) === 1).length;
-  const team2Active = activeRoster.filter((player) => player.team === 2).length;
-  const hostTeamAvailable = team1Active < playersPerTeam;
-  const opponentTeamAvailable = team2Active < playersPerTeam;
+  // Pending requests do not reserve a slot: only confirmed players decide
+  // whether a team still has room for another application.
+  const team1Confirmed = match.participants.filter((player) => (player.team ?? 1) === 1).length;
+  const team2Confirmed = match.participants.filter((player) => player.team === 2).length;
+  const hostTeamAvailable = team1Confirmed < playersPerTeam;
+  const opponentTeamAvailable = team2Confirmed < playersPerTeam;
 
   const sortTeamMembers = (members: typeof match.participants) =>
     [...members].sort((a, b) => {
@@ -460,7 +457,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
             <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
               <Badge variant="secondary">{match.umpireOption === "dengan_wasit" ? "Dengan Wasit" : "Tanpa Wasit"}</Badge>
               {match.umpireName && <Badge variant="secondary">Wasit: {match.umpireName}</Badge>}
-              <Badge variant="secondary">Rating DTR {Math.round(match.minRating)}+</Badge>
+              <Badge variant="secondary">Rating MPR {Math.round(match.minRating)}+</Badge>
               <Badge variant="secondary">Race to {raceTo}</Badge>
               <Badge variant="secondary">Court change di {switchAt} poin</Badge>
               {match.status !== "cancelled" && (
@@ -708,7 +705,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                         <p className="text-amber-700">Alasan sanggahan: {result.disputeReason}</p>
                       )}
                       {result.status === "confirmed" && (
-                        <p className="text-emerald-700">Hasil terkonfirmasi. DTR telah diperbarui.</p>
+                        <p className="text-emerald-700">Hasil terkonfirmasi. MPR telah diperbarui.</p>
                       )}
                     </div>
 

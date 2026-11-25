@@ -161,9 +161,9 @@ export default function SimulationClient() {
         <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="space-y-1">
-            <p className="font-semibold">DTR — Dynamic Tennis Rating (Modified Elo, K tetap 30).</p>
+            <p className="font-semibold">MPR — MatchPoin Rating (Modified Elo, K tetap 80).</p>
             <p>
-              Rating awal 1000, tanpa batas minimum. Lawan selevel: menang +15, kalah −15.
+              Rating awal 1000 untuk semua pemain, tanpa batas minimum. Lawan selevel: menang +40, kalah −40.
               Mengalahkan lawan berating lebih tinggi → kenaikan lebih besar. Kalah dari lawan
               berating lebih rendah → pengurangan lebih besar.
             </p>

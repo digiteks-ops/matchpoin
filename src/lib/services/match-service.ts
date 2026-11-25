@@ -21,6 +21,7 @@ import {
   type OpenMatchDetail,
   type UmpirePreference,
 } from "@/lib/matches/constants";
+import { MPR_STARTING_RATING } from "@/lib/rating/mpr-core.mjs";
 
 export * from "@/lib/matches/constants";
 
@@ -203,7 +204,7 @@ async function getProfilesForUsers(userIds: string[]) {
       full_name: row.full_name ?? row.display_name ?? "Pemain",
       avatar_url: row.avatar_url ?? null,
       gender: null,
-      rating: Number(row.current_rating ?? 1000),
+      rating: Number(row.current_rating ?? MPR_STARTING_RATING),
     });
   });
 
@@ -216,13 +217,13 @@ async function getProfilesForUsers(userIds: string[]) {
       supabase.from("player_ratings").select("user_id, current_rating").in("user_id", missing),
     ]);
     const ratingMap = new Map<string, number>();
-    (ratings ?? []).forEach((r) => ratingMap.set(r.user_id, Number(r.current_rating ?? 1000)));
+    (ratings ?? []).forEach((r) => ratingMap.set(r.user_id, Number(r.current_rating ?? MPR_STARTING_RATING)));
     (usersData ?? []).forEach((u) => {
       profileMap.set(u.id, {
         full_name: u.full_name ?? "Pemain",
         avatar_url: u.avatar_url ?? null,
         gender: null,
-        rating: ratingMap.get(u.id) ?? 1000,
+        rating: ratingMap.get(u.id) ?? MPR_STARTING_RATING,
       });
     });
   }
@@ -405,7 +406,7 @@ export async function createOpenMatch(
     tournament_id: tournamentId,
     umpire_option: input.umpireOption,
     umpire_name: input.umpireName || null,
-    min_rating: input.minRating ?? 1000,
+    min_rating: input.minRating ?? MPR_STARTING_RATING,
     max_rating: input.maxRating ?? 9999,
     level: input.level ?? "all",
     reclub_link: input.reclubLink || null,
@@ -657,6 +658,34 @@ export async function acceptParticipantRequest(
     .eq("id", participant.id);
 
   if (updateError) throw updateError;
+
+  const teamAfterAccept =
+    confirmedRoster.filter((entry) => teamOf(entry.team) === team).length + 1;
+  const matchBecomesFull = confirmed + 1 >= logicalPlayers;
+
+  // Multiple players may wait for the same slot. Once the host picks one and
+  // that slot (or the whole match) is full, close the remaining requests so
+  // nobody is left waiting for a slot that can no longer be granted.
+  if (matchBecomesFull || teamAfterAccept >= playersPerTeam) {
+    const { data: remaining } = await supabase
+      .from("match_participants")
+      .select("id, user_id, team, metadata")
+      .eq("match_id", matchId)
+      .eq("is_organizer", false);
+
+    const stale = (remaining ?? []).filter((row) => {
+      if (row.user_id === participantUserId) return false;
+      if (asParticipantMetadata(row.metadata).status !== "pending") return false;
+      return matchBecomesFull || teamOf(row.team) === team;
+    });
+
+    for (const row of stale) {
+      await supabase
+        .from("match_participants")
+        .update({ metadata: { ...asParticipantMetadata(row.metadata), status: "rejected" } })
+        .eq("id", row.id);
+    }
+  }
 
   const newStatus: MatchStatus = confirmed + 1 >= logicalMaxPlayers(category) ? "full" : "open";
 
@@ -947,7 +976,7 @@ function buildMatchDetail(
         fullName: profile?.full_name || "Pemain",
         avatarUrl: profile?.avatar_url ?? null,
         gender: profile?.gender ?? null,
-        rating: profile?.rating ?? 1000,
+        rating: profile?.rating ?? MPR_STARTING_RATING,
         isOrganizer,
         status:
           participantMeta.status === "pending"
@@ -1060,7 +1089,7 @@ function buildMatchDetail(
     categoryLabel: MATCH_CATEGORY_LABELS[category],
     umpireOption: meta.umpire_option === "dengan_wasit" ? "dengan_wasit" : "tanpa_wasit",
     umpireName: meta.umpire_name ?? null,
-    minRating: Number(meta.min_rating ?? 1000),
+    minRating: Number(meta.min_rating ?? MPR_STARTING_RATING),
     maxRating: Number(meta.max_rating ?? 9999),
     maxPlayers,
     currentPlayers,

@@ -1,4 +1,5 @@
 import type { Connection, RowDataPacket } from "mysql2/promise";
+import { mprIsCalibrating } from "@/lib/rating/mpr-core.mjs";
 
 interface PublicPlayerRow extends RowDataPacket {
   user_id: string;
@@ -71,7 +72,7 @@ function mapPublicPlayer(row: PublicPlayerRow) {
     preferredTimes: arrayValue(row.preferred_times),
     currentRating: row.current_rating === null ? null : Number(row.current_rating),
     peakRating: row.peak_rating === null ? null : Number(row.peak_rating),
-    isProvisional: matchesPlayed === 0,
+    isProvisional: mprIsCalibrating(matchesPlayed),
     matchesPlayed: row.matches_played === null ? null : matchesPlayed,
     wins: row.wins === null ? null : wins,
     losses: row.losses === null ? null : Number(row.losses),
@@ -79,7 +80,8 @@ function mapPublicPlayer(row: PublicPlayerRow) {
     completionScore: Number(row.completion_score ?? 0),
     isProfilePublic: true,
     allowInvites: Boolean(row.allow_invites),
-    showRating: Boolean(row.show_rating),
+    // MPR setiap pemain terpublish: rating tidak lagi disembunyikan.
+    showRating: true,
     isVerifiedPlayer: Boolean(row.is_verified_player),
   };
 }

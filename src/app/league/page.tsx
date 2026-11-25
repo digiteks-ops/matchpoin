@@ -11,12 +11,11 @@ import type { User } from "@supabase/supabase-js";
 import {
   IKA17_CATEGORIES,
   IKA17_ELIGIBILITY_STATEMENT,
-  TOURNAMENT_LEVEL_LABELS,
-  ika17AllowedLevels,
+  IKA17_CLASS_LABELS,
+  IKA17_INTERMEDIATE_MIN_RATING,
   ika17Category,
   IKA17_REGISTRATION_OPEN,
   IKA17_REGISTRATION_DEADLINE,
-  type TournamentLevel,
 } from "@/lib/tournaments/ika17";
 
 interface StandingRow {
@@ -118,11 +117,10 @@ export default function LeaguePage() {
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
   const [regSuccess, setRegSuccess] = useState(false);
-  // Kategori ganda butuh partner; semua kategori butuh level + pernyataan PORDA.
+  // Kategori ganda butuh partner; semua kategori butuh pernyataan PORDA.
   const [regPartnerId, setRegPartnerId] = useState("");
   const [regPartners, setRegPartners] = useState<PartnerOption[]>([]);
   const [regPartnersLoading, setRegPartnersLoading] = useState(false);
-  const [regLevel, setRegLevel] = useState<TournamentLevel>("beginner");
   const [regEligibility, setRegEligibility] = useState(false);
 
   const [provinceFilter, setProvinceFilter] = useState("all");
@@ -363,8 +361,6 @@ export default function LeaguePage() {
     setRegPartnerId("");
     setRegPartners([]);
     setRegEligibility(false);
-    const allowedLevels = ika17AllowedLevels(cat);
-    setRegLevel(allowedLevels.length === 1 ? allowedLevels[0] : "beginner");
     try {
       const supabase = createClient();
       const { data: lg } = await supabase
@@ -468,10 +464,6 @@ export default function LeaguePage() {
         setRegError("Pilih partner untuk kategori ganda.");
         return;
       }
-      if (!ika17AllowedLevels(regCategory).includes(regLevel)) {
-        setRegError("Kategori ini khusus beginner: maksimal 2 tahun bermain.");
-        return;
-      }
       if (!regEligibility) {
         setRegError("Konfirmasi bahwa Anda belum pernah mengikuti PORDA, PORPROV, atau PON.");
         return;
@@ -483,7 +475,6 @@ export default function LeaguePage() {
         body: JSON.stringify({
           tournamentId: regLeague.id,
           partnerUserId: definition?.doubles ? regPartnerId : null,
-          playingExperience: regLevel,
           eligibilityConfirmed: regEligibility,
         }),
       });
@@ -551,7 +542,9 @@ export default function LeaguePage() {
             </div>
             <h1 className="text-3xl font-extrabold font-heading text-slate-900 tracking-tight">Liga Season 1 MATCHPOIN</h1>
             <p className="text-slate-600 text-xs sm:text-sm max-w-xl leading-relaxed">
-              Daftar per kategori, lihat peserta & klasemen. Pendaftaran: 15 Nov 2026 – 31 Des 2026 (WITA). Poin: Menang 3 · Kalah 0 · WO 8–0 (3 poin).
+              Daftar per kategori (Single Man, Double Man, Double Woman, Double Mix), lihat peserta
+              &amp; klasemen. Pendaftaran: 1–31 Desember 2026 (WITA). Kelas Beginner/Intermediate
+              dibentuk otomatis dari hasil pertandingan. Poin: Menang 3 · Kalah 0 · WO 8–0 (3 poin).
             </p>
             <Badge variant={regPeriodOpen ? "outline" : "secondary"} className={regPeriodOpen ? "border-emerald-200 text-emerald-700 bg-emerald-50 w-fit" : "w-fit"}>
               Status Pendaftaran: {regPeriodOpen ? "OPEN" : regClosed ? "CLOSED" : "Belum Dibuka"}
@@ -666,34 +659,15 @@ export default function LeaguePage() {
                         </div>
                       )}
 
-                      <div className="space-y-1">
-                        <span className="font-semibold text-slate-700">Pengalaman Bermain</span>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {(["beginner", "intermediate"] as TournamentLevel[]).map((level) => {
-                            const allowed = ika17AllowedLevels(regCategory).includes(level);
-                            return (
-                              <button
-                                key={level}
-                                type="button"
-                                disabled={!allowed}
-                                aria-pressed={regLevel === level}
-                                onClick={() => setRegLevel(level)}
-                                className={`rounded-lg border p-2 text-left text-[11px] disabled:cursor-not-allowed disabled:opacity-50 ${
-                                  regLevel === level && allowed
-                                    ? "border-matchpoin-navy bg-matchpoin-navy/5 font-semibold"
-                                    : "border-slate-200"
-                                }`}
-                              >
-                                {TOURNAMENT_LEVEL_LABELS[level]}
-                                {!allowed && (
-                                  <span className="mt-0.5 block text-[10px] font-semibold text-rose-600">
-                                    Tidak tersedia untuk kategori ini
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
+                      <div className="rounded-lg bg-slate-50 p-2 text-[11px] text-slate-600">
+                        <span className="font-semibold text-slate-700">Kelas liga otomatis</span>
+                        <p className="mt-0.5">
+                          Tidak ada pilihan level saat mendaftar. Hasil pertandingan menentukan
+                          kelas Anda: {IKA17_CLASS_LABELS.beginner} (MPR di bawah{" "}
+                          {IKA17_INTERMEDIATE_MIN_RATING}) atau {IKA17_CLASS_LABELS.intermediate}{" "}
+                          (MPR {IKA17_INTERMEDIATE_MIN_RATING} ke atas). Tim ganda memakai
+                          rata-rata MPR kedua pemain.
+                        </p>
                       </div>
 
                       <label className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-2 text-[11px] text-rose-800">
@@ -709,7 +683,7 @@ export default function LeaguePage() {
                       <p className="text-slate-500">Pastikan data profil benar. Satu pemain hanya dapat terdaftar 1x per kategori liga, tetapi boleh mengikuti kategori lain.</p>
                       <div className="flex justify-between gap-2">
                         <Button variant="outline" size="sm" onClick={() => setRegStep(1)} disabled={regLoading}>Kembali</Button>
-                        <Button variant="tennis" size="sm" className="text-matchpoin-navy font-bold" onClick={confirmRegistration} disabled={regLoading || !currentUser || regAlready || !regLeague || (ika17Category(regCategory)?.doubles && !regPartnerId) || !ika17AllowedLevels(regCategory).includes(regLevel) || !regEligibility}>
+                        <Button variant="tennis" size="sm" className="text-matchpoin-navy font-bold" onClick={confirmRegistration} disabled={regLoading || !currentUser || regAlready || !regLeague || (ika17Category(regCategory)?.doubles && !regPartnerId) || !regEligibility}>
                           {regLoading ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Mendaftarkan...</> : "Konfirmasi Pendaftaran"}
                         </Button>
                       </div>

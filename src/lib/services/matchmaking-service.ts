@@ -22,7 +22,7 @@ export function calculatePlayerCompatibility(
 ): MatchmakingRecommendation {
   let score = 0;
 
-  // 1. DTR delta evaluation (max 40 pts)
+  // 1. MPR delta evaluation (max 40 pts)
   const ratingDiff = Math.abs(currentUser.currentRating - candidate.currentRating);
   if (ratingDiff <= 50) {
     score += 40;

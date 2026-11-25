@@ -11,7 +11,7 @@ const qualified = players.filter((player) => player.qualified);
 const pad = (value, width) => String(value).padEnd(width);
 const padStart = (value, width) => String(value).padStart(width);
 
-console.log("Simulasi Kualifikasi Single Man — 24 pemain (DTR)");
+console.log("Simulasi Kualifikasi Single Man — 24 pemain (MPR)");
 console.log(
   `Rating awal ${Math.round(SIMULATION_START_RATING)} untuk semua pemain · ${SIMULATION_ROUNDS} ronde Swiss · ${SIMULATION_QUALIFIERS} besar lolos`
 );

@@ -13,20 +13,19 @@ import type { User } from "@supabase/supabase-js";
 import { formatIndonesianDate } from "@/lib/utils";
 import {
   IKA17_CATEGORIES,
+  IKA17_CLASS_LABELS,
   IKA17_ELIGIBILITY_STATEMENT,
   IKA17_END_DATE,
+  IKA17_INTERMEDIATE_MIN_RATING,
   IKA17_LEAGUE_NAME,
   IKA17_MAIN_EVENT_END,
+  IKA17_MAIN_EVENT_SLOTS,
   IKA17_MAIN_EVENT_START,
   IKA17_MIN_MATCHES,
   IKA17_QUOTA,
   IKA17_REGISTRATION_DEADLINE,
   IKA17_START_DATE,
-  TOURNAMENT_LEVEL_LABELS,
-  TOURNAMENT_LEVEL_REQUIREMENTS,
-  ika17AllowedLevels,
   ika17Category,
-  type TournamentLevel,
 } from "@/lib/tournaments/ika17";
 
 interface TournamentRow {
@@ -80,7 +79,6 @@ export default function TournamentsPage() {
   const [regError, setRegError] = useState<string | null>(null);
   const [regSuccess, setRegSuccess] = useState<string | null>(null);
   const [eligibilityConfirmed, setEligibilityConfirmed] = useState(false);
-  const [playingExperience, setPlayingExperience] = useState<TournamentLevel>("beginner");
 
   useEffect(() => {
     const supabase = createClient();
@@ -152,10 +150,6 @@ export default function TournamentsPage() {
     setRegSuccess(null);
     setPartners([]);
     setEligibilityConfirmed(false);
-    // Kategori khusus beginner langsung memilih beginner; kategori campuran
-    // membiarkan pemain memilih (belum dipilih sampai diklik).
-    const allowedLevels = ika17AllowedLevels(row.category);
-    setPlayingExperience(allowedLevels.length === 1 ? allowedLevels[0] : "beginner");
 
     const definition = ika17Category(row.category);
     if (!definition?.doubles) return;
@@ -224,7 +218,6 @@ export default function TournamentsPage() {
         body: JSON.stringify({
           tournamentId: selected.id,
           partnerUserId: definition.doubles ? partnerUserId : null,
-          playingExperience,
           eligibilityConfirmed,
         }),
       });
@@ -256,14 +249,16 @@ export default function TournamentsPage() {
                 {league.name}
               </h1>
               <p className="max-w-2xl text-sm leading-relaxed text-slate-200">
-                Liga musim 1 dengan 5 kategori. Pendaftaran dibuka sampai{" "}
+                Liga musim 1 dengan {IKA17_CATEGORIES.length} kategori: Single Man, Double Man,
+                Double Woman, dan Double Mix. Pendaftaran dibuka sampai{" "}
                 <strong className="text-white">{dateLabel(league.deadline)}</strong>. Kuota setiap
                 kategori maksimal {IKA17_QUOTA} peserta/tim dan dihitung dari pendaftar yang sudah
                 diterima admin.
               </p>
               <p className="mt-3 inline-flex items-center gap-2 rounded-xl bg-matchpoin-tennis/90 px-3 py-2 text-xs font-bold text-matchpoin-navy">
                 <Trophy className="h-4 w-4" />
-                8 besar tiap kategori lolos ke Main Event (minimal {IKA17_MIN_MATCHES}{" "}
+                {IKA17_MAIN_EVENT_SLOTS} besar Beginner + {IKA17_MAIN_EVENT_SLOTS} besar
+                Intermediate tiap kategori lolos ke Main Event (minimal {IKA17_MIN_MATCHES}{" "}
                 pertandingan)
               </p>
             </div>
@@ -482,24 +477,25 @@ export default function TournamentsPage() {
               </strong>
             </li>
             <li>
-              Kategori <strong>beginner</strong>: maksimal 2 tahun bermain. Kategori{" "}
-              <strong>intermediate</strong>: lebih dari 2 tahun bermain.
+              Kategori liga: <strong>Single Man</strong>, <strong>Double Man</strong>,{" "}
+              <strong>Double Woman</strong>, dan <strong>Double Mix</strong>. Tidak ada pilihan
+              level saat mendaftar.
             </li>
             <li>
-              <strong>advanced</strong> adalah peserta yang pernah mengikuti PORDA, PORPROV,
-              PON — karena itu <strong>tidak dapat</strong> mendaftar di liga ini.
+              Kelas liga dibentuk otomatis dari hasil pertandingan: <strong>Beginner</strong>{" "}
+              (MPR di bawah {IKA17_INTERMEDIATE_MIN_RATING}) dan <strong>Intermediate</strong>{" "}
+              (MPR {IKA17_INTERMEDIATE_MIN_RATING} ke atas). Setiap pemain hanya punya satu MPR;
+              tim ganda memakai rata-rata MPR kedua pemain.
             </li>
             <li>
               <strong className="text-slate-800">
-                Lolos ke Main Event: 8 besar kategori dengan minimal {IKA17_MIN_MATCHES} pertandingan
+                Lolos ke Main Event: {IKA17_MAIN_EVENT_SLOTS} besar Beginner dan{" "}
+                {IKA17_MAIN_EVENT_SLOTS} besar Intermediate setiap kategori, dengan minimal{" "}
+                {IKA17_MIN_MATCHES} pertandingan
               </strong>{" "}
               yang tercatat selama periode liga.
             </li>
             <li>Setiap kategori maksimal {IKA17_QUOTA} peserta (single) atau {IKA17_QUOTA} tim (ganda).</li>
-            <li>
-              <strong className="text-slate-800">8 besar</strong> setiap kategori lolos ke Main
-              Event.
-            </li>
           </ul>
         </section>
       </div>
@@ -561,51 +557,25 @@ export default function TournamentsPage() {
                     </div>
                   )}
 
-                  <div className="space-y-2">
-                    <span className="text-sm font-semibold text-slate-800">Pengalaman Bermain</span>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {(["beginner", "intermediate"] as TournamentLevel[]).map((level) => {
-                        const allowed = ika17AllowedLevels(selected.category).includes(level);
-                        const active = playingExperience === level;
-                        return (
-                          <button
-                            key={level}
-                            type="button"
-                            disabled={!allowed}
-                            aria-pressed={active}
-                            onClick={() => setPlayingExperience(level)}
-                            className={`rounded-xl border p-3 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                              active && allowed
-                                ? "border-matchpoin-navy bg-matchpoin-navy/5 ring-1 ring-matchpoin-navy"
-                                : "border-slate-200 hover:border-slate-300"
-                            }`}
-                          >
-                            <span className="block font-bold text-slate-900">
-                              {TOURNAMENT_LEVEL_LABELS[level]}
-                            </span>
-                            <span className="mt-0.5 block text-[11px] text-slate-500">
-                              {TOURNAMENT_LEVEL_REQUIREMENTS[level]}
-                            </span>
-                            {!allowed && (
-                              <span className="mt-1 block text-[10px] font-semibold text-rose-600">
-                                Tidak tersedia untuk kategori ini
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Kategori tunggal, ganda putri beginner, dan ganda campuran hanya menerima
-                      beginner (maksimal 2 tahun bermain).
-                    </p>
+                  <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                    <span className="block font-semibold text-slate-800">
+                      Kelas liga ditentukan otomatis dari hasil pertandingan
+                    </span>
+                    <span className="mt-1 block">
+                      Tidak ada pilihan level saat mendaftar. Setelah bertanding, MPR Anda
+                      menentukan kelas: {IKA17_CLASS_LABELS.beginner} (MPR di bawah{" "}
+                      {IKA17_INTERMEDIATE_MIN_RATING}) atau {IKA17_CLASS_LABELS.intermediate} (MPR{" "}
+                      {IKA17_INTERMEDIATE_MIN_RATING} ke atas). Untuk ganda dipakai rata-rata MPR
+                      kedua pemain.
+                    </span>
                   </div>
 
                   <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                     Pendaftaran akan dikirim dengan status <strong>pending</strong>. Anda dapat
                     melihat statusnya di kartu kategori setelah admin memproses.
                     <span className="mt-2 block font-semibold text-slate-800">
-                      8 besar kategori ini lolos ke Main Event dengan syarat minimal{" "}
+                      {IKA17_MAIN_EVENT_SLOTS} besar Beginner dan {IKA17_MAIN_EVENT_SLOTS} besar
+                      Intermediate kategori ini lolos ke Main Event dengan syarat minimal{" "}
                       {IKA17_MIN_MATCHES} pertandingan selama periode liga.
                     </span>
                   </div>
@@ -631,7 +601,6 @@ export default function TournamentsPage() {
                     disabled={
                       regLoading ||
                       !eligibilityConfirmed ||
-                      !ika17AllowedLevels(selected.category).includes(playingExperience) ||
                       (ika17Category(selected.category)?.doubles && !partnerUserId)
                     }
                   >

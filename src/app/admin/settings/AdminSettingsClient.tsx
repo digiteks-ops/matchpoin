@@ -317,7 +317,8 @@ export default function AdminSettingsClient({
                     <tbody className="divide-y divide-slate-100">
                       {filteredUsers.map((user) => {
                         const player = playerById.get(user.id);
-                        const hasRating = player?.show_rating && player.current_rating !== null;
+                        // MPR setiap pemain terpublish: tidak lagi disembunyikan.
+                        const hasRating = player?.current_rating !== null && player !== undefined;
                         return (
                           <tr key={user.id} className="hover:bg-slate-50">
                             <td className="py-3">
@@ -340,7 +341,7 @@ export default function AdminSettingsClient({
                                   {Math.round(Number(player?.current_rating))}
                                 </span>
                               ) : player ? (
-                                <span className="text-slate-400 text-xs">Disembunyikan</span>
+                                <span className="text-slate-400 text-xs">Belum ada rating</span>
                               ) : (
                                 <span className="text-slate-400 text-xs">Belum bertanding</span>
                               )}

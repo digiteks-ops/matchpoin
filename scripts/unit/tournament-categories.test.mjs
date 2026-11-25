@@ -4,27 +4,31 @@ import test from "node:test";
 
 import {
   IKA17_CATEGORIES,
+  IKA17_CLASSES,
   IKA17_ELIGIBILITY_STATEMENT,
-  TOURNAMENT_LEVELS,
-  TOURNAMENT_LEVEL_LABELS,
-  ika17AllowedLevels,
+  IKA17_INTERMEDIATE_MIN_RATING,
+  IKA17_MAIN_EVENT_SLOTS,
+  IKA17_MIN_MATCHES,
+  IKA17_QUOTA,
   ika17Category,
-  ika17CategoryAllowsLevel,
+  ika17ClassLabel,
+  ika17ClassOfRating,
   ika17EligibilityStatement,
-  ika17RequiresBeginner,
-  ika17RequiresPordaParticipation,
+  ika17TeamRating,
 } from "../../src/lib/tournaments/ika17-core.mjs";
 import {
   evaluateLeagueRegistration,
   inferCategory,
-  isBeginnerOnlyCategory,
 } from "../../src/lib/mysql/competition-registration-core.mjs";
 
 const read = (relative) => readFile(new URL(`../../${relative}`, import.meta.url), "utf8");
 
-const migration = await read("supabase/migrations/00034_ika17_tournament_categories.sql");
+const migration = await read("supabase/migrations/00042_league_classes_from_rating.sql");
 const registerRoute = await read("src/app/api/tournaments/register/route.ts");
 const tournamentsPage = await read("src/app/tournaments/page.tsx");
+const leaguePage = await read("src/app/league/page.tsx");
+const leaderboard = await read("src/components/tournaments/tournament-leaderboard.tsx");
+const standingsService = await read("src/lib/supabase/competition-service.ts");
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const PARTNER = "22222222-2222-4222-8222-222222222222";
@@ -50,138 +54,147 @@ const evaluate = (category, overrides = {}) =>
     ...overrides,
   });
 
-test("the five tournament categories are exactly the requested list", () => {
+test("kategori turnamen tepat empat: Single Man, Double Man, Double Woman, Double Mix", () => {
   assert.deepEqual(
     IKA17_CATEGORIES.map((entry) => entry.label),
-    [
-      "Single Man Beginner",
-      "Double Man Beginner–Intermediate",
-      "Double Woman Beginner",
-      "Double Woman Beginner–Intermediate",
-      "Double Mix Beginner",
-    ]
+    ["Single Man", "Double Man", "Double Woman", "Double Mix"]
+  );
+  assert.deepEqual(
+    IKA17_CATEGORIES.map((entry) => entry.id),
+    ["mens_singles", "mens_doubles", "womens_doubles", "mixed_doubles"]
   );
 
-  assert.ok(ika17Category("mixed_doubles"));
-  assert.ok(ika17Category("womens_doubles_intermediate"));
-  // Single Woman was removed from the list.
+  // Kategori berbasis level lama sudah tidak ada.
+  assert.equal(ika17Category("womens_doubles_intermediate"), null);
   assert.equal(IKA17_CATEGORIES.some((entry) => entry.id === "womens_singles"), false);
   assert.equal(ika17Category("womens_singles"), null);
 });
 
-test("beginner-only categories reject intermediate registration", () => {
-  assert.equal(isBeginnerOnlyCategory("mens_singles"), true);
-  assert.equal(isBeginnerOnlyCategory("womens_doubles"), true);
-  assert.equal(isBeginnerOnlyCategory("mens_doubles"), false);
-  assert.equal(isBeginnerOnlyCategory("womens_doubles_intermediate"), false);
-
-  assert.equal(ika17RequiresBeginner("mens_singles"), true);
-  assert.equal(ika17RequiresBeginner("womens_doubles"), true);
-  assert.equal(ika17RequiresBeginner("mens_doubles"), false);
-  assert.deepEqual(ika17AllowedLevels("mens_doubles"), ["beginner", "intermediate"]);
+test("setiap kategori punya aturan gender dan status ganda yang jelas", () => {
+  const byId = new Map(IKA17_CATEGORIES.map((entry) => [entry.id, entry]));
+  assert.equal(byId.get("mens_singles").doubles, false);
+  assert.equal(byId.get("mens_singles").genderRule, "male");
+  assert.equal(byId.get("mens_doubles").doubles, true);
+  assert.equal(byId.get("womens_doubles").genderRule, "female");
+  assert.equal(byId.get("mixed_doubles").genderRule, "mixed");
 });
 
-test("level mapping is beginner = max 2 years, intermediate = above 2 years", () => {
-  for (const category of ["mens_singles", "womens_doubles"]) {
-    assert.equal(ika17CategoryAllowsLevel(category, "beginner"), true, category);
-    assert.equal(ika17CategoryAllowsLevel(category, "intermediate"), false, category);
-    assert.deepEqual(
-      evaluate(category, { playingExperience: "intermediate" }),
-      { ok: false, message: "Kategori ini khusus beginner: maksimal 2 tahun bermain." }
-    );
-    assert.equal(evaluate(category, { playingExperience: "beginner" }).ok, true, category);
-  }
-
-  for (const category of ["mens_doubles", "womens_doubles_intermediate"]) {
-    assert.equal(evaluate(category, { playingExperience: "beginner" }).ok, true, category);
-    assert.equal(evaluate(category, { playingExperience: "intermediate" }).ok, true, category);
-  }
+test("kuota 24 dan minimal 17 pertandingan untuk semua kategori", () => {
+  assert.equal(IKA17_QUOTA, 24);
+  assert.equal(IKA17_MIN_MATCHES, 17);
+  assert.equal(IKA17_MAIN_EVENT_SLOTS, 8);
 });
 
-test("every category requires the PORDA/PORPROV/PON statement", () => {
+test("pendaftaran tidak lagi membutuhkan pilihan level", () => {
+  for (const category of IKA17_CATEGORIES.map((entry) => entry.id)) {
+    assert.equal(evaluate(category).ok, true, category);
+  }
+
+  // Nilai playingExperience lama diabaikan, bukan ditolak.
+  assert.equal(evaluate("mens_singles", { playingExperience: "intermediate" }).ok, true);
+  assert.equal(evaluate("mens_doubles", { playingExperience: "beginner" }).ok, true);
+});
+
+test("kelas liga dibentuk dari MPR: beginner < 1100, intermediate >= 1100", () => {
+  assert.deepEqual(IKA17_CLASSES, ["beginner", "intermediate"]);
+  assert.equal(IKA17_INTERMEDIATE_MIN_RATING, 1100);
+
+  assert.equal(ika17ClassOfRating(0), "beginner");
+  assert.equal(ika17ClassOfRating(1000), "beginner");
+  assert.equal(ika17ClassOfRating(1099), "beginner");
+  assert.equal(ika17ClassOfRating(1100), "intermediate");
+  assert.equal(ika17ClassOfRating(2500), "intermediate");
+  assert.equal(ika17ClassLabel(1500), "Intermediate");
+  // Nilai kosong/rusak tidak menyembunyikan peserta.
+  assert.equal(ika17ClassOfRating(null), "beginner");
+  assert.equal(ika17ClassOfRating(Number.NaN), "beginner");
+});
+
+test("MPR tim ganda memakai rata-rata kedua pemain", () => {
+  assert.equal(ika17TeamRating([1000]), 1000);
+  assert.equal(ika17TeamRating([1000, 1200]), 1100);
+  assert.equal(ika17TeamRating([900, 1100, 1300]), 1100);
+  assert.equal(ika17TeamRating([]), null);
+  assert.equal(ika17TeamRating([null, undefined]), null);
+  // Satu pemain tanpa rating tidak membuat tim kehilangan kelas.
+  assert.equal(ika17TeamRating([1400, null]), 1400);
+});
+
+test("setiap kategori tetap mensyaratkan pernyataan PORDA/PORPROV/PON", () => {
   assert.match(IKA17_ELIGIBILITY_STATEMENT, /PORDA, PORPROV, atau PON/);
+  assert.equal(ika17EligibilityStatement(), IKA17_ELIGIBILITY_STATEMENT);
   assert.deepEqual(evaluate("mens_singles", { eligibilityConfirmed: false }), {
     ok: false,
     message: "Konfirmasi bahwa Anda belum pernah mengikuti PORDA, PORPROV, atau PON.",
   });
 });
 
-test("category inference covers the new women's intermediate doubles", () => {
-  assert.equal(inferCategory("Double Woman Beginner–Intermediate"), "womens_doubles_intermediate");
-  assert.equal(inferCategory("Double Man Beginner–Intermediate"), "mens_doubles");
-  assert.equal(inferCategory("Single Man Beginner"), "mens_singles");
+test("inferensi kategori tidak lagi menghasilkan kategori level", () => {
+  assert.equal(inferCategory("Double Woman"), "womens_doubles");
+  assert.equal(inferCategory("Double Woman Beginner–Intermediate"), "womens_doubles");
+  assert.equal(inferCategory("Double Man"), "mens_doubles");
+  assert.equal(inferCategory("Single Man"), "mens_singles");
+  assert.equal(inferCategory("Double Mix"), "mixed_doubles");
 });
 
-test("migration seeds all five leagues and enforces level + eligibility", () => {
-  for (const slug of [
-    "league-q1-2027-mens-singles",
-    "league-q1-2027-mens-doubles",
-    "league-q1-2027-womens-doubles",
-    "league-q1-2027-womens-doubles-intermediate",
-  ]) {
-    assert.match(migration, new RegExp(slug), slug);
+test("migrasi 00042 memakai 4 kategori dan tidak memvalidasi level", () => {
+  for (const category of ["mens_singles", "mens_doubles", "womens_doubles", "mixed_doubles"]) {
+    assert.match(migration, new RegExp(`''${category}''`), category);
   }
-
-  assert.match(migration, /womens_doubles_intermediate/);
-  assert.match(migration, /p_playing_experience TEXT/);
-  assert.match(migration, /p_eligibility_confirmed BOOLEAN/);
-  assert.match(migration, /Kategori ini khusus beginner: maksimal 2 tahun bermain\./);
-  assert.match(migration, /DROP FUNCTION IF EXISTS public\.register_for_competition\(UUID, UUID, UUID\)/);
+  // Kategori lama digabung, bukan dibiarkan aktif.
+  assert.match(migration, /merged_into/);
+  assert.match(migration, /SET category = 'womens_doubles'/);
+  // Tidak ada lagi penolakan berdasarkan level.
+  assert.doesNotMatch(migration, /Kategori ini khusus beginner/);
+  assert.doesNotMatch(migration, /v_experience NOT IN/);
+  // Parameter lama dipertahankan agar signature RPC tidak berubah.
+  assert.match(migration, /p_playing_experience TEXT DEFAULT NULL/);
+  assert.match(migration, /now\(\), NULL, TRUE\)/);
 });
 
-test("level wording is beginner / intermediate / advanced, not pemula / menengah", () => {
-  assert.deepEqual(TOURNAMENT_LEVELS, ["beginner", "intermediate", "advanced"]);
-  assert.equal(
-    TOURNAMENT_LEVEL_LABELS.beginner,
-    "Beginner: maksimal 2 tahun bermain"
-  );
-  assert.equal(
-    TOURNAMENT_LEVEL_LABELS.intermediate,
-    "Intermediate: lebih dari 2 tahun bermain"
-  );
-  assert.equal(
-    TOURNAMENT_LEVEL_LABELS.advanced,
-    "Advanced: pernah mengikuti PORDA, PORPROV, PON"
-  );
-
-  // advanced adalah kebalikan syarat: justru yang PERNAH ikut PORDA/PORPROV/PON.
-  assert.equal(ika17RequiresPordaParticipation("advanced"), true);
-  assert.equal(ika17RequiresPordaParticipation("beginner"), false);
-  assert.equal(ika17RequiresPordaParticipation("intermediate"), false);
-  assert.match(ika17EligibilityStatement("advanced"), /Pernah mengikuti PORDA/);
-  assert.match(ika17EligibilityStatement("beginner"), /Belum pernah mengikuti PORDA/);
+test("route pendaftaran tidak mengirim level dan mengirim pernyataan eligibility", () => {
+  assert.doesNotMatch(registerRoute, /playingExperience,/);
+  assert.match(registerRoute, /p_playing_experience: null/);
+  assert.match(registerRoute, /p_eligibility_confirmed: eligibilityConfirmed/);
 });
 
-test("no user-facing copy still says pemula or menengah", async () => {
+test("form pendaftaran tidak lagi menampilkan pilihan level", () => {
+  for (const [name, source] of [
+    ["/tournaments", tournamentsPage],
+    ["/league", leaguePage],
+  ]) {
+    assert.doesNotMatch(source, /Pengalaman Bermain/, name);
+    assert.doesNotMatch(source, /TOURNAMENT_LEVEL_LABELS/, name);
+    assert.doesNotMatch(source, /ika17AllowedLevels/, name);
+  }
+});
+
+test("leaderboard memakai kelas beginner/intermediate dan 8 besar per kelas", () => {
+  assert.match(leaderboard, /ika17ClassOfRating/);
+  assert.match(leaderboard, /IKA17_CLASSES/);
+  assert.match(leaderboard, /IKA17_MAIN_EVENT_SLOTS/);
+  assert.doesNotMatch(leaderboard, /"advanced"/);
+  assert.doesNotMatch(leaderboard, /"expert"/);
+});
+
+test("klasemen menghitung MPR tim (rata-rata) dan kelas dari rating", () => {
+  assert.match(standingsService, /ika17TeamRating/);
+  assert.match(standingsService, /ika17ClassOfRating\(teamRating\)/);
+});
+
+test("tidak ada lagi salinan yang menyebut level liga beginner–intermediate", async () => {
   const files = [
     "src/lib/tournaments/ika17-core.mjs",
     "src/lib/mysql/competition-registration-core.mjs",
-    "src/lib/rating/rating-engine.ts",
     "src/lib/matches/constants.ts",
     "src/lib/services/match-history-service.ts",
     "src/lib/mysql/player-history-service.ts",
     "src/app/tournaments/page.tsx",
     "src/app/league/page.tsx",
-    "src/app/players/page.tsx",
-    "src/app/(protected)/profile/edit/page.tsx",
-    "src/components/players/player-card.tsx",
-    "src/components/matches/create-match-form.tsx",
-    "supabase/migrations/00034_ika17_tournament_categories.sql",
   ];
   for (const file of files) {
     const source = await read(file);
     assert.doesNotMatch(source, /\b[Pp]emula\b/, `${file} masih memakai "pemula"`);
     assert.doesNotMatch(source, /\b[Mm]enengah\b/, `${file} masih memakai "menengah"`);
   }
-});
-
-test("the register route forwards level and eligibility to the RPC", () => {
-  assert.match(registerRoute, /p_playing_experience: playingExperience/);
-  assert.match(registerRoute, /p_eligibility_confirmed: eligibilityConfirmed/);
-});
-
-test("the registration form collects the playing experience", () => {
-  assert.match(tournamentsPage, /Pengalaman Bermain/);
-  assert.match(tournamentsPage, /playingExperience,/);
-  assert.match(tournamentsPage, /ika17AllowedLevels\(selected\.category\)/);
 });

@@ -38,7 +38,6 @@ const evaluate = (category, overrides = {}) =>
     entryCount: 0,
     userGender: "male",
     partnerGender: "female",
-    playingExperience: "beginner",
     eligibilityConfirmed: true,
     today: "2026-11-19",
     ...overrides,
@@ -97,27 +96,26 @@ test("the duplicate lookups are scoped to the registered category", () => {
   );
 });
 
-test("the league page submits partner, level, and eligibility", () => {
+test("the league page submits partner and eligibility without a level", () => {
   assert.match(leaguePage, /const CATEGORIES = IKA17_CATEGORIES;/);
   assert.match(leaguePage, /partnerUserId: definition\?\.doubles \? regPartnerId : null/);
-  assert.match(leaguePage, /playingExperience: regLevel/);
+  assert.doesNotMatch(leaguePage, /playingExperience: regLevel/);
   assert.match(leaguePage, /eligibilityConfirmed: regEligibility/);
   assert.doesNotMatch(leaguePage, /JSON\.stringify\(\{ tournamentId: regLeague\.id \}\)/);
 });
 
-test("the league page offers the double/level/eligibility inputs", () => {
+test("the league page offers the partner/eligibility inputs and explains classes", () => {
   assert.match(leaguePage, /id="regPartner"/);
-  assert.match(leaguePage, /Pengalaman Bermain/);
+  assert.match(leaguePage, /Kelas liga otomatis/);
   assert.match(leaguePage, /IKA17_ELIGIBILITY_STATEMENT/);
   assert.doesNotMatch(leaguePage, /["']womens_singles["']/);
 });
 
-test("the RPC treats womens_doubles_intermediate as a doubles category", () => {
-  // `LIKE '%_doubles'` misses it because the id ends with `_intermediate`,
-  // which would have made the RPC demand "no partner" for a doubles category.
-  const migration = categoriesMigration.replace(/^\s*--.*$/gm, "");
-  assert.doesNotMatch(migration, /LIKE '%_doubles'/);
-  assert.match(migration, /v_doubles := v_category LIKE '%doubles%';/);
+test("the RPC treats every doubles category as doubles", async () => {
+  const migration = await read("supabase/migrations/00042_league_classes_from_rating.sql");
+  const sql = migration.replace(/^\s*--.*$/gm, "");
+  assert.doesNotMatch(sql, /LIKE '%_doubles'/);
+  assert.match(sql, /v_doubles := v_category LIKE '%doubles%';/);
   // Keep the SQL doubles rule in step with the JS helper for every category.
   for (const category of IKA17_CATEGORIES) {
     assert.equal(category.id.includes("doubles"), isDoubles(category.id), category.id);

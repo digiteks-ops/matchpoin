@@ -91,25 +91,27 @@ export function PlayerCard({ player, onInvite, isInviting = false }: PlayerCardP
             </div>
           </div>
 
-          {player.showRating === false ? (
-            <span className="text-[10px] text-slate-400 font-medium">Rating disembunyikan</span>
-          ) : (
-            <div className="flex flex-col items-end">
-              <div
-                className={`px-2.5 py-1 rounded-lg border text-xs font-black font-heading tracking-tight ${getRatingBadgeColor(
-                  player.currentRating
-                )}`}
-              >
-                {Math.round(player.currentRating)}
-                {player.isProvisional && (
-                  <span className="ml-1 text-[9px] font-normal text-amber-700">(P)</span>
-                )}
-              </div>
-              <span className="text-[10px] text-slate-400 font-medium mt-0.5">
-                {getRatingTier(player.currentRating)}
-              </span>
+          <div className="flex flex-col items-end">
+            <div
+              className={`px-2.5 py-1 rounded-lg border text-xs font-black font-heading tracking-tight ${getRatingBadgeColor(
+                player.currentRating
+              )}`}
+              title="MPR (MatchPoin Rating) — rating setiap pemain terbuka untuk semua pemain"
+            >
+              {Math.round(player.currentRating)}
+              {player.isProvisional && (
+                <span
+                  className="ml-1 text-[9px] font-normal text-amber-700"
+                  title="Masih kalibrasi: 2 pertandingan pertama"
+                >
+                  (K)
+                </span>
+              )}
             </div>
-          )}
+            <span className="text-[10px] text-slate-400 font-medium mt-0.5">
+              {getRatingTier(player.currentRating)}
+            </span>
+          </div>
         </CardHeader>
 
         {/* Content Details */}
@@ -135,22 +137,20 @@ export function PlayerCard({ player, onInvite, isInviting = false }: PlayerCardP
             )}
           </div>
 
-          {player.showRating !== false && (
-            <div className="grid grid-cols-3 gap-1 bg-slate-50 rounded-lg p-2 text-center text-xs border border-slate-100">
-              <div>
-                <span className="block text-[10px] text-slate-400 uppercase font-semibold">Tanding</span>
-                <span className="font-bold text-slate-800">{player.matchesPlayed}</span>
-              </div>
-              <div>
-                <span className="block text-[10px] text-slate-400 uppercase font-semibold">Menang</span>
-                <span className="font-bold text-emerald-600">{player.wins}</span>
-              </div>
-              <div>
-                <span className="block text-[10px] text-slate-400 uppercase font-semibold">Win Rate</span>
-                <span className="font-bold text-slate-800">{player.winRate}%</span>
-              </div>
+          <div className="grid grid-cols-3 gap-1 bg-slate-50 rounded-lg p-2 text-center text-xs border border-slate-100">
+            <div>
+              <span className="block text-[10px] text-slate-400 uppercase font-semibold">Tanding</span>
+              <span className="font-bold text-slate-800">{player.matchesPlayed}</span>
             </div>
-          )}
+            <div>
+              <span className="block text-[10px] text-slate-400 uppercase font-semibold">Menang</span>
+              <span className="font-bold text-emerald-600">{player.wins}</span>
+            </div>
+            <div>
+              <span className="block text-[10px] text-slate-400 uppercase font-semibold">Win Rate</span>
+              <span className="font-bold text-slate-800">{player.winRate}%</span>
+            </div>
+          </div>
         </CardContent>
       </div>
 

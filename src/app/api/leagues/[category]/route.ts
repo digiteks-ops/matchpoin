@@ -6,9 +6,8 @@ import { IKA17_CATEGORIES } from "@/lib/tournaments/ika17";
 
 export const dynamic = "force-dynamic";
 
-// Sumber tunggal kategori: `ika17-core.mjs`. Daftar lokal sebelumnya masih
-// memuat `womens_singles` dan belum mengenal
-// `womens_doubles_intermediate`, sehingga klasemen kategori itu 400.
+// Sumber tunggal kategori: `ika17-core.mjs` (Single Man, Double Man,
+// Double Woman, Double Mix).
 const CATEGORIES = new Set<string>(IKA17_CATEGORIES.map((entry) => entry.id));
 
 export async function GET(

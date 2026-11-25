@@ -52,7 +52,7 @@ export function GuestModal({
 
         <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-3 text-xs text-slate-600">
           <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-          <span>Sebagai pemain terdaftar, Anda mendapatkan DTR (Dynamic Tennis Rating) awal dan akses matchmaking penuh.</span>
+          <span>Sebagai pemain terdaftar, Anda mendapatkan MPR (MatchPoin Rating) awal dan akses matchmaking penuh.</span>
         </div>
 
         <div className="flex flex-col gap-2 pt-2">

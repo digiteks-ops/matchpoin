@@ -1,15 +1,15 @@
-// Deterministic DTR simulation shared by the admin page and the CLI.
+// Deterministic MPR simulation shared by the admin page and the CLI.
 // Players are paired against each other in a Swiss-style league; every rating
-// change uses the same DTR formula as production matches.
+// change uses the same MPR formula as production matches.
 
 import {
-  DTR_DEFAULT_RATING,
-  calculateDtrSingles,
-  dtrCategoryLabel,
-  dtrExpectedScore,
-} from "../rating/dtr-core.mjs";
+  MPR_DEFAULT_RATING,
+  calculateMprSingles,
+  mprCategoryLabel,
+  mprExpectedScore,
+} from "../rating/mpr-core.mjs";
 
-export const SIMULATION_START_RATING = DTR_DEFAULT_RATING;
+export const SIMULATION_START_RATING = MPR_DEFAULT_RATING;
 export const SIMULATION_QUALIFIERS = 8;
 export const SIMULATION_ROUNDS = 7;
 
@@ -132,11 +132,11 @@ function pairRound(players, played) {
 function applyMatch(first, second, round, played) {
   played.add(pairKey(first.id, second.id));
 
-  const expectedFirst = dtrExpectedScore(first.rating, second.rating);
+  const expectedFirst = mprExpectedScore(first.rating, second.rating);
   const random = seededRandom(hashSeed(`${round}:${first.id}:${second.id}`));
   const firstWins = random() < expectedFirst;
 
-  const calc = calculateDtrSingles(
+  const calc = calculateMprSingles(
     { userId: first.id, rating: first.rating, matchesPlayed: first.matchesPlayed },
     { userId: second.id, rating: second.rating, matchesPlayed: second.matchesPlayed },
     firstWins ? "A" : "B"
@@ -231,7 +231,7 @@ export function simulateCategory(playerCount = 24) {
       name: player.name,
       rank: index + 1,
       qualified: index < SIMULATION_QUALIFIERS,
-      category: dtrCategoryLabel(player.rating),
+      category: mprCategoryLabel(player.rating),
       startRating: SIMULATION_START_RATING,
       finalRating: player.rating,
       wins: player.wins,

@@ -2,59 +2,65 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { dtrStartingRating } from "../../src/lib/rating/dtr-core.mjs";
+import { MPR_STARTING_RATING, mprStartingRating } from "../../src/lib/rating/mpr-core.mjs";
 
 const read = (relative) => readFile(new URL(`../../${relative}`, import.meta.url), "utf8");
 
-const migration = await read("supabase/migrations/00032_dtr_starting_rating_once.sql");
+const migration = await read("supabase/migrations/00041_mpr_rating.sql");
 const registerPage = await read("src/app/(auth)/register/page.tsx");
 const playerService = await read("src/lib/services/player-service.ts");
 const playerSync = await read("src/lib/services/player-sync.ts");
 const profileService = await read("src/lib/supabase/profile-service.ts");
 const startingLevelRoute = await read("src/app/api/profile/starting-level/route.ts");
 
-test("category choice maps to the DTR starting scale", () => {
-  assert.equal(dtrStartingRating("beginner"), 1000);
-  assert.equal(dtrStartingRating("intermediate"), 1500);
-  assert.equal(dtrStartingRating("advanced"), 2000);
-  assert.equal(dtrStartingRating("expert"), 2500);
+test("rating awal semua pemain baru 1000, apa pun kategori awalnya", () => {
+  assert.equal(MPR_STARTING_RATING, 1000);
+  for (const level of ["beginner", "intermediate", "advanced", "expert", null]) {
+    assert.equal(mprStartingRating(level), 1000, String(level));
+  }
 });
 
-test("migration adds the one-time marker and backfills existing players as locked", () => {
-  assert.match(migration, /ADD COLUMN IF NOT EXISTS starting_rating_set_at TIMESTAMPTZ/);
+test("migrasi 00041 menetapkan default 1000 dan mengizinkannya di RLS", () => {
   assert.match(
     migration,
-    /UPDATE public\.player_ratings\s+SET starting_rating_set_at = COALESCE\(created_at, now\(\)\)\s+WHERE starting_rating_set_at IS NULL/
+    /ALTER COLUMN current_rating SET DEFAULT 1000\.00/
   );
+  assert.match(migration, /ALTER COLUMN peak_rating SET DEFAULT 1000\.00/);
+  assert.match(migration, /current_rating = 1000\.00/);
+  // Policy lama (1000/1500/2000/2500) harus hilang.
+  assert.doesNotMatch(migration, /current_rating IN \(1000\.00, 1500\.00, 2000\.00, 2500\.00\)/);
 });
 
-test("starting rating trigger only fires while the marker is empty", () => {
+test("trigger signup memberi rating 1000 untuk semua jalur pendaftaran", () => {
+  assert.match(migration, /v_rating NUMERIC := 1000/);
+  // Tidak ada lagi CASE per kategori.
+  assert.doesNotMatch(migration, /WHEN 'expert' THEN 2500/);
+  assert.doesNotMatch(migration, /WHEN 'beginner' THEN 1000/);
+});
+
+test("trigger kategori awal tidak lagi mengubah rating menurut kategori", () => {
   const fn = migration.match(
     /CREATE OR REPLACE FUNCTION public\.apply_dtr_starting_rating\(\)[\s\S]*?\n\$\$;/
   )?.[0];
-  assert.ok(fn, "trigger function not found");
+  assert.ok(fn, "fungsi trigger tidak ditemukan");
+  assert.match(fn, /SET current_rating = 1000\.00/);
   assert.match(fn, /AND matches_played = 0/);
   assert.match(fn, /AND starting_rating_set_at IS NULL/);
-  assert.match(fn, /starting_rating_set_at = now\(\)/);
+  assert.doesNotMatch(fn, /WHEN 'expert' THEN 2500/);
 });
 
-test("signup trigger reads the chosen category from user metadata", () => {
-  assert.match(migration, /NEW\.raw_user_meta_data->>'starting_level'/);
-  assert.match(migration, /WHEN 'expert' THEN 2500/);
-  assert.match(migration, /WHEN 'intermediate' THEN 1500/);
-  assert.match(migration, /WHEN 'advanced' THEN 2000/);
-  assert.match(migration, /WHEN 'beginner' THEN 1000/);
-});
-
-test("registration form submits the category and sends it to signUp metadata", () => {
+test("form pendaftaran tetap mengirim kategori sebagai self-assessed level", () => {
   assert.match(registerPage, /starting_level: startingLevel/);
   assert.match(registerPage, /setStartingLevel/);
   assert.match(registerPage, /Self Rating/);
-  assert.match(registerPage, /dtrStartingRating\(startingLevel\)/);
+  assert.match(registerPage, /mprStartingRating\(startingLevel\)/);
 });
 
-test("self rating at registration offers exactly beginner and intermediate", async () => {
-  for (const relative of ["src/app/(auth)/register/page.tsx", "src/app/(auth)/pilih-kategori/page.tsx"]) {
+test("self rating saat mendaftar hanya menawarkan beginner dan intermediate", async () => {
+  for (const relative of [
+    "src/app/(auth)/register/page.tsx",
+    "src/app/(auth)/pilih-kategori/page.tsx",
+  ]) {
     const source = await readFile(new URL(`../../${relative}`, import.meta.url), "utf8");
     const options = source.match(/value: "(beginner|intermediate|advanced|expert)"/g) ?? [];
     assert.deepEqual(
@@ -66,22 +72,19 @@ test("self rating at registration offers exactly beginner and intermediate", asy
     assert.match(source, /useState<SkillLevel \| null>\(null\)/, relative);
     assert.match(source, /Pilih self rating Anda: Beginner atau Intermediate\./, relative);
   }
-  // Rating awal tiap pilihan.
-  assert.equal(dtrStartingRating("beginner"), 1000);
-  assert.equal(dtrStartingRating("intermediate"), 1500);
 });
 
-test("both player-sync paths accept a starting level and lock the rating", () => {
+test("kedua jalur player-sync memakai rating awal 1000 dan mengunci pilihan sekali", () => {
   for (const source of [playerService, playerSync]) {
     assert.match(source, /startingLevel\?: SkillLevel/);
-    assert.match(source, /dtrStartingRating\(startingLevel\)/);
+    assert.match(source, /mprStartingRating\(startingLevel\)/);
     assert.match(source, /starting_rating_set_at/);
     // Never re-apply once the marker exists.
     assert.match(source, /\.is\("starting_rating_set_at", null\)/);
   }
 });
 
-test("profile saves keep the locked level instead of re-rating the player", () => {
+test("profil menyimpan level terkunci tanpa menyetel ulang rating", () => {
   assert.match(profileService, /startingLevelLocked/);
   assert.match(profileService, /starting_rating_set_at/);
   assert.match(
@@ -90,15 +93,15 @@ test("profile saves keep the locked level instead of re-rating the player", () =
   );
 });
 
-test("one-time picker route refuses a second choice", () => {
+test("route kategori awal menolak pilihan kedua", () => {
   assert.match(startingLevelRoute, /starting_rating_set_at/);
   assert.match(startingLevelRoute, /409/);
   assert.match(startingLevelRoute, /Kategori awal sudah pernah ditetapkan/);
 });
 
-test("migration allows the chosen category rating under the insert RLS policy", () => {
-  assert.match(
-    migration,
-    /current_rating IN \(1000\.00, 1500\.00, 2000\.00, 2500\.00\)/
-  );
+test("rating setiap pemain terpublish: view publik tidak lagi menyensor", () => {
+  // View tidak boleh membungkus kolom rating dengan CASE show_rating.
+  assert.doesNotMatch(migration, /CASE WHEN p\.show_rating THEN/);
+  assert.match(migration, /COALESCE\(r\.current_rating, 1000\.00\) AS current_rating/);
+  assert.match(migration, /COALESCE\(r\.matches_played, 0\) AS matches_played/);
 });

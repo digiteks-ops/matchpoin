@@ -17,6 +17,7 @@ import {
   Users,
 } from "lucide-react";
 import { formatIndonesianDate, formatIndonesianTime } from "@/lib/utils";
+import { ika17CategoryLabel } from "@/lib/tournaments/ika17";
 
 interface ManagedLeagueSummary {
   id: string;
@@ -242,16 +243,7 @@ export default function AdminTournamentsClient({ leagues, initialError = null }:
     }
   };
 
-  const getCategoryLabel = (category: string) => {
-    switch (category) {
-      case "mens_singles": return "Single Man Beginner";
-      case "mens_doubles": return "Double Man Beginner–Intermediate";
-      case "womens_doubles": return "Double Woman Beginner";
-      case "womens_doubles_intermediate": return "Double Woman Beginner–Intermediate";
-      case "mixed_doubles": return "Double Mix Beginner";
-      default: return category;
-    }
-  };
+  const getCategoryLabel = (category: string) => ika17CategoryLabel(category);
 
   return (
     <div className="flex-1 py-8 md:py-12">

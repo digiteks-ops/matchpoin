@@ -2,14 +2,42 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { getOpenMatches, type OpenMatchDetail } from "@/lib/services/match-service";
+import {
+  getRecentMatchActivity,
+  type MatchActivityEntry,
+} from "@/lib/services/match-activity-service";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Calendar, MapPin, Plus, Users, AlertCircle } from "lucide-react";
+import { Activity, Calendar, MapPin, Plus, Trophy, Users, AlertCircle } from "lucide-react";
 import { formatIndonesianDate, formatIndonesianTime } from "@/lib/utils";
 import { ERROR_LOAD, logError } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
+
+function ActivityTeamLine({ entry, team }: { entry: MatchActivityEntry; team: 1 | 2 }) {
+  const side = entry.teams[team === 1 ? 0 : 1];
+  const names =
+    side.players.length > 0
+      ? side.players.map((player) => player.name).join(" & ")
+      : "Pemain belum tercatat";
+
+  return (
+    <div
+      className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-xs ${
+        side.isWinner ? "bg-emerald-50 text-emerald-900" : "text-slate-700"
+      }`}
+    >
+      <span className="flex min-w-0 items-center gap-1.5">
+        {side.isWinner && <Trophy className="h-3.5 w-3.5 shrink-0 text-emerald-600" />}
+        <span className={`truncate ${side.isWinner ? "font-bold" : "font-medium"}`}>{names}</span>
+      </span>
+      <span className="shrink-0 font-heading text-sm font-extrabold tabular-nums">
+        {side.score ?? "-"}
+      </span>
+    </div>
+  );
+}
 
 export default async function MatchesPage() {
   const supabase = createClient();
@@ -17,14 +45,27 @@ export default async function MatchesPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const [openResult, activityResult] = await Promise.allSettled([
+    getOpenMatches(),
+    getRecentMatchActivity(8),
+  ]);
+
   let matches: OpenMatchDetail[] = [];
   let loadError: string | null = null;
-
-  try {
-    matches = await getOpenMatches();
-  } catch (err) {
-    logError("matches.list", err);
+  if (openResult.status === "fulfilled") {
+    matches = openResult.value;
+  } else {
+    logError("matches.list", openResult.reason);
     loadError = ERROR_LOAD;
+  }
+
+  let activity: MatchActivityEntry[] = [];
+  let activityError: string | null = null;
+  if (activityResult.status === "fulfilled") {
+    activity = activityResult.value;
+  } else {
+    logError("matches.activity.page", activityResult.reason);
+    activityError = ERROR_LOAD;
   }
 
   return (
@@ -151,6 +192,87 @@ export default async function MatchesPage() {
             })}
           </div>
         )}
+
+        <section className="space-y-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="flex items-center gap-2 font-heading text-xl font-extrabold tracking-tight text-slate-900">
+              <Activity className="h-5 w-5 text-matchpoin-tennis" />
+              Aktivitas Pertandingan Terbaru
+            </h2>
+            <p className="max-w-2xl text-xs leading-relaxed text-slate-500 sm:text-sm">
+              Pertandingan yang sudah selesai, pemain yang bertanding, dan hasilnya. Terbuka untuk
+              dilihat semua pemain.
+            </p>
+          </div>
+
+          {activityError && (
+            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-700">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{activityError}</span>
+            </div>
+          )}
+
+          {!activityError && activity.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
+              Belum ada pertandingan selesai. Aktivitas akan muncul di sini setelah hasil
+              pertandingan dikonfirmasi.
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {activity.map((entry) => (
+                <Link
+                  key={entry.id}
+                  href={`/matches/${entry.id}`}
+                  className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="truncate font-heading text-sm font-bold text-slate-900">
+                        {entry.title}
+                      </h3>
+                      <p className="mt-0.5 text-[11px] text-slate-500">{entry.categoryLabel}</p>
+                    </div>
+                    <Badge
+                      variant={entry.resultStatus === "confirmed" ? "success" : "secondary"}
+                      className="shrink-0 text-[10px]"
+                    >
+                      {entry.resultStatus === "confirmed"
+                        ? "Selesai"
+                        : entry.resultStatus === "under_review"
+                        ? "Ditinjau"
+                        : "Menunggu konfirmasi"}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-3 space-y-1">
+                    <ActivityTeamLine entry={entry} team={1} />
+                    <div className="flex items-center gap-2 px-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <span className="h-px flex-1 bg-slate-100" />
+                      vs
+                      <span className="h-px flex-1 bg-slate-100" />
+                    </div>
+                    <ActivityTeamLine entry={entry} team={2} />
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-3 text-[11px] text-slate-500">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3 text-slate-400" />
+                      {formatIndonesianDate(entry.matchDate, {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MapPin className="h-3 w-3 text-slate-400" />
+                      <span className="truncate">{entry.courtName}</span>
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

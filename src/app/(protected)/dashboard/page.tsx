@@ -13,6 +13,7 @@ import { getUserRoles } from "@/lib/supabase/rbac-service";
 import { logError } from "@/lib/errors";
 import { formatIndonesianDate, formatIndonesianTime } from "@/lib/utils";
 import type { DbUser, PlayerProfile, PlayerRating } from "@/types/database.types";
+import { MPR_STARTING_RATING } from "@/lib/rating/mpr-core.mjs";
 import {
   Activity,
   Calendar,
@@ -95,7 +96,7 @@ export default async function DashboardPage() {
     | Pick<PlayerRating, "current_rating" | "peak_rating" | "matches_played" | "wins" | "losses">
     | null;
 
-  const currentRating = Number(rating?.current_rating ?? 1000);
+  const currentRating = Number(rating?.current_rating ?? MPR_STARTING_RATING);
   const matchesPlayed = rating?.matches_played ?? stats?.totalMatches ?? 0;
   const matchesWon = rating?.wins ?? stats?.wins ?? 0;
   const winRate = matchesPlayed > 0 ? Math.round((matchesWon / matchesPlayed) * 100) : 0;

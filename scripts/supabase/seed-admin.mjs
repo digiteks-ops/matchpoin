@@ -12,6 +12,7 @@
 import { existsSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
+import { IKA17_CATEGORIES, IKA17_QUOTA } from "../../src/lib/tournaments/ika17-core.mjs";
 
 // Node 20 has no native WebSocket; provide one for Supabase Realtime init.
 if (!globalThis.WebSocket) globalThis.WebSocket = WebSocket;
@@ -47,31 +48,15 @@ const LEAGUE = {
   mainEventStart: "2027-04-03",
   mainEventEnd: "2027-04-04",
   registrationDeadline: "2026-12-31",
-  quota: 24,
+  quota: IKA17_QUOTA,
 };
 
-const CATEGORIES = [
-  {
-    category: "mens_singles",
-    label: "Single Man Beginner",
-    slug: "league-q1-2027-mens-singles",
-  },
-  {
-    category: "mens_doubles",
-    label: "Double Man Beginner–Intermediate",
-    slug: "league-q1-2027-mens-doubles",
-  },
-  {
-    category: "womens_doubles",
-    label: "Double Woman Beginner",
-    slug: "league-q1-2027-womens-doubles",
-  },
-  {
-    category: "womens_doubles_intermediate",
-    label: "Double Woman Beginner–Intermediate",
-    slug: "league-q1-2027-womens-doubles-intermediate",
-  },
-];
+// Satu sumber kategori: src/lib/tournaments/ika17-core.mjs.
+const CATEGORIES = IKA17_CATEGORIES.map((entry) => ({
+  category: entry.id,
+  label: entry.label,
+  slug: entry.slug,
+}));
 
 async function findAuthUserByEmail(email) {
   for (let page = 1; page <= 20; page += 1) {
@@ -149,8 +134,8 @@ async function ensurePublicUser(user) {
   if (!rating) {
     const { error } = await supabase.from("player_ratings").insert({
       user_id: user.id,
-      current_rating: 1000,
-      peak_rating: 1000,
+      current_rating: 1300,
+      peak_rating: 1300,
       matches_played: 0,
       wins: 0,
       losses: 0,

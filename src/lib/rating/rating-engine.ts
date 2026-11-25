@@ -1,35 +1,49 @@
 /**
- * DTR — Dynamic Tennis Rating engine (Modified Elo).
- * Thin typed wrapper around the shared dtr-core module so the Supabase app,
+ * MPR — MatchPoin Rating engine (Modified Elo).
+ * Thin typed wrapper around the shared mpr-core module so the Supabase app,
  * the admin simulation, and CLI scripts all use the same formula.
  */
 
 import {
-  DTR_ABSOLUTE_MIN_RATING,
-  DTR_CATEGORIES,
-  DTR_DEFAULT_RATING,
-  DTR_MIN_RATING,
-  calculateDtrSingles,
-  calculateDtrDoubles,
-  dtrCategoryLabel,
-  dtrKFactor,
-  dtrStartingRating,
-} from "./dtr-core.mjs";
+  MPR_ABSOLUTE_MIN_RATING,
+  MPR_CALIBRATION_MATCHES,
+  MPR_CATEGORIES,
+  MPR_DEFAULT_RATING,
+  MPR_K_FACTOR,
+  MPR_LOGISTIC_DIVISOR,
+  MPR_POINT_SWING,
+  MPR_STARTING_RATING,
+  calculateMprSingles,
+  calculateMprDoubles,
+  mprCalibrationRemaining,
+  mprCategoryLabel,
+  mprIsCalibrating,
+  mprKFactor,
+  mprRatingStatus,
+  mprStartingRating,
+} from "./mpr-core.mjs";
 
 export {
-  DTR_ABSOLUTE_MIN_RATING,
-  DTR_CATEGORIES,
-  DTR_DEFAULT_RATING,
-  DTR_MIN_RATING,
-  dtrCategoryLabel,
-  dtrKFactor,
-  dtrStartingRating,
+  MPR_ABSOLUTE_MIN_RATING,
+  MPR_CALIBRATION_MATCHES,
+  MPR_CATEGORIES,
+  MPR_DEFAULT_RATING,
+  MPR_K_FACTOR,
+  MPR_LOGISTIC_DIVISOR,
+  MPR_POINT_SWING,
+  MPR_STARTING_RATING,
+  mprCalibrationRemaining,
+  mprCategoryLabel,
+  mprIsCalibrating,
+  mprKFactor,
+  mprRatingStatus,
+  mprStartingRating,
 };
 
-export type DtrCategory = "Beginner" | "Intermediate" | "Advanced" | "Expert";
+export type MprCategory = "Beginner" | "Intermediate" | "Advanced" | "Expert";
 
 export interface RatingCategoryInfo {
-  category: DtrCategory;
+  category: MprCategory;
   minRating: number;
   maxRating: number;
   description: string;
@@ -37,17 +51,17 @@ export interface RatingCategoryInfo {
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   beginner:
-    "Beginner: maksimal 2 tahun bermain. Membiasakan pukulan dasar, servis, dan konsistensi rally.",
+    "Beginner (MPR 0–1099): maksimal 2 tahun bermain. Membiasakan pukulan dasar, servis, dan konsistensi rally.",
   intermediate:
-    "Intermediate: lebih dari 2 tahun bermain. Rally stabil dengan tempo sedang dan pemahaman penempatan lapangan.",
+    "Intermediate (MPR 1100–1599): lebih dari 2 tahun bermain. Rally stabil dengan tempo sedang dan pemahaman penempatan lapangan.",
   advanced:
-    "Advanced: pernah mengikuti PORDA, PORPROV, PON. Pukulan kuat, antisipasi taktis tinggi, dan performa kompetisi yang matang.",
+    "Advanced (MPR 1600–1999): pernah mengikuti PORDA, PORPROV, PON. Pukulan kuat, antisipasi taktis tinggi, dan performa kompetisi yang matang.",
   expert:
-    "Pemain turnamen tingkat tinggi dengan konsistensi dan strategi eksekusi tinggi.",
+    "Expert (MPR 2000+): pemain turnamen tingkat tinggi dengan konsistensi dan strategi eksekusi tinggi.",
 };
 
-export const RATING_CATEGORIES: RatingCategoryInfo[] = DTR_CATEGORIES.map((category) => ({
-  category: category.label as DtrCategory,
+export const RATING_CATEGORIES: RatingCategoryInfo[] = MPR_CATEGORIES.map((category) => ({
+  category: category.label as MprCategory,
   minRating: category.minRating,
   maxRating: category.maxRating ?? Number.MAX_SAFE_INTEGER,
   description: CATEGORY_DESCRIPTIONS[category.key] ?? "",
@@ -63,12 +77,12 @@ export interface RatingEngineConfig {
 }
 
 export const DEFAULT_RATING_CONFIG: RatingEngineConfig = {
-  kFactorStandard: 30,
-  kFactorProvisional: 30,
-  provisionalMatchThreshold: 11,
-  logisticDivisor: 400,
-  // No 1000 floor: DTR_MIN_RATING is the starting rating, not a minimum.
-  minRating: DTR_ABSOLUTE_MIN_RATING,
+  kFactorStandard: MPR_K_FACTOR,
+  kFactorProvisional: MPR_K_FACTOR,
+  provisionalMatchThreshold: MPR_CALIBRATION_MATCHES,
+  logisticDivisor: MPR_LOGISTIC_DIVISOR,
+  // 1000 adalah rating awal, bukan lantai: rating boleh turun di bawahnya.
+  minRating: MPR_ABSOLUTE_MIN_RATING,
   maxRating: Number.MAX_SAFE_INTEGER,
 };
 
@@ -93,10 +107,10 @@ export interface RatingChangeResult {
 }
 
 /**
- * Returns the DTR rating category for a given rating value.
+ * Returns the MPR category for a given rating value.
  */
-export function getRatingCategory(rating: number): DtrCategory {
-  return dtrCategoryLabel(rating) as DtrCategory;
+export function getRatingCategory(rating: number): MprCategory {
+  return mprCategoryLabel(rating) as MprCategory;
 }
 
 /**
@@ -105,13 +119,13 @@ export function getRatingCategory(rating: number): DtrCategory {
 export function calculateExpectedScore(
   ratingA: number,
   ratingB: number,
-  logisticDivisor: number = 400
+  logisticDivisor: number = MPR_LOGISTIC_DIVISOR
 ): number {
-  return 1 / (1 + Math.pow(10, (ratingB - ratingA) / (logisticDivisor || 400)));
+  return 1 / (1 + Math.pow(10, (ratingB - ratingA) / (logisticDivisor || MPR_LOGISTIC_DIVISOR)));
 }
 
 /**
- * Generates a clear Indonesian explanation for a DTR rating change.
+ * Generates a clear Indonesian explanation for an MPR rating change.
  */
 export function generateIndonesianRatingReason(
   isWinner: boolean,
@@ -127,35 +141,39 @@ export function generateIndonesianRatingReason(
 
   if (isWinner) {
     if (isProvisional) {
-      return `Penyesuaian DTR pemain baru setelah menang (${sign}).`;
+      return `Penyesuaian MPR pemain baru setelah menang (${sign}).`;
     }
     if (isOpponentStronger) {
-      return `Kemenangan melawan lawan berating lebih tinggi (${sign}).`;
+      return `Menang lawan rating lebih tinggi, poin besar (${sign}).`;
     }
     if (isOpponentWeaker) {
-      return `Kemenangan atas lawan berating lebih rendah (${sign}).`;
+      return `Menang lawan rating lebih rendah, poin kecil (${sign}).`;
     }
-    return `Kemenangan imbang melawan lawan selevel (${sign}).`;
+    return `Menang lawan seimbang (${sign}).`;
   }
 
   if (isProvisional) {
-    return `Penyesuaian DTR pemain baru setelah kalah (${sign}).`;
+    return `Penyesuaian MPR pemain baru setelah kalah (${sign}).`;
   }
   if (isOpponentWeaker) {
-    return `Kekalahan dari lawan berating lebih rendah (${sign}).`;
+    return `Kalah dari lawan rating lebih rendah, poin minus besar (${sign}).`;
   }
   if (isOpponentStronger) {
-    return `Kekalahan dari lawan berating lebih tinggi (${sign}).`;
+    return `Kalah dari lawan rating lebih tinggi, minus kecil (${sign}).`;
   }
-  return `Kekalahan tipis dalam duel seimbang (${sign}).`;
-}
-
-function isProvisional(matchesPlayed: number): boolean {
-  return (matchesPlayed ?? 0) <= 10;
+  return `Kalah lawan seimbang (${sign}).`;
 }
 
 /**
- * Calculates DTR adjustment for a Singles match.
+ * Kalibrasi = dua pertandingan pertama. Rating tetap bergerak, tetapi belum
+ * dianggap peringkat resmi sampai kalibrasi selesai.
+ */
+function isProvisional(matchesPlayed: number): boolean {
+  return mprIsCalibrating(matchesPlayed);
+}
+
+/**
+ * Calculates the MPR adjustment for a Singles match.
  */
 export function calculateSinglesMatchRating(
   playerA: PlayerRatingState,
@@ -165,7 +183,7 @@ export function calculateSinglesMatchRating(
 ): { playerA: RatingChangeResult; playerB: RatingChangeResult } {
   void config;
 
-  const calc = calculateDtrSingles(
+  const calc = calculateMprSingles(
     {
       userId: playerA.userId,
       rating: playerA.currentRating,
@@ -225,7 +243,7 @@ export function calculateSinglesMatchRating(
 }
 
 /**
- * Calculates DTR adjustment for a Doubles or Mixed Doubles match.
+ * Calculates the MPR adjustment for a Doubles or Mixed Doubles match.
  * Team rating is the average of the pair; Match K is the average of all four.
  */
 export function calculateDoublesMatchRating(
@@ -243,7 +261,7 @@ export function calculateDoublesMatchRating(
 
   const normalizedWinner: 1 | 2 = winnerTeam === 2 ? 2 : 1;
 
-  const calc = calculateDtrDoubles(
+  const calc = calculateMprDoubles(
     [
       {
         userId: team1[0].userId,

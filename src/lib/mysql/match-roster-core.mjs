@@ -3,7 +3,6 @@ const VALID_CATEGORIES = new Set([
   "womens_singles",
   "mens_doubles",
   "womens_doubles",
-  "womens_doubles_intermediate",
   "mixed_doubles",
 ]);
 

@@ -160,7 +160,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* DTR (Dynamic Tennis Rating) System Explanation */}
+      {/* MPR (MatchPoin Rating) System Explanation */}
       <section className="py-16 md:py-24 bg-slate-50">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="max-w-3xl mb-12">
@@ -168,10 +168,10 @@ export default function HomePage() {
               Transparan & Adil
             </Badge>
             <h2 className="text-2xl sm:text-3xl font-bold font-heading text-slate-900">
-              Kategori DTR (Dynamic Tennis Rating)
+              Kategori MPR (MatchPoin Rating)
             </h2>
             <p className="text-slate-600 mt-2 text-sm sm:text-base">
-              Sistem rating MATCHPOIN adalah metrik independen internal yang objektif. Rating awal pemain baru berstatus provisori hingga terverifikasi melalui pertandingan resmi.
+              Sistem rating MATCHPOIN adalah metrik independen internal yang objektif. Semua pemain baru mulai dari MPR 1000 dan rating itu terbuka untuk dilihat semua pemain.
             </p>
           </div>
 
@@ -196,7 +196,7 @@ export default function HomePage() {
             <div className="flex items-center gap-3">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
               <p className="text-xs sm:text-sm text-slate-700">
-                Semua pemain terdaftar mulai dengan Rating Provisori 1000 dan berkembang sesuai performa match nyata.
+                Semua pemain terdaftar mulai dengan MPR 1000 dan berkembang sesuai performa match nyata: menang lawan seimbang +40, kalah lawan seimbang -40.
               </p>
             </div>
             <Link href="/register">
@@ -267,7 +267,7 @@ export default function HomePage() {
               </div>
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Rating awal 1000</span>
+                <span>Rating awal MPR 1000</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-matchpoin-tennis" />

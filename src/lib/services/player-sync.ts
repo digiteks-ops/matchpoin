@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logError } from "@/lib/errors";
-import { DTR_DEFAULT_RATING, dtrStartingRating } from "@/lib/rating/dtr-core.mjs";
+import { MPR_DEFAULT_RATING, mprStartingRating } from "@/lib/rating/mpr-core.mjs";
 import type { SkillLevel } from "@/types/database.types";
 
 export interface PlayerSyncResult {
@@ -89,7 +89,7 @@ export async function ensurePlayerRecords(
     .eq("user_id", userId)
     .maybeSingle();
 
-  const startingRating = startingLevel ? dtrStartingRating(startingLevel) : DTR_DEFAULT_RATING;
+  const startingRating = startingLevel ? mprStartingRating(startingLevel) : MPR_DEFAULT_RATING;
 
   if (!existingRating) {
     const { error: ratingError } = await admin.from("player_ratings").insert({

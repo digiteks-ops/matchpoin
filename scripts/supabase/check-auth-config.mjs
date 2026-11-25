@@ -139,31 +139,68 @@ async function checkGoogle() {
   }
 }
 
+/**
+ * Uji allowlist Redirect URLs memakai /auth/v1/verify, bukan /authorize.
+ *
+ * /authorize hanya MENYALIN redirect_to ke URL provider tanpa memvalidasinya,
+ * jadi memakainya sebagai bukti membuat kesimpulan palsu "wildcard terbuka".
+ * /auth/v1/verify-lah yang benar-benar mencocokkan redirect_to dengan daftar
+ * Redirect URLs: alamat asing diganti menjadi Site URL, alamat terdaftar
+ * dipertahankan apa adanya.
+ */
+async function probeVerifyRedirect(redirectTo) {
+  const url = new URL(`${SUPABASE_URL}/auth/v1/verify`);
+  url.searchParams.set("token", "token-palsu-uji-konfigurasi");
+  url.searchParams.set("type", "recovery");
+  url.searchParams.set("redirect_to", redirectTo);
+
+  const res = await fetch(url, { redirect: "manual" });
+  return res.headers.get("location") ?? "";
+}
+
 async function checkRedirectAllowlist() {
-  const known = `${APP_URL}/auth/callback`;
-  const testDomains = [
+  const required = [`${APP_URL}/auth/callback`, `${APP_URL}/reset-password`];
+  const foreign = [
     "https://contoh-asing.example.org/auth/callback",
     "http://random.test/auth/callback",
   ];
 
-  let leaked = 0;
-  for (const target of testDomains) {
-    const probe = await probeRedirectTo(target);
-    if (probe.redirectTo === target) leaked += 1;
+  const rejectedRequired = [];
+  for (const target of required) {
+    const location = await probeVerifyRedirect(target);
+    if (!location.startsWith(target)) rejectedRequired.push(target);
   }
 
-  if (leaked === 0) {
-    ok("Redirect URLs", "domain asing ditolak / dikembalikan ke Site URL");
+  const leaked = [];
+  for (const target of foreign) {
+    const location = await probeVerifyRedirect(target);
+    if (location.startsWith(target)) leaked.push(target);
+  }
+
+  if (rejectedRequired.length > 0) {
+    warn(
+      "Redirect URLs",
+      `belum terdaftar di Supabase: ${rejectedRequired.join(", ")}. ` +
+        "Tambahkan di Authentication -> URL Configuration."
+    );
+  }
+
+  if (leaked.length > 0) {
+    warn(
+      "Redirect URLs terlalu terbuka",
+      `domain asing diterima apa adanya (${leaked[0]}). Kemungkinan ada entri ` +
+        "wildcard (`**`) di Authentication -> URL Configuration. Hapus wildcard dan " +
+        "sisakan URL spesifik."
+    );
     return;
   }
 
-  warn(
-    "Redirect URLs terlalu terbuka",
-    "domain asing diterima apa adanya. Kemungkinan ada entri wildcard (`**`) di " +
-      "Authentication -> URL Configuration. Hapus wildcard dan sisakan URL spesifik. " +
-      "Dampaknya terbatas (PKCE code_verifier tidak ikut terkirim ke domain asing), " +
-      "tetapi lebih baik ditutup."
-  );
+  if (rejectedRequired.length === 0) {
+    ok(
+      "Redirect URLs",
+      "URL aplikasi diterima, domain asing diganti menjadi Site URL (allowlist tertutup)"
+    );
+  }
 }
 
 /**

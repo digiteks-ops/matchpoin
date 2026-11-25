@@ -118,7 +118,7 @@ export async function POST(
       logError("walkover.status", statusError, { matchId: params.id });
     }
 
-    // DTR only uses real win/loss results. Walkover (WO) must not change rating.
+    // MPR only uses real win/loss results. Walkover (WO) must not change rating.
     return NextResponse.json({
       success: true,
       message: `WO dicatat. Tim ${payload.winnerTeam} menang 8–0. Rating tidak berubah.`,

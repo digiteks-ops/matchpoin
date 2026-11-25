@@ -12,8 +12,8 @@
  *   - `player_ratings` disesuaikan (current_rating, W/L, matches_played)
  *
  * Rating awal diambil dari rating pemain saat ini bila sudah pernah bermain,
- * atau 1000/1500 sesuai self_assessed_level. Perubahan rating memakai rumus
- * DTR yang sama dengan produksi (calculateDtrSingles), jadi angkanya konsisten.
+ * atau 1300 (rating awal MPR) sesuai self_assessed_level. Perubahan rating memakai rumus
+ * MPR yang sama dengan produksi (calculateMprSingles), jadi angkanya konsisten.
  *
  * Jalankan:
  *   node --env-file=.env.local scripts/supabase/seed-simulation.mjs
@@ -27,7 +27,7 @@ import WebSocket from "ws";
 // hanya untuk inisialisasi (script ini tidak memakai realtime).
 if (!globalThis.WebSocket) globalThis.WebSocket = WebSocket;
 import { randomUUID } from "node:crypto";
-import { calculateDtrSingles, dtrStartingRating } from "../../src/lib/rating/dtr-core.mjs";
+import { calculateMprSingles, mprStartingRating } from "../../src/lib/rating/mpr-core.mjs";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -116,7 +116,7 @@ async function main() {
       player.user_id,
       {
         name: player.display_name ?? "Pemain",
-        rating: Number(player.current_rating) || dtrStartingRating(player.self_assessed_level),
+        rating: Number(player.current_rating) || mprStartingRating(player.self_assessed_level),
         played: Number(player.matches_played) || 0,
         startPlayed: Number(player.matches_played) || 0,
         wins: 0,
@@ -148,7 +148,7 @@ async function main() {
 
     // Pertandingan historis: rating dihitung dari posisi sebelum match ini.
     const outcome = Math.random() < 0.5 ? "A" : "B";
-    const change = calculateDtrSingles(
+    const change = calculateMprSingles(
       { rating: aState.rating },
       { rating: bState.rating },
       outcome

@@ -1,28 +1,31 @@
-// Tingkatan rating DTR (0–1000+ skala DTR) yang dipakai di seluruh aplikasi.
+// Tingkatan rating MPR (MatchPoin Rating) yang dipakai di seluruh aplikasi.
 //
-//   Beginner      0    – 1499
-//   Intermediate  1500 – 1999
-//   Advanced      2000 – 2499
-//   Expert        2500+
+//   Beginner      0    – 1099
+//   Intermediate  1100 – 1599   ← rating awal semua pemain baru (1000)
+//   Advanced      1600 – 1999
+//   Expert        2000+
 //
-// Dipakai untuk filter di direktori pemain (/players), label tier di kartu
-// pemain, dan ringkasan di beranda, supaya batasnya tidak pernah berbeda antar
-// halaman.
+// Batas aslinya ada di satu tempat: MPR_CATEGORIES (src/lib/rating/mpr-core.mjs).
+// File ini hanya menyusun ulang bentuknya untuk UI, supaya batas kategori tidak
+// pernah berbeda antara mesin rating, direktori pemain, dan leaderboard.
 
-export const RATING_TIERS = [
-  { level: "beginner", label: "Beginner", min: 0, max: 1499 },
-  { level: "intermediate", label: "Intermediate", min: 1500, max: 1999 },
-  { level: "advanced", label: "Advanced", min: 2000, max: 2499 },
-  { level: "expert", label: "Expert", min: 2500, max: null },
-];
+import { MPR_CATEGORIES } from "./mpr-core.mjs";
 
-/** Rentang yang ditampilkan di UI, mis. "0 – 1499" atau "2500+". */
-export const RATING_TIER_RANGES = {
-  beginner: "0 – 1499",
-  intermediate: "1500 – 1999",
-  advanced: "2000 – 2499",
-  expert: "2500+",
-};
+export const RATING_TIERS = MPR_CATEGORIES.map((category) => ({
+  level: category.key,
+  label: category.label,
+  min: category.minRating,
+  max: category.maxRating,
+}));
+
+function formatRange(min, max) {
+  return max === null ? `${min}+` : `${min} – ${max}`;
+}
+
+/** Rentang yang ditampilkan di UI, mis. "0 – 1099" atau "2000+". */
+export const RATING_TIER_RANGES = Object.fromEntries(
+  RATING_TIERS.map((tier) => [tier.level, formatRange(tier.min, tier.max)])
+);
 
 export const RATING_TIER_LEVELS = RATING_TIERS.map((tier) => tier.level);
 
@@ -37,7 +40,7 @@ export function ratingTierOf(rating) {
   for (const tier of RATING_TIERS) {
     if (tier.max === null || value <= tier.max) return tier.level;
   }
-  return "expert";
+  return RATING_TIERS[RATING_TIERS.length - 1].level;
 }
 
 /** Label tampilan, mis. "Advanced". */

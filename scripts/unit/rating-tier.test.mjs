@@ -9,19 +9,20 @@ import {
   ratingTierLabel,
   ratingTierOf,
 } from "../../src/lib/rating/rating-tier-core.mjs";
+import { MPR_CATEGORIES, MPR_STARTING_RATING } from "../../src/lib/rating/mpr-core.mjs";
 
 const read = (relative) => readFile(new URL(`../../${relative}`, import.meta.url), "utf8");
 
-test("tier boundaries are 0-1499, 1500-1999, 2000-2499, 2500+", () => {
+test("batas tingkat MPR: 0-1099, 1100-1599, 1600-1999, 2000+", () => {
   const cases = [
     [0, "beginner"],
     [1000, "beginner"],
-    [1499, "beginner"],
-    [1500, "intermediate"],
-    [1999, "intermediate"],
-    [2000, "advanced"],
-    [2499, "advanced"],
-    [2500, "expert"],
+    [1099, "beginner"],
+    [1100, "intermediate"],
+    [1599, "intermediate"],
+    [1600, "advanced"],
+    [1999, "advanced"],
+    [2000, "expert"],
     [3500, "expert"],
   ];
   for (const [rating, expected] of cases) {
@@ -30,46 +31,55 @@ test("tier boundaries are 0-1499, 1500-1999, 2000-2499, 2500+", () => {
   }
 });
 
-test("a tier filter excludes every other tier", () => {
-  // Beginner hanya 0–1499.
-  assert.equal(matchesRatingTier("beginner", 1000), true);
-  assert.equal(matchesRatingTier("beginner", 1500), false);
-  assert.equal(matchesRatingTier("beginner", 2500), false);
-  // Intermediate hanya 1500–1999.
-  assert.equal(matchesRatingTier("intermediate", 1499), false);
-  assert.equal(matchesRatingTier("intermediate", 2000), false);
-  // Advanced hanya 2000–2499.
-  assert.equal(matchesRatingTier("advanced", 1999), false);
-  assert.equal(matchesRatingTier("advanced", 2500), false);
-  // Expert 2500 ke atas.
-  assert.equal(matchesRatingTier("expert", 2499), false);
-  assert.equal(matchesRatingTier("expert", 2500), true);
+test("batas tingkat diambil dari mesin MPR, bukan daftar terpisah", () => {
+  // Satu sumber kebenaran: kalau batas di mpr-core berubah, UI ikut berubah.
+  assert.deepEqual(
+    MPR_CATEGORIES.map((category) => category.key),
+    RATING_TIER_OPTIONS.slice(1).map((option) => option.value)
+  );
+  assert.equal(RATING_TIER_RANGES.beginner, "0 – 1099");
+  assert.equal(RATING_TIER_RANGES.intermediate, "1100 – 1599");
+  assert.equal(RATING_TIER_RANGES.advanced, "1600 – 1999");
+  assert.equal(RATING_TIER_RANGES.expert, "2000+");
+});
+
+test("filter tingkat mengecualikan tingkat lain", () => {
+  assert.equal(matchesRatingTier("beginner", 1099), true);
+  assert.equal(matchesRatingTier("beginner", 1100), false);
+  assert.equal(matchesRatingTier("intermediate", 1099), false);
+  assert.equal(matchesRatingTier("intermediate", 1600), false);
+  assert.equal(matchesRatingTier("advanced", 1599), false);
+  assert.equal(matchesRatingTier("advanced", 2000), false);
+  assert.equal(matchesRatingTier("expert", 1999), false);
+  assert.equal(matchesRatingTier("expert", 2000), true);
   // "all" berarti tanpa filter.
-  for (const rating of [0, 1499, 1500, 2500, 4000]) {
+  for (const rating of [0, 1099, 1100, 2000, 4000]) {
     assert.equal(matchesRatingTier("all", rating), true, String(rating));
     assert.equal(matchesRatingTier("", rating), true, String(rating));
   }
 });
 
-test("corrupt ratings fall back to beginner instead of hiding the player", () => {
+test("rating rusak dianggap beginner dan tidak menyembunyikan pemain", () => {
   assert.equal(ratingTierOf(null), "beginner");
   assert.equal(ratingTierOf(undefined), "beginner");
   assert.equal(ratingTierOf(Number.NaN), "beginner");
-  assert.equal(ratingTierOf("1000"), "beginner");
-  assert.equal(ratingTierLabel(1500), "Intermediate");
+  assert.equal(ratingTierOf("1100"), "intermediate");
+  assert.equal(ratingTierLabel(1600), "Advanced");
 });
 
-test("filter options list Semua Level plus the four tiers", () => {
+test("pemain baru (1000) mulai di Beginner", () => {
+  assert.equal(ratingTierOf(MPR_STARTING_RATING), "beginner");
+});
+
+test("opsi filter menampilkan Semua Level plus empat tingkat", () => {
   assert.deepEqual(
     RATING_TIER_OPTIONS.map((option) => option.value),
     ["all", "beginner", "intermediate", "advanced", "expert"]
   );
   assert.equal(RATING_TIER_OPTIONS[0].label, "Semua Level");
-  assert.equal(RATING_TIER_RANGES.beginner, "0 – 1499");
-  assert.equal(RATING_TIER_RANGES.expert, "2500+");
 });
 
-test("every level filter surface offers all four tiers", async () => {
+test("setiap permukaan filter menawarkan keempat tingkat", async () => {
   // /players: filter memakai rating, bukan level pendaftaran.
   const players = await read("src/app/players/page.tsx");
   assert.match(players, /RATING_TIER_OPTIONS\.map/);
@@ -84,10 +94,12 @@ test("every level filter surface offers all four tiers", async () => {
   assert.match(leaderboard, /RATING_TIER_OPTIONS\.map/);
   assert.match(leaderboard, /matchesRatingTier\(selectedLevel, r\.rating\)/);
 
-  // Leaderboard liga/turnamen: tombol level harus lengkap.
+  // Leaderboard liga IKA17 memakai KELAS liga (beginner/intermediate dari MPR),
+  // bukan empat tingkat MPR, jadi yang diuji di sini adalah sumber kelasnya.
   const tournament = await read("src/components/tournaments/tournament-leaderboard.tsx");
-  for (const level of ["beginner", "intermediate", "advanced", "expert"]) {
-    assert.match(tournament, new RegExp(`\\["${level}", "`), level);
+  assert.match(tournament, /ika17ClassOfRating\(standing\.rating\)/);
+  for (const klass of ["beginner", "intermediate"]) {
+    assert.match(tournament, new RegExp(`\\["${klass}", `), klass);
   }
 
   // Beranda memakai rentang yang sama.

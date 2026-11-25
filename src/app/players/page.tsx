@@ -10,6 +10,7 @@ import { PlayerCardSkeleton } from "@/components/players/player-card-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GuestModal } from "@/components/ui/guest-modal";
 import { createClient } from "@/lib/supabase/client";
+import { MPR_STARTING_RATING, mprIsCalibrating } from "@/lib/rating/mpr-core.mjs";
 import {
   fetchMySqlPublicPlayers,
   isMySqlPublicPlayerReads,
@@ -67,9 +68,9 @@ function mapMySqlPlayer(player: MySqlPublicPlayer): FullPlayerProfile {
     playingSince: player.playingSince,
     preferredCategories: player.preferredCategories,
     preferredTimes: player.preferredTimes,
-    currentRating: player.currentRating ?? 1000,
-    peakRating: player.peakRating ?? player.currentRating ?? 1000000,
-    isProvisional: matchesPlayed === 0,
+    currentRating: player.currentRating ?? MPR_STARTING_RATING,
+    peakRating: player.peakRating ?? player.currentRating ?? MPR_STARTING_RATING,
+    isProvisional: mprIsCalibrating(matchesPlayed),
     matchesPlayed,
     wins,
     losses,
@@ -77,7 +78,7 @@ function mapMySqlPlayer(player: MySqlPublicPlayer): FullPlayerProfile {
     completionScore: player.completionScore,
     isProfilePublic: true,
     allowInvites: player.allowInvites,
-    showRating: player.showRating,
+    showRating: true,
     lastSeenAt: player.lastSeenAt ?? null,
   };
 }
@@ -193,9 +194,9 @@ export default function PlayersDirectoryPage() {
               playingSince: p.playing_since,
               preferredCategories: p.preferred_categories ?? [],
               preferredTimes: p.preferred_times ?? [],
-              currentRating: Number(p.current_rating ?? 1000),
-              peakRating: Number(p.peak_rating ?? p.current_rating ?? 1000),
-              isProvisional: matchesPlayed === 0,
+              currentRating: Number(p.current_rating ?? MPR_STARTING_RATING),
+              peakRating: Number(p.peak_rating ?? p.current_rating ?? MPR_STARTING_RATING),
+              isProvisional: mprIsCalibrating(matchesPlayed),
               matchesPlayed,
               wins,
               losses,
@@ -203,7 +204,7 @@ export default function PlayersDirectoryPage() {
               completionScore: p.completion_score ?? 50,
               isProfilePublic: true,
               allowInvites: p.allow_invites ?? true,
-              showRating: p.show_rating !== false,
+              showRating: true,
               lastSeenAt: p.last_seen_at ?? null,
             };
           });
@@ -413,7 +414,7 @@ export default function PlayersDirectoryPage() {
               className="h-10 w-full md:w-40 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis"
               aria-label="Filter level"
             >
-              {/* Beginner 0–1499, Intermediate 1500–1999, Advanced 2000–2499, Expert 2500+ */}
+              {/* Beginner 0–1099, Intermediate 1100–1599, Advanced 1600–1999, Expert 2000+ */}
               {RATING_TIER_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -506,7 +507,7 @@ export default function PlayersDirectoryPage() {
             <div className="space-y-1 text-center sm:text-left">
               <h3 className="text-base font-bold font-heading">Ingin mengundang pemain bertanding?</h3>
               <p className="text-xs text-slate-300 max-w-lg leading-relaxed">
-                Buat akun gratis untuk mengirim undangan, membuat pertandingan terbuka, dan meningkatkan DTR (Dynamic Tennis Rating).
+                Buat akun gratis untuk mengirim undangan, membuat pertandingan terbuka, dan meningkatkan MPR (MatchPoin Rating).
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">

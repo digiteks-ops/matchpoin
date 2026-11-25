@@ -6,7 +6,7 @@
  *   - auth.users + users + player_profiles + player_ratings untuk 25 pemain
  *     dummy (semua ditandai is_dummy = TRUE)
  *   - pertandingan selesai (4-8 per pemain) + peserta + hasil + rating_history
- *   - pendaftaran liga IKA17 (pending/accepted) untuk 5 kategori
+ *   - pendaftaran liga IKA17 (pending/accepted) untuk 4 kategori
  *   - satu pertandingan yang masih OPEN dengan 1 permohonan pending
  *     (untuk menguji tombol Terima/Tolak host)
  *   - notifikasi contoh
@@ -27,9 +27,9 @@ import { createClient } from "@supabase/supabase-js";
 import WebSocket from "ws";
 import { randomUUID } from "node:crypto";
 import {
-  calculateDtrSingles,
-  dtrStartingRating,
-} from "../../src/lib/rating/dtr-core.mjs";
+  calculateMprSingles,
+  mprStartingRating,
+} from "../../src/lib/rating/mpr-core.mjs";
 import { IKA17_CATEGORIES } from "../../src/lib/tournaments/ika17-core.mjs";
 
 // Node 20 tidak punya WebSocket bawaan (dipakai Supabase Realtime saat init).
@@ -169,7 +169,7 @@ async function reset() {
 /** Buat satu akun dummy lengkap. */
 async function createPlayer([fullName, gender, level, cityName]) {
   const email = `dummy-${fullName.toLowerCase().replace(/[^a-z]+/g, ".")}${DUMMY_EMAIL_DOMAIN}`;
-  const rating = dtrStartingRating(level);
+  const rating = mprStartingRating(level);
   const cityId = await cityIdByName(cityName);
 
   const { data: created, error } = await supabase.auth.admin.createUser({
@@ -233,7 +233,7 @@ async function createCompletedMatch(a, b, stateA, stateB, daysAgo, options = {})
   const matchId = randomUUID();
   const winner = options.winner ?? (Math.random() < 0.5 ? "A" : "B");
   const label = options.label ? `${options.label} — ` : "";
-  const change = calculateDtrSingles({ rating: stateA.rating }, { rating: stateB.rating }, winner);
+  const change = calculateMprSingles({ rating: stateA.rating }, { rating: stateB.rating }, winner);
   const aNew = change.playerA.newRating;
   const bNew = change.playerB.newRating;
   const category = "mens_singles";
@@ -247,9 +247,13 @@ async function createCompletedMatch(a, b, stateA, stateB, daysAgo, options = {})
     start_time: "09:00:00",
     duration_minutes: 90,
     max_players: 2,
-    current_players: 2,
+    // Biarkan trigger match_participants yang menghitung; nilai awal 2 membuat
+    // current_players melebihi max_players sehingga insert peserta gagal.
+    current_players: 0,
     status: "completed",
-    is_private: true,
+    // Data uji harus publik agar feed "Aktivitas Pertandingan Terbaru" di
+    // /matches bisa dilihat semua pemain (RLS menyembunyikan match private).
+    is_private: false,
     is_league_challenge: false,
     level: "all",
     result_submitted_at: isoDaysAgo(daysAgo),
@@ -258,10 +262,11 @@ async function createCompletedMatch(a, b, stateA, stateB, daysAgo, options = {})
   });
   if (matchError) throw new Error(`match: ${matchError.message}`);
 
-  await supabase.from("match_participants").insert([
+  const { error: participantError } = await supabase.from("match_participants").insert([
     { match_id: matchId, user_id: a.id, is_organizer: true, team: 1, metadata: { status: "confirmed" }, confirmed_at: isoDaysAgo(daysAgo) },
     { match_id: matchId, user_id: b.id, is_organizer: false, team: 2, metadata: { status: "confirmed" }, confirmed_at: isoDaysAgo(daysAgo) },
   ]);
+  if (participantError) throw new Error(`match_participants: ${participantError.message}`);
 
   await supabase.from("match_results").insert({
     match_id: matchId,
@@ -301,54 +306,50 @@ async function createCompletedMatch(a, b, stateA, stateB, daysAgo, options = {})
  * Pertandingan lintas level, dibuat "dari sisi admin": admin memilih kedua
  * pemain dan hasil akhirnya, bukan pemain yang mengajukan.
  *
- * Tujuannya memperlihatkan perubahan poin DTR pada selisih rating besar:
- * beginner vs intermediate dan beginner vs expert, dengan pemenang dari kedua
- * sisi (beginner menang dan expert menang). Sesuai rumus DTR:
+ * Semua pemain dummy mulai dari MPR 1300, jadi setelah rangkaian pertandingan
+ * di atas rating mereka sudah menyebar. Skenario di bawah memilih pemain
+ * berating TERENDAH dan TERTINGGI yang nyata, lalu mempertandingkan keduanya
+ * untuk memperlihatkan aturan poin MPR:
  *   - pemain berating rendah yang menang mendapat kenaikan BESAR
- *   - pemain berating tinggi yang menang hanya naik sedikit, dan turun banyak
- *     bila kalah
+ *   - pemain berating tinggi yang menang hanya naik sedikit
+ *   - pemain berating tinggi yang kalah turun BANYAK
  */
 async function seedCrossLevelMatches(players, state) {
-  const find = (name) => players.find((player) => player.fullName === name);
-  const beginner = find("Andi Pratama");        // beginner
-  const intermediate = find("Cakra Wijaya");    // intermediate
-  const advanced = find("Gilang Permana");      // advanced
-  const expert = find("Zaki Firmansyah");       // expert
+  const ranked = [...players].sort(
+    (a, b) => (state.get(a.id)?.rating ?? 0) - (state.get(b.id)?.rating ?? 0)
+  );
+  const lowest = ranked[0];
+  const middle = ranked[Math.floor(ranked.length / 2)];
+  const highest = ranked[ranked.length - 1];
 
-  if (!beginner || !intermediate || !advanced || !expert) return [];
+  if (!lowest || !middle || !highest || lowest.id === highest.id) return [];
 
-  // Pertahankan level awal agar perubahan poin terlihat jelas.
-  // Pemain A selalu sisi pemain berating lebih rendah supaya label mudah dibaca.
+  // Pemain A selalu sisi berating lebih rendah supaya label mudah dibaca.
   const scenarios = [
     {
-      a: beginner, b: intermediate, winner: "A", daysAgo: 3,
-      label: "Admin: Beginner MENANG vs Intermediate",
-      note: "Beginner mengalahkan Intermediate (poin beginner naik)",
+      a: lowest, b: highest, winner: "A", daysAgo: 3,
+      label: "Admin: rating terendah MENANG vs rating tertinggi",
+      note: "Upset: pemain berating rendah menang, kenaikan poin paling besar",
     },
     {
-      a: beginner, b: intermediate, winner: "B", daysAgo: 4,
-      label: "Admin: Intermediate MENANG vs Beginner",
-      note: "Intermediate mengalahkan Beginner (poin beginner turun)",
+      a: lowest, b: highest, winner: "B", daysAgo: 4,
+      label: "Admin: rating tertinggi MENANG vs rating terendah",
+      note: "Favorit menang: kenaikan kecil, pemain berating rendah turun sedikit",
     },
     {
-      a: beginner, b: advanced, winner: "A", daysAgo: 5,
-      label: "Admin: Beginner MENANG vs Advanced",
-      note: "Beginner mengalahkan Advanced (upset, kenaikan besar)",
+      a: lowest, b: middle, winner: "A", daysAgo: 5,
+      label: "Admin: rating terendah MENANG vs rating menengah",
+      note: "Pemain berating rendah menang lawan yang lebih kuat",
     },
     {
-      a: beginner, b: expert, winner: "A", daysAgo: 6,
-      label: "Admin: Beginner MENANG vs Expert",
-      note: "Beginner mengalahkan Expert (upset terbesar)",
+      a: middle, b: highest, winner: "A", daysAgo: 6,
+      label: "Admin: rating menengah MENANG vs rating tertinggi",
+      note: "Kemenangan besar bagi pemain menengah, minus besar bagi yang tertinggi",
     },
     {
-      a: beginner, b: expert, winner: "B", daysAgo: 7,
-      label: "Admin: Expert MENANG vs Beginner",
-      note: "Expert mengalahkan Beginner (selisih 1250 poin: 0 poin, sesuai rumus)",
-    },
-    {
-      a: advanced, b: expert, winner: "B", daysAgo: 8,
-      label: "Admin: Expert MENANG vs Advanced",
-      note: "Expert mengalahkan Advanced (menang tipis, naik sedikit)",
+      a: middle, b: lowest, winner: "B", daysAgo: 7,
+      label: "Admin: rating terendah MENANG vs rating menengah",
+      note: "Kalah dari lawan berating lebih rendah: minus paling besar",
     },
   ];
 
@@ -372,6 +373,7 @@ async function seedCrossLevelMatches(players, state) {
       beforeB, afterB: bState.rating,
     });
   }
+
   return results;
 }
 
@@ -387,7 +389,7 @@ async function createPendingRequest(host, applicant) {
     start_time: "16:00:00",
     duration_minutes: 90,
     max_players: 2,
-    current_players: 1,
+    current_players: 0,
     status: "open",
     is_private: false,
     is_league_challenge: false,
@@ -396,10 +398,11 @@ async function createPendingRequest(host, applicant) {
   });
   if (error) return console.warn(`  open match: ${error.message}`);
 
-  await supabase.from("match_participants").insert([
+  const { error: participantError } = await supabase.from("match_participants").insert([
     { match_id: matchId, user_id: host.id, is_organizer: true, team: 1, metadata: { status: "confirmed" } },
     { match_id: matchId, user_id: applicant.id, is_organizer: false, team: 2, metadata: { status: "pending", joined_via: "open_match" } },
   ]);
+  if (participantError) console.warn(`  open match participants: ${participantError.message}`);
   return matchId;
 }
 
@@ -419,8 +422,8 @@ async function seedLeagueRegistrations(players) {
     const eligible = players.filter((player) => {
       if (definition.genderRule === "male" && player.gender !== "male") return false;
       if (definition.genderRule === "female" && player.gender !== "female") return false;
-      // Liga IKA17 tidak menerima level advanced.
-      return player.level === "beginner" || player.level === "intermediate";
+      // Kelas liga tidak dipilih pemain: ditentukan dari MPR setelah bertanding.
+      return true;
     });
 
     const statuses = definition.doubles
@@ -436,7 +439,7 @@ async function seedLeagueRegistrations(players) {
           tournament_id: league.id, user_id: entry.captain.id, category: league.category,
           entry_id: entryId, entry_role: "captain", status,
           partner_user_id: entry.partner?.id ?? null,
-          playing_experience: entry.captain.level, eligibility_confirmed: true,
+          playing_experience: null, eligibility_confirmed: true,
           joined_at: isoDaysAgo(1 + index),
         },
       ];
@@ -444,7 +447,7 @@ async function seedLeagueRegistrations(players) {
         rows.push({
           tournament_id: league.id, user_id: entry.partner.id, category: league.category,
           entry_id: entryId, entry_role: "partner", status,
-          playing_experience: entry.partner.level, eligibility_confirmed: true,
+          playing_experience: null, eligibility_confirmed: true,
           joined_at: isoDaysAgo(1 + index),
         });
       }
@@ -492,7 +495,7 @@ async function main() {
   if (DRY_RUN) {
     console.log(`  Akan membuat ${PLAYERS.length} pemain dummy.`);
     console.log(`  Setiap pemain 4-8 pertandingan selesai + riwayat rating.`);
-    console.log(`  Pendaftaran liga untuk 5 kategori + 1 match open dengan pending.`);
+    console.log(`  Pendaftaran liga untuk 4 kategori + 1 match open dengan pending.`);
     return;
   }
 

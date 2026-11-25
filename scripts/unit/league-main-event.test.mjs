@@ -12,12 +12,14 @@ const read = (relative) => readFile(new URL(`../../${relative}`, import.meta.url
 const leaderboard = await read("src/components/tournaments/tournament-leaderboard.tsx");
 const tournamentsPage = await read("src/app/tournaments/page.tsx");
 const matchService = await read("src/lib/services/match-service.ts");
-const migration = await read("supabase/migrations/00036_fix_league_registration.sql");
+const migration = await read("supabase/migrations/00042_league_classes_from_rating.sql");
 
-test("main event takes the top 8 of each category, not per-level winners", () => {
+test("main event takes the top 8 of each class in every category", () => {
   assert.equal(IKA17_MAIN_EVENT_SLOTS, 8);
   assert.match(leaderboard, /IKA17_MAIN_EVENT_SLOTS/);
   assert.match(leaderboard, /\.slice\(0, IKA17_MAIN_EVENT_SLOTS\)/);
+  // Delapan besar dihitung per kelas (beginner & intermediate), bukan gabungan.
+  assert.match(leaderboard, /for \(const klass of IKA17_CLASSES\)/);
   // Juara 1 & 2 per level sudah tidak dipakai lagi.
   assert.doesNotMatch(leaderboard, /Juara \$\{index \+ 1\}/);
   // Syarat pertandingan tetap berlaku.
@@ -26,7 +28,7 @@ test("main event takes the top 8 of each category, not per-level winners", () =>
 });
 
 test("the league rules text is the corrected one", () => {
-  assert.match(tournamentsPage, /8 besar/);
+  assert.match(tournamentsPage, /IKA17_MAIN_EVENT_SLOTS/);
   // Kalimat yang diminta dihapus tidak boleh muncul lagi.
   assert.doesNotMatch(tournamentsPage, /Kuota dihitung dari pendaftar berstatus diterima/);
   assert.doesNotMatch(tournamentsPage, /Pendaftaran masuk sebagai pending dan harus disetujui admin/);
@@ -42,10 +44,10 @@ test("match capacity counts confirmed players only, never pending requests", () 
   assert.doesNotMatch(matchService, /currentPlayers = participants\.length > 0 \? confirmed\.length/);
 });
 
-test("migration 00036 removes every stale registration overload first", () => {
+test("migration 00042 removes every stale registration overload first", () => {
   assert.match(migration, /p\.proname = 'register_for_competition'/);
   assert.match(migration, /DROP FUNCTION IF EXISTS %s/);
-  // Satu definisi final dengan lima parameter.
+  // Satu definisi final dengan lima parameter (parameter level dipertahankan).
   assert.match(
     migration,
     /CREATE OR REPLACE FUNCTION public\.register_for_competition\(\s*p_user_id UUID,\s*p_tournament_id UUID,\s*p_partner_user_id UUID DEFAULT NULL,\s*p_playing_experience TEXT DEFAULT NULL,\s*p_eligibility_confirmed BOOLEAN DEFAULT false/s
@@ -53,8 +55,9 @@ test("migration 00036 removes every stale registration overload first", () => {
   // Kuota hanya dari pendaftar diterima, satu tim ganda = satu slot.
   assert.match(migration, /COUNT\(DISTINCT COALESCE\(tp\.entry_id::text, tp\.id::text\)\)/);
   assert.match(migration, /tp\.status IN \('accepted', 'confirmed'\)/);
-  // Level wajib salah satu dari dua pilihan.
-  assert.match(migration, /v_experience NOT IN \('beginner', 'intermediate'\)/);
+  // Tidak ada lagi validasi level: kelas liga dibentuk dari MPR.
+  assert.doesNotMatch(migration, /v_experience NOT IN/);
+  assert.match(migration, /now\(\), NULL, TRUE\)/);
 });
 test("registration still works when the RPC is missing or has another signature", async () => {
   const route = await read("src/app/api/tournaments/register/route.ts");
@@ -84,7 +87,6 @@ test("registration opens 1 December 2026 everywhere, not just on /league", async
     partnerUserId: null,
     registeredUserIds: [],
     entryCount: 0,
-    playingExperience: "beginner",
     eligibilityConfirmed: true,
   };
   // Sebelum tanggal buka: ditolak dengan pesan bertanggal.

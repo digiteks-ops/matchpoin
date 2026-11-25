@@ -8,6 +8,7 @@ import {
   type OpenMatchDetail,
 } from "@/lib/matches/constants";
 import { todayInPlatformTimeZone } from "@/lib/utils";
+import { MPR_STARTING_RATING } from "@/lib/rating/mpr-core.mjs";
 
 interface MatchRow extends RowDataPacket {
   id: string;
@@ -107,14 +108,15 @@ async function mapMatchRows(
             ? participantMeta.status
             : "confirmed";
         const isOrganizer = row.is_organizer || row.user_id === match.organizer_id;
-        const showRating = Boolean(row.show_rating);
+        // MPR setiap pemain terpublish: rating tidak lagi disembunyikan.
+        const showRating = true;
         return {
           id: row.id,
           userId: row.user_id,
           fullName: row.full_name || "Pemain",
           avatarUrl: row.avatar_url,
           gender: row.gender,
-          rating: showRating ? Number(row.current_rating ?? 1) : 1,
+          rating: Number(row.current_rating ?? MPR_STARTING_RATING),
           showRating,
           isOrganizer,
           status,

@@ -3,7 +3,6 @@ export type MatchCategory =
   | "womens_singles"
   | "mens_doubles"
   | "womens_doubles"
-  | "womens_doubles_intermediate"
   | "mixed_doubles";
 
 export type MatchType = "private" | "open";
@@ -93,8 +92,6 @@ export const MATCH_CATEGORY_LABELS: Record<MatchCategory, string> = {
   womens_singles: "Tunggal Putri (Women's Singles)",
   mens_doubles: "Ganda Putra (Men's Doubles)",
   womens_doubles: "Ganda Putri (Women's Doubles)",
-  // Kategori liga IKA17: kelas beginner–intermediate ganda putri.
-  womens_doubles_intermediate: "Ganda Putri Beginner–Intermediate (Women's Doubles)",
   mixed_doubles: "Ganda Campuran (Mixed Doubles)",
 };
 

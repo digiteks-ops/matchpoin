@@ -24,6 +24,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { DbUser, PlayerProfile, PlayerRating, City } from "@/types/database.types";
+import { MPR_STARTING_RATING } from "@/lib/rating/mpr-core.mjs";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -119,7 +120,7 @@ export default function ProfilePage() {
   }
 
   const completion = calculateProfileCompletion(user, profile);
-  const currentRating = Number(rating?.current_rating ?? 1000);
+  const currentRating = Number(rating?.current_rating ?? MPR_STARTING_RATING);
 
   const getRatingCategory = (r: number) => {
     if (r >= 2500) return "Expert";
@@ -221,7 +222,7 @@ export default function ProfilePage() {
             <Card className="border-slate-200">
               <CardHeader className="pb-2">
                 <CardDescription className="text-xs uppercase font-bold text-slate-500">
-                  DTR Rating
+                  MPR Rating
                 </CardDescription>
                 <div className="flex items-baseline justify-between mt-1">
                   <div className="text-3xl font-extrabold font-heading text-matchpoin-navy">
@@ -367,10 +368,10 @@ export default function ProfilePage() {
             <div>
               <CardTitle className="text-base font-bold text-slate-800">Statistik & Riwayat</CardTitle>
               <CardDescription className="text-xs">
-                5 pertandingan terakhir beserta perubahan rating DTR.
+                5 pertandingan terakhir beserta perubahan rating MPR.
               </CardDescription>
             </div>
-            <Link href="/matches">
+            <Link href="/profile/history">
               <Button variant="outline" size="sm" className="text-xs">
                 Lihat Pertandingan
               </Button>
@@ -444,7 +445,7 @@ export default function ProfilePage() {
                               : undefined
                           }
                         >
-                          DTR {entry.ratingChange > 0 ? "+" : ""}
+                          MPR {entry.ratingChange > 0 ? "+" : ""}
                           {Math.round(entry.ratingChange)}
                         </p>
                       )}

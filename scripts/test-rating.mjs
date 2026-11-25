@@ -1,87 +1,100 @@
 /**
- * DTR verification script.
+ * MPR verification script.
  * Run with: npm run test:rating
  */
 
 import assert from "node:assert/strict";
 import {
-  DTR_MIN_RATING,
-  calculateDtrDoubles,
-  calculateDtrSingles,
-  dtrCategory,
-  dtrKFactor,
-  dtrStartingRating,
-} from "../src/lib/rating/dtr-core.mjs";
+  MPR_K_FACTOR,
+  MPR_POINT_SWING,
+  MPR_STARTING_RATING,
+  calculateMprDoubles,
+  calculateMprSingles,
+  mprCategory,
+  mprKFactor,
+  mprStartingRating,
+} from "../src/lib/rating/mpr-core.mjs";
 
 const player = (userId, rating, matchesPlayed = 0) => ({ userId, rating, matchesPlayed });
 const log = (label, value) => console.log(`PASS  ${label}: ${value}`);
 
-// 1. Fixed K factor
-assert.equal(dtrKFactor(0), 30);
-assert.equal(dtrKFactor(10), 30);
-assert.equal(dtrKFactor(11), 30);
-assert.equal(dtrKFactor(31), 30);
-assert.equal(dtrKFactor(100), 30);
-log("K factor", "30 (fixed)");
+// 1. K factor tetap: laga seimbang +40 / -40
+assert.equal(MPR_POINT_SWING, 40);
+assert.equal(MPR_K_FACTOR, 80);
+for (const matchesPlayed of [0, 1, 2, 10, 31, 100]) {
+  assert.equal(mprKFactor(matchesPlayed), 80, String(matchesPlayed));
+}
+log("K factor", `${MPR_K_FACTOR} (tetap)`);
 
-// 2. Starting ratings and categories
-assert.equal(dtrStartingRating("beginner"), 1000);
-assert.equal(dtrStartingRating("intermediate"), 1500);
-assert.equal(dtrStartingRating("advanced"), 2000);
-assert.equal(dtrStartingRating("expert"), 2500);
-assert.equal(dtrCategory(1000), "beginner");
-assert.equal(dtrCategory(1500), "intermediate");
-assert.equal(dtrCategory(2000), "advanced");
-assert.equal(dtrCategory(2500), "expert");
-log("Starting ratings", "1000 / 1500 / 2000 / 2500");
-log("Categories", "Beginner / Intermediate / Advanced / Expert");
+// 2. Rating awal & kategori
+assert.equal(MPR_STARTING_RATING, 1000);
+for (const level of ["beginner", "intermediate", "advanced", "expert"]) {
+  assert.equal(mprStartingRating(level), 1000, level);
+}
+assert.equal(mprCategory(1099), "beginner");
+assert.equal(mprCategory(1100), "intermediate");
+assert.equal(mprCategory(1599), "intermediate");
+assert.equal(mprCategory(1600), "advanced");
+assert.equal(mprCategory(1999), "advanced");
+assert.equal(mprCategory(2000), "expert");
+log("Rating awal", "1000 untuk semua pemain baru");
+log("Kategori", "0-1099 / 1100-1599 / 1600-1999 / 2000+");
 
-// 3. Equal ratings, K=30 => about 15 points
-const equal = calculateDtrSingles(player("a", 1500), player("b", 1500), "A");
-assert.equal(equal.matchK, 30);
-assert.equal(equal.playerA.delta, 15);
-assert.equal(equal.playerB.delta, -15);
-log("Equal rating win", `+${equal.playerA.delta}`);
-log("Equal rating loss", `${equal.playerB.delta}`);
+// 3. Laga seimbang
+const equal = calculateMprSingles(player("a", 1000), player("b", 1000), "A");
+assert.equal(equal.matchK, 80);
+assert.equal(equal.playerA.delta, 40);
+assert.equal(equal.playerB.delta, -40);
+log("Menang lawan seimbang", `+${equal.playerA.delta}`);
+log("Kalah lawan seimbang", `${equal.playerB.delta}`);
 
-// 4. Strong vs weak
-const favoriteWins = calculateDtrSingles(player("strong", 2000), player("weak", 1500), "A");
-const upset = calculateDtrSingles(player("weak", 1500), player("strong", 2000), "A");
-assert.ok(favoriteWins.playerA.delta < 10, "favorite should gain little");
-assert.ok(upset.playerA.delta > 20, "underdog should gain more");
-assert.ok(upset.playerB.delta < -20, "favorite should lose more");
-log("Favorite beats weaker", `+${favoriteWins.playerA.delta}`);
-log("Underdog beats stronger", `+${upset.playerA.delta}`);
-log("Stronger loses to underdog", `${upset.playerB.delta}`);
+// 4. Dinamis: lawan lebih kuat vs lebih lemah
+const upset = calculateMprSingles(player("low", 1000), player("high", 1400), "A");
+const favoriteWins = calculateMprSingles(player("high", 1400), player("low", 1000), "A");
+const badLoss = calculateMprSingles(player("high", 1400), player("low", 1000), "B");
+const expectedLoss = calculateMprSingles(player("low", 1000), player("high", 1400), "B");
 
-// 5. Rating can drop below 1000
-const belowFloor = calculateDtrSingles(player("a", DTR_MIN_RATING), player("b", DTR_MIN_RATING), "B");
-assert.equal(belowFloor.playerA.newRating, DTR_MIN_RATING - 15);
-log("Rating below 1000", `${belowFloor.playerA.newRating}`);
+assert.ok(upset.playerA.delta > 40, "menang lawan lebih tinggi harus di atas +40");
+assert.ok(favoriteWins.playerA.delta < 40, "menang lawan lebih rendah harus di bawah +40");
+assert.ok(badLoss.playerA.delta < -40, "kalah dari lawan lebih rendah harus di bawah -40");
+assert.ok(expectedLoss.playerA.delta > -40, "kalah dari lawan lebih tinggi minusnya kecil");
+log("Menang lawan rating lebih tinggi", `+${upset.playerA.delta}`);
+log("Menang lawan rating lebih rendah", `+${favoriteWins.playerA.delta}`);
+log("Kalah dari lawan rating lebih rendah", `${badLoss.playerA.delta}`);
+log("Kalah dari lawan rating lebih tinggi", `${expectedLoss.playerA.delta}`);
 
-// 6. Doubles: team averages and equal team change
-const doubles = calculateDtrDoubles(
-  [player("a1", 2000), player("a2", 1000)],
-  [player("b1", 1500), player("b2", 1500)],
+// 5. Rating boleh turun di bawah 1000
+const belowStart = calculateMprSingles(
+  player("a", MPR_STARTING_RATING),
+  player("b", MPR_STARTING_RATING),
+  "B"
+);
+assert.equal(belowStart.playerA.newRating, MPR_STARTING_RATING - 40);
+log("Rating turun di bawah 1000", `${belowStart.playerA.newRating}`);
+
+// 6. Nol-sum
+for (const [a, b] of [
+  [1000, 1000],
+  [1000, 1400],
+  [1900, 1000],
+]) {
+  for (const winner of ["A", "B"]) {
+    const result = calculateMprSingles(player("a", a), player("b", b), winner);
+    assert.equal(result.playerA.delta + result.playerB.delta, 0);
+  }
+}
+log("Nol-sum", "poin yang didapat = poin yang hilang");
+
+// 7. Doubles
+const doubles = calculateMprDoubles(
+  [player("a1", 1400), player("a2", 1000)],
+  [player("b1", 1200), player("b2", 1200)],
   1
 );
-assert.equal(doubles.team1Avg, 1500);
-assert.equal(doubles.team2Avg, 1500);
-assert.equal(doubles.team1Results[0].delta, doubles.team1Results[1].delta);
-assert.equal(doubles.team2Results[0].delta, doubles.team2Results[1].delta);
-log("Doubles team averages", `${doubles.team1Avg} vs ${doubles.team2Avg}`);
-log(
-  "Doubles changes",
-  `winners +${doubles.team1Results[0].delta}, losers ${doubles.team2Results[0].delta}`
-);
+assert.equal(doubles.team1Avg, 1200);
+assert.equal(doubles.team2Avg, 1200);
+assert.equal(doubles.team1Results[0].delta, 40);
+assert.equal(doubles.team2Results[0].delta, -40);
+log("Doubles seimbang", `+${doubles.team1Results[0].delta} / ${doubles.team2Results[0].delta}`);
 
-// 7. Doubles Match K is the fixed 30
-const mixedK = calculateDtrDoubles(
-  [player("a1", 1500, 0), player("a2", 1500, 0)],
-  [player("b1", 1500, 40), player("b2", 1500, 40)],
-  1
-);
-assert.equal(mixedK.matchK, 30);
-log("Doubles Match K", `${mixedK.matchK}`);
-
-console.log("\nAll DTR checks passed.");
+console.log("\nAll MPR checks passed.");

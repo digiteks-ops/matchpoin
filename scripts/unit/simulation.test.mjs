@@ -9,7 +9,7 @@ import {
 
 const players = simulateCategory(24);
 
-test("simulation uses 24 players starting at rating 1000", () => {
+test("simulation uses 24 players starting at MPR 1000", () => {
   assert.equal(players.length, 24);
   assert.equal(SIMULATION_START_RATING, 1000);
   for (const player of players) {

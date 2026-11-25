@@ -1,3 +1,12 @@
+export type TournamentCategory =
+  | "mens_singles"
+  | "mens_doubles"
+  | "womens_doubles"
+  | "mixed_doubles";
+
+/** Kelas liga yang dibentuk otomatis dari hasil pertandingan (MPR). */
+export type TournamentClass = "beginner" | "intermediate";
+
 export interface Ika17Category {
   id: TournamentCategory;
   label: string;
@@ -5,31 +14,7 @@ export interface Ika17Category {
   doubles: boolean;
   genderRule: "male" | "female" | "mixed";
   slug: string;
-  allowedLevels: TournamentLevel[];
   eligibilityLabel: string;
-}
-
-export type TournamentCategory =
-  | "mens_singles"
-  | "mens_doubles"
-  | "womens_doubles"
-  | "womens_doubles_intermediate"
-  | "mixed_doubles";
-
-/** Level yang boleh dipakai saat mendaftar liga ini. */
-export type TournamentLevel = "beginner" | "intermediate";
-
-/**
- * Semua tingkat yang dikenal aplikasi. `advanced` hanya untuk keterangan dan
- * profil: pesertanya justru yang PERNAH mengikuti PORDA/PORPROV/PON, sehingga
- * tidak memenuhi syarat liga IKA17 dan tidak pernah masuk `allowedLevels`.
- */
-export type TournamentExperienceLevel = TournamentLevel | "advanced";
-
-export interface ExperienceLevelOption {
-  value: TournamentExperienceLevel;
-  label: string;
-  hint: string;
 }
 
 export const IKA17_LEAGUE_KEY: string;
@@ -42,28 +27,26 @@ export const IKA17_MAIN_EVENT_END: string;
 /** Periode pendaftaran liga: 1 - 31 Desember 2026. */
 export const IKA17_REGISTRATION_OPEN: string;
 export const IKA17_REGISTRATION_DEADLINE: string;
+/** Kuota setiap kategori: 24 peserta (single) atau 24 tim (ganda). */
 export const IKA17_QUOTA: number;
+/** Syarat lolos Main Event: minimal 17 pertandingan tercatat. */
 export const IKA17_MIN_MATCHES: number;
-/** Jumlah peserta tiap kategori yang lolos ke Main Event. */
+/** Jumlah peserta tiap kelas yang lolos ke Main Event. */
 export const IKA17_MAIN_EVENT_SLOTS: number;
+export const IKA17_CLASSES: TournamentClass[];
+export const IKA17_CLASS_LABELS: Record<TournamentClass, string>;
+/** Batas MPR kelas intermediate; di bawahnya beginner. */
+export const IKA17_INTERMEDIATE_MIN_RATING: number;
 export const IKA17_ELIGIBILITY_STATEMENT: string;
-export const TOURNAMENT_LEVELS: TournamentExperienceLevel[];
-export const TOURNAMENT_LEVEL_LABELS: Record<TournamentExperienceLevel, string>;
-export const TOURNAMENT_LEVEL_REQUIREMENTS: Record<TournamentExperienceLevel, string>;
-export const IKA17_ADVANCED_ELIGIBILITY_STATEMENT: string;
 
-export function ika17RequiresPordaParticipation(
-  level: string | null | undefined
-): boolean;
-export function ika17EligibilityStatement(level: string | null | undefined): string;
+export function ika17ClassOfRating(rating: number | string | null | undefined): TournamentClass;
+export function ika17ClassLabel(rating: number | string | null | undefined): string;
+export function ika17TeamRating(
+  ratings: Array<number | string | null | undefined> | null | undefined
+): number | null;
+export function ika17EligibilityStatement(): string;
 
 export const IKA17_CATEGORIES: Ika17Category[];
 
 export function ika17Category(category: string | null | undefined): Ika17Category | null;
 export function ika17CategoryLabel(category: string | null | undefined): string;
-export function ika17CategoryAllowsLevel(
-  category: string | null | undefined,
-  level: TournamentLevel
-): boolean;
-export function ika17AllowedLevels(category: string | null | undefined): TournamentLevel[];
-export function ika17RequiresBeginner(category: string | null | undefined): boolean;

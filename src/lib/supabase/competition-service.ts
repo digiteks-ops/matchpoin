@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { ika17ClassOfRating, ika17TeamRating } from "@/lib/tournaments/ika17-core.mjs";
 
 export interface TournamentListItem {
   id: string;
@@ -329,6 +330,11 @@ export async function getLeagueOverview(category: string): Promise<LeagueOvervie
       .map((entry) => playerById.get(entry.user_id)?.display_name)
       .filter((value): value is string => Boolean(value))
       .join(" & ");
+    // Kelas liga tidak dipilih pemain: ditentukan dari MPR hasil pertandingan.
+    // Tim ganda memakai rata-rata MPR kedua pemain.
+    const teamRating = ika17TeamRating(
+      entryPlayers.map((entry) => playerById.get(entry.user_id)?.current_rating ?? null)
+    );
     return {
       entryId,
       name: name || first?.full_name || "Peserta",
@@ -344,11 +350,8 @@ export async function getLeagueOverview(category: string): Promise<LeagueOvervie
       gameDiff: Number(values?.game_diff ?? 0),
       rank: Number(values?.position && values.position > 0 ? values.position : fallbackRank),
       needsTiebreak: Boolean(values?.needs_tiebreak),
-      level: first?.self_assessed_level ?? null,
-      rating:
-        first?.current_rating === null || first?.current_rating === undefined
-          ? null
-          : Number(first.current_rating),
+      level: ika17ClassOfRating(teamRating),
+      rating: teamRating,
     };
   };
 

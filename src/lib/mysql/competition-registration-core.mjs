@@ -1,5 +1,3 @@
-import { ika17AllowedLevels } from "../tournaments/ika17-core.mjs";
-
 const MAX_ID_LENGTH = 36;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 
@@ -22,7 +20,6 @@ export function inferCategory(name) {
   if (/mix/i.test(name)) return "mixed_doubles";
   // Label resmi memakai "Double Woman"/"Double Man" (tunggal, bukan "Doubles"),
   // jadi cocokkan "double" dan "doubles" sekaligus.
-  if (/wom[ae]n.*intermediate/i.test(name)) return "womens_doubles_intermediate";
   if (/wom[ae]n/i.test(name) && /doubles?|ganda/i.test(name)) return "womens_doubles";
   if (/doubles?|ganda/i.test(name)) return "mens_doubles";
   return "mens_singles";
@@ -47,15 +44,6 @@ export function formatRegistrationOpen(isoDate) {
   return `${Number(match[3])} ${month} ${match[1]}`;
 }
 
-/**
- * Returns true when the category only accepts beginner (max 2 years playing).
- * Derived from the shared IKA17 category table so it cannot drift.
- */
-export function isBeginnerOnlyCategory(category) {
-  const levels = ika17AllowedLevels(category);
-  return levels.length === 1 && levels[0] === "beginner";
-}
-
 export function parseRegistrationPayload(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return { ok: false, message: "Data tidak valid." };
@@ -74,15 +62,6 @@ export function parseRegistrationPayload(payload) {
     return { ok: false, message: "Partner tidak valid." };
   }
 
-  const playingExperience = payload.playingExperience;
-  if (playingExperience !== "beginner" && playingExperience !== "intermediate") {
-    return {
-      ok: false,
-      message:
-        "Pilih pengalaman bermain: beginner (maksimal 2 tahun) atau intermediate (lebih dari 2 tahun).",
-    };
-  }
-
   if (payload.eligibilityConfirmed !== true) {
     return {
       ok: false,
@@ -94,7 +73,6 @@ export function parseRegistrationPayload(payload) {
     ok: true,
     leagueId,
     partnerUserId: partnerUserId || null,
-    playingExperience,
     eligibilityConfirmed: true,
   };
 }
@@ -119,7 +97,6 @@ export function evaluateLeagueRegistration(input) {
     partnerGender = null,
     userExists = true,
     partnerExists = true,
-    playingExperience = null,
     eligibilityConfirmed = true,
     today,
   } = input;
@@ -128,23 +105,6 @@ export function evaluateLeagueRegistration(input) {
 
   const category = tournament.category || inferCategory(tournament.name || "");
   const doubles = isDoubles(category);
-
-  // Syarat level: beginner maksimal 2 tahun bermain, intermediate lebih dari 2.
-  if (playingExperience !== null && playingExperience !== undefined) {
-    if (playingExperience !== "beginner" && playingExperience !== "intermediate") {
-      return {
-        ok: false,
-        message:
-          "Pilih pengalaman bermain: beginner (maksimal 2 tahun) atau intermediate (lebih dari 2 tahun).",
-      };
-    }
-    if (isBeginnerOnlyCategory(category) && playingExperience !== "beginner") {
-      return {
-        ok: false,
-        message: "Kategori ini khusus beginner: maksimal 2 tahun bermain.",
-      };
-    }
-  }
 
   if (eligibilityConfirmed === false) {
     return {

@@ -14,17 +14,12 @@ import {
   isMySqlPublicPlayerReads,
   type MySqlPlayerCity,
 } from "@/lib/mysql/public-player-client";
-import { Trophy, Search, MapPin, Medal, Crown, TrendingUp, Lock } from "lucide-react";
-import {
-  LEADERBOARD_MIN_MATCHES_NON_BEGINNER,
-  isLeaderboardEligible,
-  leaderboardMatchesRemaining,
-  leaderboardRequiresMatches,
-} from "@/lib/rating/leaderboard-visibility-core.mjs";
+import { Trophy, Search, MapPin, Medal, Crown, TrendingUp } from "lucide-react";
 import {
   RATING_TIER_OPTIONS,
   matchesRatingTier,
 } from "@/lib/rating/rating-tier-core.mjs";
+import { MPR_STARTING_RATING, mprIsCalibrating } from "@/lib/rating/mpr-core.mjs";
 
 interface LeaderboardRow {
   userId: string;
@@ -59,7 +54,6 @@ interface SupabasePublicPlayer {
   city_name: string | null;
   city_id: string | null;
   self_assessed_level: string | null;
-  show_rating?: boolean | null;
 }
 
 interface LeaderboardPlayerData {
@@ -82,15 +76,16 @@ function leaderboardRow(player: LeaderboardPlayerData): LeaderboardRow {
   return {
     userId: player.userId,
     name: player.fullName || player.displayName || "Pemain MATCHPOIN",
-    rating: player.currentRating ?? 1000,
-    peakRating: player.peakRating ?? player.currentRating ?? 1000000,
+    rating: player.currentRating ?? MPR_STARTING_RATING,
+    peakRating: player.peakRating ?? player.currentRating ?? MPR_STARTING_RATING,
     matchesPlayed,
     wins,
     losses: player.losses ?? 0,
     winRate: matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : 0,
     cityName: player.cityName || "Makassar",
     cityId: player.cityId,
-    isProvisional: matchesPlayed === 0,
+    // Kalibrasi = 2 pertandingan pertama; sesudahnya rating jadi ranking resmi.
+    isProvisional: mprIsCalibrating(matchesPlayed),
     selfAssessedLevel: player.selfAssessedLevel,
   };
 }
@@ -106,15 +101,11 @@ export default function LeaderboardPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCity, setSelectedCity] = useState("all");
-  // Filter tingkat rating: beginner 0–1499, intermediate 1500–1999,
-  // advanced 2000–2499, expert 2500+.
+  // Filter tingkat MPR: beginner 0–1099, intermediate 1100–1599,
+  // advanced 1600–1999, expert 2000+.
   const [selectedLevel, setSelectedLevel] = useState("all");
   const [province, setProvince] = useState<string>("");
   const [provinceOptions, setProvinceOptions] = useState<string[]>([]);
-  // Dipakai untuk memberi tahu pemain sendiri kalau belum lolos tampil.
-  const [myStatus, setMyStatus] = useState<
-    { level: string | null; matchesPlayed: number; remaining: number } | null
-  >(null);
 
   useEffect(() => {
     async function load() {
@@ -128,13 +119,8 @@ export default function LeaderboardPage() {
           }));
           setCities(cityOptions);
           setProvinceOptions(provinceOptionsFrom(cityOptions));
-          setRows(
-            result.players
-              .filter((player) => player.showRating)
-              .map(leaderboardRow)
-              // Aturan tampil: beginner langsung, level lain menunggu 3 match.
-              .filter((row) => isLeaderboardEligible(row.selfAssessedLevel, row.matchesPlayed))
-          );
+          // Rating setiap pemain terpublish: tidak ada penyaringan tambahan.
+          setRows(result.players.map(leaderboardRow));
           return;
         }
 
@@ -146,22 +132,6 @@ export default function LeaderboardPage() {
             .select("*")
             .limit(500),
         ]);
-
-        // Status pemain yang sedang login, untuk memberi tahu bila belum lolos.
-        const { data: authUser } = await supabase.auth.getUser();
-        if (authUser?.user) {
-          const { data: mine } = await supabase
-            .from("public_players")
-            .select("self_assessed_level, matches_played")
-            .eq("user_id", authUser.user.id)
-            .maybeSingle();
-          if (mine) {
-            const level = (mine.self_assessed_level as string | null) ?? null;
-            const played = Number(mine.matches_played ?? 0);
-            const remaining = leaderboardMatchesRemaining(level, played);
-            if (remaining > 0) setMyStatus({ level, matchesPlayed: played, remaining });
-          }
-        }
 
         if (citiesResult.error) throw citiesResult.error;
         if (publicPlayersResult.error) throw publicPlayersResult.error;
@@ -175,8 +145,8 @@ export default function LeaderboardPage() {
         setProvinceOptions(provinceOptionsFrom(cityOptions));
 
         const publicPlayers = (publicPlayersResult.data ?? []) as unknown as SupabasePublicPlayer[];
+        // Rating setiap pemain terpublish: semua pemain ikut dihitung.
         const merged: LeaderboardRow[] = publicPlayers
-          .filter((player) => player.show_rating !== false)
           .map((player) =>
             leaderboardRow({
               userId: player.user_id,
@@ -191,9 +161,7 @@ export default function LeaderboardPage() {
               cityName: player.city_name || "Makassar",
               cityId: player.city_id,
             })
-          )
-          // Aturan tampil: beginner langsung, level lain menunggu 3 match.
-          .filter((row) => isLeaderboardEligible(row.selfAssessedLevel, row.matchesPlayed));
+          );
         merged.sort(
           (a, b) =>
             b.rating - a.rating ||
@@ -245,14 +213,13 @@ export default function LeaderboardPage() {
               </Badge>
             </div>
             <p className="text-slate-600 text-xs sm:text-sm max-w-xl leading-relaxed">
-              Peringkat berdasarkan DTR (Dynamic Tennis Rating) dari pertandingan yang telah dikonfirmasi.
+              Peringkat berdasarkan MPR (MatchPoin Rating) dari pertandingan yang telah dikonfirmasi.
             </p>
             <p className="text-[11px] text-slate-500 max-w-xl leading-relaxed">
-              Pemain <strong>beginner</strong> langsung tampil. Level{" "}
-              <strong>intermediate</strong>, <strong>advanced</strong>, dan{" "}
-              <strong>expert</strong> baru tampil setelah{" "}
-              <strong>{LEADERBOARD_MIN_MATCHES_NON_BEGINNER} pertandingan</strong> yang hasilnya
-              sudah terverifikasi.
+              Rating MPR setiap pemain terpublish: semua pemain yang sudah mendaftar langsung
+              tampil di sini, termasuk yang belum pernah bertanding (MPR awal 1000). Dua
+              pertandingan pertama adalah <strong>kalibrasi</strong>; sesudahnya rating menjadi
+              ranking resmi.
             </p>
           </div>
           <div className="flex gap-2">
@@ -329,18 +296,6 @@ export default function LeaderboardPage() {
             </select>
           </div>
         </div>
-
-        {myStatus && (
-          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            <Lock className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>
-              Anda terdaftar sebagai{" "}
-              <strong>{myStatus.level ?? "non-beginner"}</strong>, jadi belum tampil di
-              leaderboard. Butuh <strong>{myStatus.remaining} pertandingan terverifikasi</strong>{" "}
-              lagi ({myStatus.matchesPlayed}/{LEADERBOARD_MIN_MATCHES_NON_BEGINNER}).
-            </p>
-          </div>
-        )}
 
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -442,7 +397,7 @@ export default function LeaderboardPage() {
                     <div className="flex items-center gap-2 mt-0.5">
                       {p.isProvisional && (
                         <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200">
-                          Provisori
+                          Kalibrasi
                         </Badge>
                       )}
                       <span className="text-[10px] text-slate-400 sm:hidden">{p.cityName}</span>

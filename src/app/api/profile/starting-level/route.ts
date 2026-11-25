@@ -3,12 +3,12 @@ import { getCurrentUser } from "@/lib/auth/supabase-session";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logError } from "@/lib/errors";
-import { dtrStartingRating } from "@/lib/rating/dtr-core.mjs";
+import { mprStartingRating } from "@/lib/rating/mpr-core.mjs";
 
 export const dynamic = "force-dynamic";
 
-// Self rating saat mendaftar hanya dua pilihan (lihat formulir registrasi):
-// beginner -> rating awal 1000, intermediate -> rating awal 1500.
+// Self rating saat mendaftar hanya dua pilihan (lihat formulir registrasi).
+// Kategori tidak lagi menentukan rating: semua pemain baru mulai dari MPR 1000.
 // advanced & expert tetap dikenali agar akun lama tidak rusak, tapi tidak
 // ditawarkan lagi di UI.
 const LEVELS = ["beginner", "intermediate", "advanced", "expert"] as const;
@@ -21,9 +21,10 @@ function parseLevel(value: unknown): Level | null {
 }
 
 /**
- * Picks the starting DTR category exactly once. The database trigger enforces
- * the "once" rule (player_ratings.starting_rating_set_at), this route only
- * mirrors the same starting values for the OAuth path.
+ * Picks the starting MPR category exactly once. The database trigger enforces
+ * the "once" rule (player_ratings.starting_rating_set_at); the rating itself is
+ * always 1000, so this route only records the chosen category for the OAuth
+ * path (where the registration form never ran).
  */
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const startingRating = dtrStartingRating(level);
+  const startingRating = mprStartingRating(level);
   const admin = createAdminClient();
   const writer = admin ?? supabase;
 

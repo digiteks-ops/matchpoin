@@ -22,6 +22,7 @@ import {
   Pencil,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
+import { MPR_STARTING_RATING } from "@/lib/rating/mpr-core.mjs";
 
 interface PublicPlayerProfile {
   display_name: string | null;
@@ -51,7 +52,6 @@ export default function PublicPlayerProfilePage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<PublicPlayerProfile | null>(null);
   const [rating, setRating] = useState<PublicPlayerRating | null>(null);
-  const [showRating, setShowRating] = useState(true);
   const [locationLabel, setLocationLabel] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -80,17 +80,12 @@ export default function PublicPlayerProfilePage() {
             self_assessed_level: publicPlayer.selfAssessedLevel,
             is_verified_player: publicPlayer.isVerifiedPlayer,
           });
-          setShowRating(publicPlayer.showRating);
-          setRating(
-            publicPlayer.showRating
-              ? {
-                  current_rating: publicPlayer.currentRating,
-                  matches_played: publicPlayer.matchesPlayed,
-                  wins: publicPlayer.wins,
-                  losses: publicPlayer.losses,
-                }
-              : null
-          );
+          setRating({
+            current_rating: publicPlayer.currentRating,
+            matches_played: publicPlayer.matchesPlayed,
+            wins: publicPlayer.wins,
+            losses: publicPlayer.losses,
+          });
           setLocationLabel(
             [publicPlayer.cityName, publicPlayer.province].filter(Boolean).join(", ")
           );
@@ -127,18 +122,10 @@ export default function PublicPlayerProfilePage() {
           self_assessed_level: publicPlayer.self_assessed_level,
           is_verified_player: publicPlayer.is_verified_player ?? false,
         });
-        const ratingVisible = publicPlayer.show_rating !== false;
-        setShowRating(ratingVisible);
-
         if (publicPlayer.city_name) {
           setLocationLabel([publicPlayer.city_name, publicPlayer.province].filter(Boolean).join(", "));
         } else {
           setLocationLabel("");
-        }
-
-        if (!ratingVisible) {
-          setRating(null);
-          return;
         }
 
         const { data: ratingData, error: ratingError } = await supabase
@@ -201,7 +188,7 @@ export default function PublicPlayerProfilePage() {
     );
   }
 
-  const currentRating = Number(rating?.current_rating ?? 1000);
+  const currentRating = Number(rating?.current_rating ?? MPR_STARTING_RATING);
   const isSelf = currentUser?.id === playerId;
   const displayName = profile.display_name || "Pemain MATCHPOIN";
 
@@ -283,11 +270,10 @@ export default function PublicPlayerProfilePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="space-y-6">
-            {showRating ? (
-              <Card className="border-slate-200">
+            <Card className="border-slate-200">
                 <CardHeader className="pb-2">
                   <CardDescription className="text-xs uppercase font-bold text-slate-500">
-                    DTR Rating
+                    MPR Rating
                   </CardDescription>
                   <div className="flex items-baseline justify-between mt-1">
                     <div className="text-4xl font-extrabold font-heading text-matchpoin-navy">
@@ -319,13 +305,6 @@ export default function PublicPlayerProfilePage() {
                   </div>
                 </CardContent>
               </Card>
-            ) : (
-              <Card className="border-slate-200">
-                <CardContent className="p-4 text-xs text-slate-500">
-                  Pemain memilih untuk menyembunyikan rating dan statistik.
-                </CardContent>
-              </Card>
-            )}
 
             <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2 text-xs">
               <div className="flex items-center gap-2 text-slate-800 font-bold">

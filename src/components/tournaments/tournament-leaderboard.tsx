@@ -7,8 +7,11 @@ import { Button } from "@/components/ui/button";
 import { AlertCircle, Crown, Loader2, Medal, Trophy } from "lucide-react";
 import {
   IKA17_CATEGORIES,
+  IKA17_CLASSES,
+  IKA17_CLASS_LABELS,
   IKA17_MIN_MATCHES,
   IKA17_MAIN_EVENT_SLOTS,
+  ika17ClassOfRating,
 } from "@/lib/tournaments/ika17";
 
 interface Standing {
@@ -25,25 +28,14 @@ interface Standing {
   rating: number | null;
 }
 
-type LevelFilter = "all" | "beginner" | "intermediate" | "advanced" | "expert";
+type ClassFilter = "all" | "beginner" | "intermediate";
 
-const LEVEL_LABEL: Record<string, string> = {
-  beginner: "Beginner",
-  intermediate: "Intermediate",
-  advanced: "Advanced",
-  expert: "Expert",
-  unknown: "Level belum diisi",
-};
-
-function levelOf(
-  standing: Standing
-): "beginner" | "intermediate" | "advanced" | "expert" | "unknown" {
-  // `expert` sekarang berdiri sendiri supaya filter Expert bisa dipakai.
-  if (standing.level === "expert") return "expert";
-  if (standing.level === "advanced") return "advanced";
-  if (standing.level === "intermediate") return "intermediate";
-  if (standing.level === "beginner") return "beginner";
-  return "unknown";
+/**
+ * Kelas liga ditentukan dari MPR hasil pertandingan, bukan pilihan pemain saat
+ * mendaftar. Tim ganda memakai rata-rata MPR kedua pemain (dihitung di server).
+ */
+function classOf(standing: Standing): "beginner" | "intermediate" {
+  return ika17ClassOfRating(standing.rating);
 }
 
 function sortStandings(rows: Standing[]): Standing[] {
@@ -58,7 +50,7 @@ function sortStandings(rows: Standing[]): Standing[] {
 
 export function TournamentLeaderboard() {
   const [category, setCategory] = useState(IKA17_CATEGORIES[0]?.id ?? "mens_singles");
-  const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
+  const [classFilter, setClassFilter] = useState<ClassFilter>("all");
   const [standings, setStandings] = useState<Standing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,23 +82,25 @@ export function TournamentLeaderboard() {
     load(category);
   }, [category, load]);
 
-  // 8 besar tiap kategori lolos ke Main Event (bukan juara 1 & 2 per level).
-  // Syarat tambahan: minimal IKA17_MIN_MATCHES pertandingan tercatat.
+  // Delapan besar Beginner DAN delapan besar Intermediate tiap kategori lolos ke
+  // Main Event. Syarat tambahan: minimal IKA17_MIN_MATCHES pertandingan tercatat.
   const mainEventSlots = useMemo(() => {
     const map = new Map<string, number>();
-    sortStandings(standings)
-      .slice(0, IKA17_MAIN_EVENT_SLOTS)
-      .forEach((row, index) => map.set(row.entryId, index + 1));
+    for (const klass of IKA17_CLASSES) {
+      sortStandings(standings.filter((row) => classOf(row) === klass))
+        .slice(0, IKA17_MAIN_EVENT_SLOTS)
+        .forEach((row, index) => map.set(row.entryId, index + 1));
+    }
     return map;
   }, [standings]);
 
   const visible = useMemo(() => {
     const filtered =
-      levelFilter === "all"
+      classFilter === "all"
         ? standings
-        : standings.filter((row) => levelOf(row) === levelFilter);
+        : standings.filter((row) => classOf(row) === classFilter);
     return sortStandings(filtered);
-  }, [standings, levelFilter]);
+  }, [standings, classFilter]);
 
   const categoryLabel =
     IKA17_CATEGORIES.find((entry) => entry.id === category)?.label ?? "Kategori";
@@ -121,7 +115,8 @@ export function TournamentLeaderboard() {
               Leaderboard Turnamen
             </CardTitle>
             <CardDescription className="mt-1 text-xs">
-              8 besar setiap kategori lolos ke Main Event, dengan syarat minimal{" "}
+              {IKA17_MAIN_EVENT_SLOTS} besar Beginner dan {IKA17_MAIN_EVENT_SLOTS} besar
+              Intermediate setiap kategori lolos ke Main Event, dengan syarat minimal{" "}
               {IKA17_MIN_MATCHES} pertandingan tercatat selama periode liga.
             </CardDescription>
           </div>
@@ -153,20 +148,18 @@ export function TournamentLeaderboard() {
         <div className="flex flex-wrap gap-1.5">
           {(
             [
-              ["all", "Semua Level"],
-              ["beginner", "Beginner"],
-              ["intermediate", "Intermediate"],
-              ["advanced", "Advanced"],
-              ["expert", "Expert"],
-            ] as Array<[LevelFilter, string]>
+              ["all", "Semua Kelas"],
+              ["beginner", IKA17_CLASS_LABELS.beginner],
+              ["intermediate", IKA17_CLASS_LABELS.intermediate],
+            ] as Array<[ClassFilter, string]>
           ).map(([value, label]) => (
             <Button
               key={value}
               type="button"
               size="sm"
-              variant={levelFilter === value ? "default" : "ghost"}
+              variant={classFilter === value ? "default" : "ghost"}
               className="text-xs"
-              onClick={() => setLevelFilter(value)}
+              onClick={() => setClassFilter(value)}
             >
               {label}
             </Button>
@@ -190,7 +183,7 @@ export function TournamentLeaderboard() {
           </div>
         ) : visible.length === 0 ? (
           <p className="py-8 text-center text-xs text-slate-500">
-            Belum ada peserta yang masuk klasemen untuk kategori dan level ini.
+            Belum ada peserta yang masuk klasemen untuk kategori dan kelas ini.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -201,22 +194,23 @@ export function TournamentLeaderboard() {
                   <th className="pb-2 pr-2">Pemain / Tim</th>
                   <th className="pb-2 pr-2 text-center">Main</th>
                   <th className="pb-2 pr-2 text-center">M-K</th>
-                  <th className="pb-2 pr-2 text-right">Rating</th>
+                  <th className="pb-2 pr-2 text-right">MPR</th>
                   <th className="pb-2 text-right">Status Main Event</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {visible.map((row, index) => {
-                  const overallRank = mainEventSlots.get(row.entryId);
+                  const classRank = mainEventSlots.get(row.entryId);
                   const qualifies = row.matchesPlayed >= IKA17_MIN_MATCHES;
                   const remaining = Math.max(0, IKA17_MIN_MATCHES - row.matchesPlayed);
-                  const level = levelOf(row);
+                  const klass = classOf(row);
+                  const inSlots = Boolean(classRank && classRank <= IKA17_MAIN_EVENT_SLOTS);
                   return (
                     <tr key={row.entryId} className="hover:bg-slate-50">
                       <td className="py-2.5 pr-2 font-bold text-slate-500">{index + 1}</td>
                       <td className="py-2.5 pr-2">
                         <div className="flex items-center gap-1.5">
-                          {overallRank && overallRank <= 8 ? (
+                          {inSlots ? (
                             <Crown className="h-4 w-4 shrink-0 text-matchpoin-tennis" />
                           ) : (
                             <Medal className="h-3.5 w-3.5 shrink-0 text-slate-300" />
@@ -224,7 +218,7 @@ export function TournamentLeaderboard() {
                           <span className="font-semibold text-slate-900">{row.name}</span>
                         </div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
-                          <span className="capitalize">{LEVEL_LABEL[level]}</span>
+                          <span>{IKA17_CLASS_LABELS[klass]}</span>
                           {row.cityName && <span>· {row.cityName}</span>}
                         </div>
                       </td>
@@ -238,20 +232,16 @@ export function TournamentLeaderboard() {
                         {row.rating === null ? "-" : Math.round(row.rating)}
                       </td>
                       <td className="py-2.5 text-right">
-                        {overallRank && overallRank <= IKA17_MAIN_EVENT_SLOTS ? (
+                        {inSlots ? (
                           qualifies ? (
                             <Badge variant="success" className="text-[10px]">
-                              8 besar · Lolos
+                              {IKA17_MAIN_EVENT_SLOTS} besar {IKA17_CLASS_LABELS[klass]} · Lolos
                             </Badge>
                           ) : (
                             <Badge variant="outline" className="border-amber-200 bg-amber-50 text-[10px] text-amber-700">
-                              8 besar · butuh {remaining} match lagi
+                              {IKA17_MAIN_EVENT_SLOTS} besar · butuh {remaining} match lagi
                             </Badge>
                           )
-                        ) : level === "advanced" ? (
-                          <span className="text-[10px] text-slate-400">Tidak masuk kategori</span>
-                        ) : level === "unknown" ? (
-                          <span className="text-[10px] text-amber-600">Lengkapi level profil</span>
                         ) : (
                           <span className="text-[10px] text-slate-400">Belum lolos</span>
                         )}
@@ -265,9 +255,11 @@ export function TournamentLeaderboard() {
         )}
 
         <p className="text-[11px] leading-relaxed text-slate-500">
-          Peringkat ditentukan dari DTR tertinggi per kategori. 8 besar setiap kategori lolos ke
-          Main Event. Menang/kalah memengaruhi rating, dan pemain wajib menyelesaikan minimal{" "}
-          {IKA17_MIN_MATCHES} pertandingan selama periode liga agar dinyatakan lolos.
+          Peringkat ditentukan dari MPR tertinggi per kategori dan per kelas. Kelas Beginner dan
+          Intermediate dibentuk otomatis dari hasil pertandingan (ganda memakai rata-rata MPR tim).{" "}
+          {IKA17_MAIN_EVENT_SLOTS} besar tiap kelas lolos ke Main Event, dan pemain wajib
+          menyelesaikan minimal {IKA17_MIN_MATCHES} pertandingan selama periode liga agar
+          dinyatakan lolos.
         </p>
       </CardContent>
     </Card>

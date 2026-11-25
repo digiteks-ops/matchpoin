@@ -14,25 +14,24 @@ import { ensurePlayerRecords } from "@/lib/services/player-service";
 import { recordLastSeen } from "@/lib/services/last-seen";
 import { mapSignUpError } from "@/lib/auth/auth-errors-core.mjs";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
-import { dtrStartingRating } from "@/lib/rating/dtr-core.mjs";
+import { mprStartingRating } from "@/lib/rating/mpr-core.mjs";
 import type { SkillLevel } from "@/types/database.types";
 import { AlertCircle, ArrowLeft, Loader2, CheckCircle2, ShieldCheck } from "lucide-react";
 
-// Self rating wajib dipilih saat mendaftar: hanya dua pilihan.
-//   beginner     -> rating awal 1000, langsung tampil di leaderboard
-//   intermediate -> rating awal 1500, tampil setelah 3 pertandingan terverifikasi
+// Self rating wajib dipilih saat mendaftar: hanya dua pilihan. Kategori
+// disimpan sebagai level awal; rating MPR selalu dimulai dari 1000.
 const STARTING_LEVELS: { value: SkillLevel; label: string; hint: string; leaderboard: string }[] = [
   {
     value: "beginner",
     label: "Beginner",
     hint: "Maksimal 2 tahun bermain",
-    leaderboard: "Langsung tampil di leaderboard",
+    leaderboard: "Rating awal MPR 1000, resmi setelah 2 pertandingan kalibrasi",
   },
   {
     value: "intermediate",
     label: "Intermediate",
     hint: "Lebih dari 2 tahun bermain",
-    leaderboard: "Tampil di leaderboard setelah 3x bertanding",
+    leaderboard: "Rating awal MPR 1000, resmi setelah 2 pertandingan kalibrasi",
   },
 ];
 
@@ -263,7 +262,7 @@ export default function RegisterPage() {
                         <span className="flex items-center justify-between text-xs font-bold text-slate-900">
                           {level.label}
                           <span className="text-[11px] font-semibold text-matchpoin-navy">
-                            {dtrStartingRating(level.value)}
+                            {mprStartingRating(level.value)}
                           </span>
                         </span>
                         <span className="mt-0.5 block text-[10px] leading-snug text-slate-500">
@@ -277,17 +276,17 @@ export default function RegisterPage() {
                   })}
                 </div>
                 <p className="text-[11px] text-slate-500">
-                  Rating awal ditetapkan sekali dari self rating ini dan tidak dapat diubah lewat
-                  halaman profil setelahnya. Hasil pertandingan berikutnya menaikkan atau
-                  menurunkan rating sesuai aturan DTR.
+                  Kategori ini disimpan sebagai level awal dan tidak dapat diubah lewat halaman
+                  profil setelahnya. Rating MPR dimulai dari 1000 untuk semua pemain baru, lalu
+                  naik atau turun mengikuti hasil pertandingan.
                 </p>
               </div>
 
               <div className="p-3 rounded-lg bg-slate-100 flex items-start gap-2 text-[11px] text-slate-600">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <span>
-                  Autentikasi aman via Supabase. Rating awal DTR Anda{" "}
-                  {startingLevel ? dtrStartingRating(startingLevel) : "—"} sesuai self rating
+                  Autentikasi aman via Supabase. Rating awal MPR Anda{" "}
+                  {startingLevel ? mprStartingRating(startingLevel) : "—"} sesuai self rating
                   yang dipilih.
                 </span>
               </div>

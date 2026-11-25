@@ -59,11 +59,10 @@ async function registerWithoutRpc(input: {
   userId: string;
   tournamentId: string;
   partnerUserId: string | null;
-  playingExperience: "beginner" | "intermediate";
   eligibilityConfirmed: boolean;
   rpcMessage: string;
 }): Promise<Response | null> {
-  const { userId, tournamentId, partnerUserId, playingExperience, eligibilityConfirmed } = input;
+  const { userId, tournamentId, partnerUserId, eligibilityConfirmed } = input;
 
   const admin = createAdminClient();
   if (!admin) return null;
@@ -131,7 +130,6 @@ async function registerWithoutRpc(input: {
     partnerGender: partnerUserId ? genders.get(partnerUserId) ?? null : null,
     userExists: genders.has(userId),
     partnerExists: partnerUserId ? genders.has(partnerUserId) : true,
-    playingExperience: playingExperience as "beginner" | "intermediate",
     eligibilityConfirmed,
     today: todayInPlatformTimeZone(),
   });
@@ -151,7 +149,7 @@ async function registerWithoutRpc(input: {
       partner_user_id: evaluation.doubles ? partnerUserId : null,
       status: "pending",
       joined_at: timestamp,
-      playing_experience: playingExperience,
+      playing_experience: null,
       eligibility_confirmed: true,
     },
   ];
@@ -172,12 +170,6 @@ async function registerWithoutRpc(input: {
       { status: 500 }
     );
   }
-
-  // Simpan level di profil agar admin dapat memverifikasi.
-  await admin
-    .from("player_profiles")
-    .update({ playing_experience: playingExperience })
-    .eq("user_id", userId);
 
   const tournamentName = tournament.name ?? "Liga";
   try {
@@ -239,7 +231,7 @@ export async function POST(request: Request) {
   if (!parsed.ok) {
     return NextResponse.json({ success: false, message: parsed.message }, { status: 400 });
   }
-  const { leagueId, partnerUserId, playingExperience, eligibilityConfirmed } = parsed;
+  const { leagueId, partnerUserId, eligibilityConfirmed } = parsed;
 
   try {
     const tournamentId = await resolveTournamentId(leagueId);
@@ -251,7 +243,7 @@ export async function POST(request: Request) {
       p_user_id: user.id,
       p_tournament_id: tournamentId,
       p_partner_user_id: partnerUserId,
-      p_playing_experience: playingExperience,
+      p_playing_experience: null,
       p_eligibility_confirmed: eligibilityConfirmed,
     });
 
@@ -263,7 +255,6 @@ export async function POST(request: Request) {
         userId: user.id,
         tournamentId,
         partnerUserId,
-        playingExperience,
         eligibilityConfirmed,
         rpcMessage: error.message,
       });

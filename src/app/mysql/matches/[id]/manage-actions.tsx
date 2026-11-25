@@ -98,7 +98,7 @@ export function MatchManagerActions({
         <Card>
           <CardHeader><CardTitle className="text-base">Permohonan bergabung</CardTitle><CardDescription className="text-xs">Setujui atau tolak permohonan pemain.</CardDescription></CardHeader>
           <CardContent className="space-y-3">
-            {pendingRequests.map((participant) => <div key={participant.userId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 p-3"><div><p className="text-sm font-semibold">{participant.fullName}</p><p className="text-xs text-slate-500">{participant.showRating === false ? "Rating disembunyikan" : `Rating ${participant.rating.toFixed(2)}`}</p></div><div className="flex gap-2"><Button size="sm" onClick={() => updateRequest(participant.userId, "accept")} disabled={Boolean(busyAction)}>Terima</Button><Button size="sm" variant="outline" onClick={() => updateRequest(participant.userId, "reject")} disabled={Boolean(busyAction)}>Tolak</Button></div></div>)}
+            {pendingRequests.map((participant) => <div key={participant.userId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 p-3"><div><p className="text-sm font-semibold">{participant.fullName}</p><p className="text-xs text-slate-500">MPR {Math.round(participant.rating)}</p></div><div className="flex gap-2"><Button size="sm" onClick={() => updateRequest(participant.userId, "accept")} disabled={Boolean(busyAction)}>Terima</Button><Button size="sm" variant="outline" onClick={() => updateRequest(participant.userId, "reject")} disabled={Boolean(busyAction)}>Tolak</Button></div></div>)}
           </CardContent>
         </Card>
       )}

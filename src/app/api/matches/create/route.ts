@@ -10,8 +10,8 @@ import { VALID_CATEGORIES } from '@/lib/matches/constants';
 
 export const dynamic = 'force-dynamic';
 
-// Gunakan daftar kategori bersama (src/lib/matches/constants.ts) agar kategori
-// liga baru seperti `womens_doubles_intermediate` tidak ditolak di sini.
+// Gunakan daftar kategori bersama (src/lib/matches/constants.ts) agar semua
+// kategori liga IKA17 diterima di sini.
 const CATEGORIES = VALID_CATEGORIES;
 const UMPIRES = ['dengan_wasit', 'tanpa_wasit'];
 

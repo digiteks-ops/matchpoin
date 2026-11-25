@@ -1,17 +1,21 @@
 // Kategori Liga Tennis IKA17 — sumber tunggal (dipakai UI, API, dan test).
-// Daftar final:
-//   1. Single Man Beginner
-//   2. Double Man Beginner–Intermediate
-//   3. Double Woman Beginner
-//   4. Double Woman Beginner–Intermediate
-//   5. Double Mix Beginner
 //
-// Syarat level:
-//   beginner     : maksimal 2 tahun bermain
-//   intermediate : lebih dari 2 tahun bermain
-//   advanced     : pernah mengikuti PORDA, PORPROV, PON
-// Semua kategori mensyaratkan BELUM pernah ikut PORDA/PORPROV/PON, jadi
-// `advanced` tidak pernah masuk `allowedLevels`.
+// Empat kategori final:
+//   1. Single Man
+//   2. Double Man
+//   3. Double Woman
+//   4. Double Mix
+//
+// Pemain TIDAK memilih level (beginner/intermediate) saat mendaftar. Klasifikasi
+// ditentukan otomatis dari hasil pertandingan liga:
+//   beginner     : MPR < 1100
+//   intermediate : MPR >= 1100
+// Untuk kategori ganda, MPR tim adalah rata-rata MPR kedua pemain. Delapan besar
+// beginner dan delapan besar intermediate setiap kategori lolos ke Main Event.
+//
+// Semua kategori mensyaratkan BELUM pernah ikut PORDA/PORPROV/PON.
+
+import { MPR_CATEGORIES } from "../rating/mpr-core.mjs";
 
 export const IKA17_LEAGUE_KEY = "ika17-2027";
 export const IKA17_LEAGUE_NAME = "Liga Tennis IKA17";
@@ -23,105 +27,105 @@ export const IKA17_MAIN_EVENT_END = "2027-04-04";
 /** Periode pendaftaran liga: 1 - 31 Desember 2026. */
 export const IKA17_REGISTRATION_OPEN = "2026-12-01";
 export const IKA17_REGISTRATION_DEADLINE = "2026-12-31";
+/** Kuota setiap kategori: 24 peserta (single) atau 24 tim (ganda). */
 export const IKA17_QUOTA = 24;
+/** Syarat lolos Main Event: minimal 17 pertandingan tercatat. */
 export const IKA17_MIN_MATCHES = 17;
-/** Jumlah peserta tiap kategori yang lolos ke Main Event. */
+/** Jumlah peserta tiap kelas (beginner / intermediate) yang lolos ke Main Event. */
 export const IKA17_MAIN_EVENT_SLOTS = 8;
 
-// Tiga tingkat pengalaman:
-//   beginner     : maksimal 2 tahun bermain
-//   intermediate : lebih dari 2 tahun bermain
-//   advanced     : pernah mengikuti PORDA, PORPROV, atau PON
-//
-// `advanced` adalah kebalikan dari dua tingkat lain: justru pemain yang PERNAH
-// tampil di PORDA/PORPROV/PON. Karena liga IKA17 mensyaratkan belum pernah
-// ikut ajang tersebut, tingkat ini TIDAK pernah masuk `allowedLevels`.
-export const TOURNAMENT_LEVELS = ["beginner", "intermediate", "advanced"];
-
-export const TOURNAMENT_LEVEL_LABELS = {
-  beginner: "Beginner: maksimal 2 tahun bermain",
-  intermediate: "Intermediate: lebih dari 2 tahun bermain",
-  advanced: "Advanced: pernah mengikuti PORDA, PORPROV, PON",
-};
-
-export const TOURNAMENT_LEVEL_REQUIREMENTS = {
-  beginner: "Maksimal 2 tahun bermain tenis.",
-  intermediate: "Lebih dari 2 tahun bermain tenis.",
-  advanced: "Pernah mengikuti PORDA, PORPROV, atau PON.",
-};
-
 /**
- * Syarat keikutsertaan liga IKA17 untuk beginner & intermediate: BELUM pernah
- * tampil di PORDA/PORPROV/PON.
+ * Dua kelas liga yang dibentuk otomatis dari hasil pertandingan. Pemain tidak
+ * memilih kelas ini saat mendaftar.
  */
+export const IKA17_CLASSES = ["beginner", "intermediate"];
+
+export const IKA17_CLASS_LABELS = {
+  beginner: "Beginner",
+  intermediate: "Intermediate",
+};
+
+/** Batas MPR kelas intermediate; di bawahnya beginner.
+ *  Diambil dari batas tier Intermediate MPR supaya kelas liga dan tier MPR
+ *  tidak pernah berbeda angka. */
+export const IKA17_INTERMEDIATE_MIN_RATING = MPR_CATEGORIES.find(
+  (category) => category.key === "intermediate"
+).minRating;
+
+/** Syarat keikutsertaan liga IKA17: BELUM pernah tampil di PORDA/PORPROV/PON. */
 export const IKA17_ELIGIBILITY_STATEMENT = "Belum pernah mengikuti PORDA, PORPROV, atau PON.";
 
-/** Kebalikannya, untuk tingkat advanced. */
-export const IKA17_ADVANCED_ELIGIBILITY_STATEMENT =
-  "Pernah mengikuti PORDA, PORPROV, atau PON.";
-
-/** True untuk tingkat yang justru mensyaratkan sudah tampil di PORDA/PORPROV/PON. */
-export function ika17RequiresPordaParticipation(level) {
-  return level === "advanced";
+/**
+ * Kelas liga dari MPR. Nilai tidak valid dianggap beginner agar pemain tanpa
+ * rating tetap tampil di klasemen.
+ */
+export function ika17ClassOfRating(rating) {
+  const value = Number(rating);
+  if (!Number.isFinite(value)) return "beginner";
+  return value >= IKA17_INTERMEDIATE_MIN_RATING ? "intermediate" : "beginner";
 }
 
-/** Pernyataan yang harus disetujui pemain untuk tingkat yang dipilihnya. */
-export function ika17EligibilityStatement(level) {
-  return ika17RequiresPordaParticipation(level)
-    ? IKA17_ADVANCED_ELIGIBILITY_STATEMENT
-    : IKA17_ELIGIBILITY_STATEMENT;
+export function ika17ClassLabel(rating) {
+  return IKA17_CLASS_LABELS[ika17ClassOfRating(rating)] ?? "Beginner";
+}
+
+/**
+ * MPR tim untuk klasemen: single memakai MPR pemain, ganda memakai rata-rata
+ * MPR kedua pemain. Pemain tanpa rating diabaikan; bila tidak ada rating sama
+ * sekali hasilnya null.
+ */
+export function ika17TeamRating(ratings) {
+  const values = (Array.isArray(ratings) ? ratings : [])
+    // Buang nilai kosong SEBELUM Number(): Number(null) adalah 0, yang akan
+    // menyeret rata-rata tim ke bawah seolah pemainnya berating 0.
+    .filter((value) => value !== null && value !== undefined && value !== "")
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+  if (values.length === 0) return null;
+  return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+/** Pernyataan yang harus disetujui pemain sebelum mendaftar. */
+export function ika17EligibilityStatement() {
+  return IKA17_ELIGIBILITY_STATEMENT;
 }
 
 export const IKA17_CATEGORIES = [
   {
     id: "mens_singles",
-    label: "Single Man Beginner",
-    shortLabel: "Tunggal Putra Beginner",
+    label: "Single Man",
+    shortLabel: "Tunggal Putra",
     doubles: false,
     genderRule: "male",
     slug: "league-q1-2027-mens-singles",
-    allowedLevels: ["beginner"],
-    eligibilityLabel: "Khusus beginner: maksimal 2 tahun bermain.",
+    eligibilityLabel: "Khusus pemain putra.",
   },
   {
     id: "mens_doubles",
-    label: "Double Man Beginner–Intermediate",
-    shortLabel: "Ganda Putra Beginner–Intermediate",
+    label: "Double Man",
+    shortLabel: "Ganda Putra",
     doubles: true,
     genderRule: "male",
     slug: "league-q1-2027-mens-doubles",
-    allowedLevels: ["beginner", "intermediate"],
-    eligibilityLabel: "Beginner (maksimal 2 tahun) atau intermediate (lebih dari 2 tahun).",
+    eligibilityLabel: "Khusus pemain putra, satu tim 2 pemain.",
   },
   {
     id: "womens_doubles",
-    label: "Double Woman Beginner",
-    shortLabel: "Ganda Putri Beginner",
+    label: "Double Woman",
+    shortLabel: "Ganda Putri",
     doubles: true,
     genderRule: "female",
     slug: "league-q1-2027-womens-doubles",
-    allowedLevels: ["beginner"],
-    eligibilityLabel: "Khusus beginner: maksimal 2 tahun bermain.",
-  },
-  {
-    id: "womens_doubles_intermediate",
-    label: "Double Woman Beginner–Intermediate",
-    shortLabel: "Ganda Putri Beginner–Intermediate",
-    doubles: true,
-    genderRule: "female",
-    slug: "league-q1-2027-womens-doubles-intermediate",
-    allowedLevels: ["beginner", "intermediate"],
-    eligibilityLabel: "Beginner (maksimal 2 tahun) atau intermediate (lebih dari 2 tahun).",
+    eligibilityLabel: "Khusus pemain putri, satu tim 2 pemain.",
   },
   {
     id: "mixed_doubles",
-    label: "Double Mix Beginner",
-    shortLabel: "Ganda Campuran Beginner",
+    label: "Double Mix",
+    shortLabel: "Ganda Campuran",
     doubles: true,
     genderRule: "mixed",
     slug: "league-q1-2027-mixed-doubles",
-    allowedLevels: ["beginner"],
-    eligibilityLabel: "Khusus beginner: maksimal 2 tahun bermain.",
+    eligibilityLabel: "Satu tim terdiri dari 1 pemain putra dan 1 pemain putri.",
   },
 ];
 
@@ -131,18 +135,4 @@ export function ika17Category(category) {
 
 export function ika17CategoryLabel(category) {
   return ika17Category(category)?.label ?? category ?? "Kategori";
-}
-
-export function ika17AllowedLevels(category) {
-  return ika17Category(category)?.allowedLevels ?? ["beginner", "intermediate"];
-}
-
-export function ika17CategoryAllowsLevel(category, level) {
-  return ika17AllowedLevels(category).includes(level);
-}
-
-/** True when the category only accepts beginner (single man / putri / mix). */
-export function ika17RequiresBeginner(category) {
-  const levels = ika17AllowedLevels(category);
-  return levels.length === 1 && levels[0] === "beginner";
 }

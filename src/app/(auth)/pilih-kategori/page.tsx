@@ -6,23 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Logo } from "@/components/layout/logo";
 import { createClient } from "@/lib/supabase/client";
-import { dtrStartingRating } from "@/lib/rating/dtr-core.mjs";
+import { mprStartingRating } from "@/lib/rating/mpr-core.mjs";
 import type { SkillLevel } from "@/types/database.types";
 import { AlertCircle, Loader2, Sparkles } from "lucide-react";
 
-// Self rating hanya dua pilihan, sama seperti formulir pendaftaran:
-// beginner = rating awal 1000 (langsung tampil di leaderboard),
-// intermediate = rating awal 1500 (tampil setelah 3x bertanding).
+// Self rating hanya dua pilihan, sama seperti formulir pendaftaran. Kategori
+// tidak lagi menentukan rating: semua pemain baru mulai dari MPR 1000.
 const LEVELS: { value: SkillLevel; label: string; hint: string }[] = [
   {
     value: "beginner",
     label: "Beginner",
-    hint: "Maksimal 2 tahun bermain. Rating awal 1000, langsung tampil di leaderboard.",
+    hint: "Maksimal 2 tahun bermain. Rating awal MPR 1000, resmi setelah 2 pertandingan kalibrasi.",
   },
   {
     value: "intermediate",
     label: "Intermediate",
-    hint: "Lebih dari 2 tahun bermain. Rating awal 1500, tampil setelah 3x bertanding.",
+    hint: "Lebih dari 2 tahun bermain. Rating awal MPR 1000, resmi setelah 2 pertandingan kalibrasi.",
   },
 ];
 
@@ -152,8 +151,8 @@ function StartingLevelForm() {
             Pilih Kategori Awal Anda
           </CardTitle>
           <CardDescription>
-            Rating awal DTR ditetapkan sekali dari kategori ini. Setelah bertanding, rating
-            bergerak mengikuti hasil pertandingan.
+            Kategori ini disimpan sebagai level awal Anda. Rating MPR selalu dimulai dari 1000
+            dan bergerak mengikuti hasil pertandingan.
           </CardDescription>
         </CardHeader>
 
@@ -184,7 +183,7 @@ function StartingLevelForm() {
                   <span className="flex items-center justify-between text-sm font-bold text-slate-900">
                     {level.label}
                     <span className="text-xs font-semibold text-matchpoin-navy">
-                      DTR {dtrStartingRating(level.value)}
+                      MPR {mprStartingRating(level.value)}
                     </span>
                   </span>
                   <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">

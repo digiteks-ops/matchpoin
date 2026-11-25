@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { MPR_STARTING_RATING } from "@/lib/rating/mpr-core.mjs";
 
 export interface MatchHistoryEntry {
   id: string;
@@ -17,7 +18,7 @@ export interface MatchHistoryEntry {
   resultStatus: "pending" | "confirmed" | "under_review" | "none";
   photoUrls: string[];
   createdAt: string;
-  /** Perubahan rating DTR pada pertandingan ini (null bila belum dihitung). */
+  /** Perubahan rating MPR pada pertandingan ini (null bila belum dihitung). */
   ratingChange: number | null;
   ratingBefore: number | null;
   ratingAfter: number | null;
@@ -44,7 +45,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   womens_singles: "Tunggal Putri",
   mens_doubles: "Ganda Putra",
   womens_doubles: "Ganda Putri",
-  womens_doubles_intermediate: "Ganda Putri Beginner–Intermediate",
   mixed_doubles: "Ganda Campuran",
 };
 
@@ -232,7 +232,7 @@ async function getOpponentNames(matchIds: string[]): Promise<Map<string, string>
 /**
  * Returns aggregated statistics for a given player.
  */
-export async function getPlayerStats(userId: string): Promise<PlayerStats> {
+export async function getPlayerStats(userId: string, recentLimit = 5): Promise<PlayerStats> {
   const supabase = createClient();
 
   const { data: rating } = await supabase
@@ -310,9 +310,9 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats> {
     doublesMatches: doubles.length,
     doublesWins: doubles.filter((m) => m.result === "win").length,
     doublesLosses: doubles.filter((m) => m.result === "loss").length,
-    currentRating: Number(rating?.current_rating ?? 1000),
-    bestRating: Number(rating?.peak_rating ?? rating?.current_rating ?? 1000000),
-    // Maksimal 5 pertandingan terakhir, sesuai tampilan profil.
-    recentMatches: withRating.slice(0, 5),
+    currentRating: Number(rating?.current_rating ?? MPR_STARTING_RATING),
+    bestRating: Number(rating?.peak_rating ?? rating?.current_rating ?? MPR_STARTING_RATING),
+    // Maksimal 5 pertandingan terakhir secara default, sesuai tampilan profil.
+    recentMatches: withRating.slice(0, Math.max(0, recentLimit)),
   };
 }

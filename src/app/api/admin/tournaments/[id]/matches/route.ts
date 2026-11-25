@@ -7,8 +7,8 @@ import { getManagedLeague, getManagedTournamentCategory } from "@/lib/supabase/t
 
 export const dynamic = "force-dynamic";
 
-// Pakai daftar kategori bersama supaya kategori liga baru
-// (`womens_doubles_intermediate`) tidak ditolak saat admin membuat match.
+// Pakai daftar kategori bersama supaya semua kategori liga IKA17 diterima
+// saat admin membuat match.
 const CATEGORIES: MatchCategory[] = VALID_CATEGORIES;
 
 function cleanIds(value: unknown): string[] {
