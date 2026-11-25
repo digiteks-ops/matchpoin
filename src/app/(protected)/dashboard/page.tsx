@@ -13,7 +13,12 @@ import { getUserRoles } from "@/lib/supabase/rbac-service";
 import { logError } from "@/lib/errors";
 import { formatIndonesianDate, formatIndonesianTime } from "@/lib/utils";
 import type { DbUser, PlayerProfile, PlayerRating } from "@/types/database.types";
-import { MPR_STARTING_RATING } from "@/lib/rating/mpr-core.mjs";
+import {
+  MPR_CALIBRATION_MATCHES,
+  MPR_STARTING_RATING,
+  mprCalibrationRemaining,
+  mprIsCalibrating,
+} from "@/lib/rating/mpr-core.mjs";
 import {
   Activity,
   Calendar,
@@ -136,9 +141,13 @@ export default async function DashboardPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Rating</span>
-                {matchesPlayed === 0 && (
-                  <Badge variant="outline" className="border-amber-200 bg-amber-50 text-[10px] text-amber-700">
-                    Provisori
+                {mprIsCalibrating(matchesPlayed) && (
+                  <Badge
+                    variant="outline"
+                    className="border-amber-200 bg-amber-50 text-[10px] text-amber-700"
+                    title={`Rating resmi setelah ${MPR_CALIBRATION_MATCHES} pertandingan`}
+                  >
+                    Kalibrasi {mprCalibrationRemaining(matchesPlayed)}x
                   </Badge>
                 )}
               </div>

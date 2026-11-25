@@ -79,8 +79,9 @@ test("setiap kategori punya aturan gender dan status ganda yang jelas", () => {
   assert.equal(byId.get("mixed_doubles").genderRule, "mixed");
 });
 
-test("kuota 24 dan minimal 17 pertandingan untuk semua kategori", () => {
-  assert.equal(IKA17_QUOTA, 24);
+test("tanpa batas kuota; minimal 17 pertandingan untuk semua kategori", () => {
+  // Kuota peserta dihapus: null menandakan "tanpa batas".
+  assert.equal(IKA17_QUOTA, null);
   assert.equal(IKA17_MIN_MATCHES, 17);
   assert.equal(IKA17_MAIN_EVENT_SLOTS, 8);
 });

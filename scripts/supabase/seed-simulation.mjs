@@ -12,7 +12,7 @@
  *   - `player_ratings` disesuaikan (current_rating, W/L, matches_played)
  *
  * Rating awal diambil dari rating pemain saat ini bila sudah pernah bermain,
- * atau 1300 (rating awal MPR) sesuai self_assessed_level. Perubahan rating memakai rumus
+ * atau 1000 (rating awal MPR) sesuai self_assessed_level. Perubahan rating memakai rumus
  * MPR yang sama dengan produksi (calculateMprSingles), jadi angkanya konsisten.
  *
  * Jalankan:

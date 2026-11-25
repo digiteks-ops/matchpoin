@@ -451,10 +451,6 @@ export default function LeaguePage() {
         setRegError("Pendaftaran kategori ini tidak tersedia.");
         return;
       }
-      if (regParticipantsCount >= regLeague.max_participants) {
-        setRegError("Kuota kategori ini sudah penuh.");
-        return;
-      }
       if (regAlready) {
         setRegError("Anda sudah terdaftar di kategori liga ini.");
         return;
@@ -529,7 +525,8 @@ export default function LeaguePage() {
   const regCatMeta = CATEGORIES.find((c) => c.id === regCategory) ?? CATEGORIES[0];
   const regPeriodOpen = isRegistrationPeriodOpen();
   const regClosed = isRegistrationClosed();
-  const regOpenOk = regLeague && regPeriodOpen && regLeague.status === "registration_open" && regParticipantsCount < regLeague.max_participants;
+  // Tanpa batas kuota: hanya periode dan status liga yang menentukan.
+  const regOpenOk = Boolean(regLeague && regPeriodOpen && regLeague.status === "registration_open");
 
   return (
     <div className="flex-1 bg-slate-50 py-8 md:py-12">
@@ -594,7 +591,7 @@ export default function LeaguePage() {
                   <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
                     <div className="font-semibold text-slate-800">{regCatMeta.label} — {regLeague?.season ?? "-"}</div>
                     <div>Status Pendaftaran: <Badge variant={regOpenOk ? "outline" : "secondary"} className="text-[10px]">{regPeriodOpen ? "OPEN" : regClosed ? "CLOSED" : "Belum Dibuka"}</Badge></div>
-                    <div>Kuota: {regParticipantsCount}/{regLeague?.max_participants ?? 12} peserta · {regOpenOk ? "Dapat mendaftar" : "Tidak dapat mendaftar (periode/kuota/status)"}</div>
+                    <div>Pendaftar: {regParticipantsCount} peserta · {regOpenOk ? "Dapat mendaftar" : "Tidak dapat mendaftar (periode/status)"}</div>
                     {regAlready && <div className="text-emerald-700 font-semibold">Anda sudah terdaftar di kategori ini.</div>}
                     {!regLeague && <div className="text-amber-700">Data liga kategori ini belum tersedia.</div>}
                   </div>
@@ -623,7 +620,7 @@ export default function LeaguePage() {
                         <div><span className="text-slate-500">Liga:</span> <strong>{regLeague?.name} {regLeague?.season}</strong></div>
                         <div><span className="text-slate-500">Nama:</span> <strong>{regProfile?.name ?? "-"}</strong></div>
                         <div><span className="text-slate-500">Lokasi:</span> <strong>{[regProfile?.city, regProfile?.province].filter(Boolean).join(", ") || "Belum diisi di profil"}</strong></div>
-                        <div><span className="text-slate-500">Kuota saat ini:</span> <strong>{regParticipantsCount}/{regLeague?.max_participants ?? 12}</strong></div>
+                        <div><span className="text-slate-500">Pendaftar saat ini:</span> <strong>{regParticipantsCount}</strong></div>
                       </div>
 
                       {ika17Category(regCategory)?.doubles && (
@@ -723,7 +720,7 @@ export default function LeaguePage() {
           <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div className="space-y-1">
               <div className="font-bold text-slate-800">{selectedCategoryMeta.label} · {league?.season ?? "-"}</div>
-              <div className="text-slate-500">Status liga: <strong className="capitalize">{league?.status ?? "tidak tersedia"}</strong> · Peserta terdaftar: <strong>{participants.length}</strong>/{league?.max_participants ?? 12}</div>
+              <div className="text-slate-500">Status liga: <strong className="capitalize">{league?.status ?? "tidak tersedia"}</strong> · Peserta terdaftar: <strong>{participants.length}</strong></div>
               <div className="text-slate-500">Periode liga: {league?.start_date ?? "-"} s/d {league?.end_date ?? "-"}</div>
               <div className="text-slate-500">Periode pendaftaran: 15 Nov 2026 – 31 Des 2026 (WITA)</div>
             </div>

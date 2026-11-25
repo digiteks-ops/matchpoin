@@ -27,7 +27,7 @@ Status legend: **PASS** = verified by build/unit test; **MANUAL** = requires liv
 | 19 | Match history + stats | `/api/profile/history` | PASS | `getPlayerStats` |
 | 20 | Dashboard | `/dashboard` | PASS | Profile, rating, upcoming, invites |
 | 21 | Tournament/league registration | `/tournaments`, `/league`, `/api/tournaments/register` | PASS | IKA17 4 categories (Single Man, Double Man, Double Woman, Double Mix), no level selection, quota 24 per category, pending/accepted/rejected, gender and partner rules |
-| 22 | League overview/standings | `/league`, `/api/leagues/[category]` | PASS | Supabase reads; class (Beginner < 1300 MPR, Intermediate >= 1300) derived from match results, doubles use team average MPR |
+| 22 | League overview/standings | `/league`, `/api/leagues/[category]` | PASS | Supabase reads; class (Beginner < 1100 MPR, Intermediate >= 1100) derived from match results, doubles use team average MPR |
 | 23 | Admin dashboard | `/admin` | PASS | Supabase counts + audit log |
 | 24 | Admin settings (users/players/matches/tournaments) | `/admin/settings` | PASS | Supabase reads |
 | 25 | Admin registration approvals | `/admin/tournaments`, `/api/admin/*` | PASS | Admin/super_admin guard, atomic RPC, quota enforcement + audit |

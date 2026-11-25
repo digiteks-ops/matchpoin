@@ -80,17 +80,17 @@ Local DB credentials are invalid (`Unregistered API key`), so `/matches` timing 
 ## MPR rating system (2026-11-25)
 
 - DTR (Dynamic Tennis Rating) diganti MPR (MatchPoin Rating). Core ada di `src/lib/rating/mpr-core.mjs` (dipakai rating engine, simulasi admin, dan script CLI); nama file lama `dtr-core` dihapus.
-- Rating awal semua pemain baru = **1300**, apa pun kategori awal yang dipilih saat mendaftar. Kategori hanya disimpan sebagai `self_assessed_level` (`player_ratings.starting_rating_set_at` mengunci pilihan sekali).
-- K tetap 100 sehingga laga seimbang bergerak +50 / -50; kemenangan atas lawan lebih tinggi mendekati +100, kekalahan dari lawan lebih rendah mendekati -100. Doubles memakai rata-rata tim dan kedua rekan mendapat perubahan yang sama.
-- Batas tingkat MPR: Beginner 0-1299, Intermediate 1300-1699, Advanced 1700-1899, Expert 1900+. Satu sumber: `MPR_CATEGORIES`; UI (`rating-tier-core.mjs`) menurunkan rentang dari situ.
-- `supabase/migrations/00041_mpr_rating.sql`: default kolom rating 1300, policy RLS insert 1300, `apply_dtr_starting_rating` dan `handle_new_user` memakai 1300, dan view `public_players` mempublikasikan rating semua pemain (tidak lagi disensor `show_rating`). Migrasi ini belum diterapkan ke Supabase.
+- Rating awal semua pemain baru = **1000**, apa pun kategori awal yang dipilih saat mendaftar. Kategori hanya disimpan sebagai `self_assessed_level` (`player_ratings.starting_rating_set_at` mengunci pilihan sekali).
+- K tetap 80 sehingga laga seimbang bergerak +40 / -40; kemenangan atas lawan lebih tinggi mendekati +80, kekalahan dari lawan lebih rendah mendekati -80. Kalibrasi 2 pertandingan pertama sebelum rating jadi ranking resmi (`MPR_CALIBRATION_MATCHES`, `mprIsCalibrating`). Doubles memakai rata-rata tim dan kedua rekan mendapat perubahan yang sama.
+- Batas tingkat MPR: Beginner 0-1099, Intermediate 1100-1599, Advanced 1600-1999, Expert 2000+. Satu sumber: `MPR_CATEGORIES`; UI (`rating-tier-core.mjs`) menurunkan rentang dari situ.
+- `supabase/migrations/00041_mpr_rating.sql`: default kolom rating 1000, policy RLS insert 1000, `apply_dtr_starting_rating` dan `handle_new_user` memakai 1000, dan view `public_players` mempublikasikan rating semua pemain (tidak lagi disensor `show_rating`). Migrasi ini belum diterapkan ke Supabase.
 - Verifikasi: `npm run test:unit` 107/107, `npm run test:rating` lulus, `npx tsc --noEmit` bersih, `npm run lint` bersih.
 
 ## Liga IKA17 tanpa pilih level (2026-11-25)
 
 - Kategori liga kini 4: **Single Man**, **Double Man**, **Double Woman**, **Double Mix**. womens_doubles_intermediate dihapus dan digabung ke womens_doubles (migrasi `00042_league_classes_from_rating.sql`).
 - Pendaftaran tidak lagi memilih level. Pemain hanya memilih kategori dan partner (untuk ganda) serta menyatakan belum pernah ikut PORDA/PORPROV/PON.
-- Kelas liga dibentuk otomatis dari hasil pertandingan: **Beginner** bila MPR < 1300, **Intermediate** bila MPR >= 1300 (`ika17ClassOfRating`, batasnya diambil dari tier Intermediate `MPR_CATEGORIES`). Kategori ganda memakai rata-rata MPR kedua pemain (`ika17TeamRating`), baik untuk kelas maupun peringkat.
+- Kelas liga dibentuk otomatis dari hasil pertandingan: **Beginner** bila MPR < 1100, **Intermediate** bila MPR >= 1100 (`ika17ClassOfRating`, batasnya diambil dari tier Intermediate `MPR_CATEGORIES`). Kategori ganda memakai rata-rata MPR kedua pemain (`ika17TeamRating`), baik untuk kelas maupun peringkat.
 - 8 besar Beginner **dan** 8 besar Intermediate setiap kategori lolos ke Main Event, dengan syarat minimal 17 pertandingan (`IKA17_MIN_MATCHES`). Kuota setiap kategori 24 peserta/tim (`IKA17_QUOTA`).
 - File yang berubah: `src/lib/tournaments/ika17-core.mjs` + `ika17.ts` + `ika17-core.d.mts` (sumber tunggal 4 kategori, kelas, rata-rata MPR), `competition-registration-core.mjs` (tanpa validasi level), `/api/tournaments/register` (tidak mengirim level), `/tournaments` dan `/league` (tanpa pemilih level, teks aturan baru), `tournament-leaderboard.tsx` (filter kelas + 8 besar per kelas), `competition-service.ts` (level/rating dari MPR tim), `seed-admin.mjs` dan `seed-dummy.mjs` (4 kategori, tanpa level).
 - `register_for_competition` versi 00042 mempertahankan signature 5 parameter (`p_playing_experience` diabaikan, disimpan NULL) agar pemanggil lama tidak patah; kolom `playing_experience` tetap ada untuk data historis.

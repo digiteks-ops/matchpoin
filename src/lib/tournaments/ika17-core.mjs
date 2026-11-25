@@ -27,8 +27,9 @@ export const IKA17_MAIN_EVENT_END = "2027-04-04";
 /** Periode pendaftaran liga: 1 - 31 Desember 2026. */
 export const IKA17_REGISTRATION_OPEN = "2026-12-01";
 export const IKA17_REGISTRATION_DEADLINE = "2026-12-31";
-/** Kuota setiap kategori: 24 peserta (single) atau 24 tim (ganda). */
-export const IKA17_QUOTA = 24;
+/** Tanpa batas kuota: pendaftaran ditutup hanya oleh periode/status liga.
+ *  Konstanta ini dipertahankan (nilai null) agar impor lama tetap valid. */
+export const IKA17_QUOTA = null;
 /** Syarat lolos Main Event: minimal 17 pertandingan tercatat. */
 export const IKA17_MIN_MATCHES = 17;
 /** Jumlah peserta tiap kelas (beginner / intermediate) yang lolos ke Main Event. */

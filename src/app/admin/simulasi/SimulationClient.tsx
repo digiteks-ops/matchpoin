@@ -15,6 +15,7 @@ import {
   Trophy,
   Users,
 } from "lucide-react";
+import { RatingCalculator } from "./rating-calculator";
 import {
   simulateSinglesMen,
   simulateSinglesMen24,
@@ -72,6 +73,11 @@ export default function SimulationClient() {
     [variant]
   );
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Kalkulator rating: contoh default A 1000 vs B 1300.
+  const [calcA, setCalcA] = useState(1000);
+  const [calcB, setCalcB] = useState(1300);
+  const [calcMatchesA, setCalcMatchesA] = useState(0);
+  const [calcMatchesB, setCalcMatchesB] = useState(0);
 
   const qualifiedCount = useMemo(
     () => players.filter((player) => player.qualified).length,
@@ -169,6 +175,17 @@ export default function SimulationClient() {
             </p>
           </div>
         </div>
+
+        <RatingCalculator
+          ratingA={calcA}
+          ratingB={calcB}
+          matchesA={calcMatchesA}
+          matchesB={calcMatchesB}
+          onChangeA={setCalcA}
+          onChangeB={setCalcB}
+          onChangeMatchesA={setCalcMatchesA}
+          onChangeMatchesB={setCalcMatchesB}
+        />
 
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
           Data ini <strong>sintetis</strong> dan deterministik untuk simulasi. Tidak menulis atau

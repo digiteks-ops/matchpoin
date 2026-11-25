@@ -156,7 +156,6 @@ DECLARE
   v_partner_gender TEXT;
   v_category TEXT;
   v_doubles BOOLEAN;
-  v_entry_count INTEGER;
   v_entry_id UUID := gen_random_uuid();
 BEGIN
   IF p_user_id IS NULL THEN
@@ -265,16 +264,7 @@ BEGIN
     END IF;
   END IF;
 
-  -- Kuota: hanya pendaftar yang sudah diterima, dan satu tim ganda = satu slot.
-  SELECT COUNT(DISTINCT COALESCE(tp.entry_id::text, tp.id::text)) INTO v_entry_count
-  FROM public.tournament_participants tp
-  WHERE tp.tournament_id = p_tournament_id
-    AND tp.category = v_category
-    AND tp.status IN ('accepted', 'confirmed');
-
-  IF v_entry_count >= COALESCE(v_tournament.max_participants, 24) THEN
-    RETURN jsonb_build_object('success', false, 'message', 'Kuota kategori ini sudah penuh.');
-  END IF;
+  -- Tanpa batas kuota: pendaftaran hanya ditutup oleh periode dan status liga.
 
   INSERT INTO public.tournament_participants
     (tournament_id, user_id, category, entry_id, entry_role, partner_user_id, status,

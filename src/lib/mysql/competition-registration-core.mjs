@@ -92,7 +92,6 @@ export function evaluateLeagueRegistration(input) {
     userId,
     partnerUserId,
     registeredUserIds = [],
-    entryCount = 0,
     userGender = null,
     partnerGender = null,
     userExists = true,
@@ -164,14 +163,7 @@ export function evaluateLeagueRegistration(input) {
     }
   }
 
-  const maxParticipants = Number(tournament.max_participants);
-  if (
-    Number.isFinite(maxParticipants) &&
-    maxParticipants > 0 &&
-    entryCount >= maxParticipants
-  ) {
-    return { ok: false, message: "Kuota kategori ini sudah penuh." };
-  }
+  // Tanpa batas kuota: pendaftaran hanya ditutup oleh periode & status liga.
 
   return { ok: true, category, doubles };
 }

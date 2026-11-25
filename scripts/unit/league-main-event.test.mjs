@@ -52,9 +52,9 @@ test("migration 00042 removes every stale registration overload first", () => {
     migration,
     /CREATE OR REPLACE FUNCTION public\.register_for_competition\(\s*p_user_id UUID,\s*p_tournament_id UUID,\s*p_partner_user_id UUID DEFAULT NULL,\s*p_playing_experience TEXT DEFAULT NULL,\s*p_eligibility_confirmed BOOLEAN DEFAULT false/s
   );
-  // Kuota hanya dari pendaftar diterima, satu tim ganda = satu slot.
-  assert.match(migration, /COUNT\(DISTINCT COALESCE\(tp\.entry_id::text, tp\.id::text\)\)/);
-  assert.match(migration, /tp\.status IN \('accepted', 'confirmed'\)/);
+  // Tanpa batas kuota: pendaftaran hanya ditutup oleh periode & status liga.
+  assert.doesNotMatch(migration, /max_participants, 24\)/);
+  assert.doesNotMatch(migration, /Kuota kategori ini sudah penuh/);
   // Tidak ada lagi validasi level: kelas liga dibentuk dari MPR.
   assert.doesNotMatch(migration, /v_experience NOT IN/);
   assert.match(migration, /now\(\), NULL, TRUE\)/);

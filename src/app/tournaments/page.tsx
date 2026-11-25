@@ -22,7 +22,6 @@ import {
   IKA17_MAIN_EVENT_SLOTS,
   IKA17_MAIN_EVENT_START,
   IKA17_MIN_MATCHES,
-  IKA17_QUOTA,
   IKA17_REGISTRATION_DEADLINE,
   IKA17_START_DATE,
   ika17Category,
@@ -251,9 +250,9 @@ export default function TournamentsPage() {
               <p className="max-w-2xl text-sm leading-relaxed text-slate-200">
                 Liga musim 1 dengan {IKA17_CATEGORIES.length} kategori: Single Man, Double Man,
                 Double Woman, dan Double Mix. Pendaftaran dibuka sampai{" "}
-                <strong className="text-white">{dateLabel(league.deadline)}</strong>. Kuota setiap
-                kategori maksimal {IKA17_QUOTA} peserta/tim dan dihitung dari pendaftar yang sudah
-                diterima admin.
+                <strong className="text-white">{dateLabel(league.deadline)}</strong>. Tidak ada
+                batas jumlah peserta: setiap kategori terbuka untuk semua pendaftar selama periode
+                berjalan.
               </p>
               <p className="mt-3 inline-flex items-center gap-2 rounded-xl bg-matchpoin-tennis/90 px-3 py-2 text-xs font-bold text-matchpoin-navy">
                 <Trophy className="h-4 w-4" />
@@ -330,8 +329,6 @@ export default function TournamentsPage() {
               }
 
               const accepted = row.registration_count;
-              const quota = row.max_participants || IKA17_QUOTA;
-              const isFull = accepted >= quota;
               const deadlinePassed = Boolean(
                 row.registration_deadline &&
                   new Date(`${row.registration_deadline}T23:59:59`) < new Date()
@@ -339,7 +336,6 @@ export default function TournamentsPage() {
               const isClosed = row.status !== "registration_open" || deadlinePassed;
               const myStatus = row.my_status;
               const isActive = myStatus === "pending" || myStatus === "accepted" || myStatus === "confirmed";
-              const percent = Math.min(100, Math.round((accepted / quota) * 100));
 
               return (
                 <Card key={definition.id} className="flex flex-col border-slate-200 transition-shadow hover:shadow-md">
@@ -349,8 +345,8 @@ export default function TournamentsPage() {
                         <CardTitle className="text-lg font-bold text-slate-900">{definition.label}</CardTitle>
                         <p className="mt-1 text-xs text-slate-500">{definition.shortLabel}</p>
                       </div>
-                      <Badge variant={isFull || isClosed ? "destructive" : "success"}>
-                        {isFull ? "Penuh" : isClosed ? "Ditutup" : "Dibuka"}
+                      <Badge variant={isClosed ? "destructive" : "success"}>
+                        {isClosed ? "Ditutup" : "Dibuka"}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -359,17 +355,11 @@ export default function TournamentsPage() {
                       <div className="flex items-center justify-between text-xs text-slate-500">
                         <span className="flex items-center gap-1.5">
                           <Users className="h-3.5 w-3.5" />
-                          Kuota diterima
+                          Peserta diterima
                         </span>
-                        <strong className={isFull ? "text-rose-600" : "text-slate-800"}>
-                          {accepted}/{quota} {definition.doubles ? "tim" : "peserta"}
+                        <strong className="text-slate-800">
+                          {accepted} {definition.doubles ? "tim" : "peserta"}
                         </strong>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className={`h-full rounded-full ${isFull ? "bg-rose-500" : "bg-matchpoin-tennis"}`}
-                          style={{ width: `${percent}%` }}
-                        />
                       </div>
                       {row.pending_count > 0 && (
                         <p className="text-[11px] text-amber-700">
@@ -435,10 +425,6 @@ export default function TournamentsPage() {
                         <Button variant="outline" size="sm" className="w-full text-xs" disabled>
                           {myStatus === "pending" ? "Menunggu Persetujuan" : "Sudah Terdaftar"}
                         </Button>
-                      ) : isFull ? (
-                        <Button variant="secondary" size="sm" className="w-full text-xs" disabled>
-                          Kuota Penuh ({accepted}/{quota})
-                        </Button>
                       ) : isClosed ? (
                         <Button variant="secondary" size="sm" className="w-full text-xs" disabled>
                           Pendaftaran Ditutup
@@ -495,7 +481,7 @@ export default function TournamentsPage() {
               </strong>{" "}
               yang tercatat selama periode liga.
             </li>
-            <li>Setiap kategori maksimal {IKA17_QUOTA} peserta (single) atau {IKA17_QUOTA} tim (ganda).</li>
+            <li>Tidak ada batas jumlah peserta: setiap kategori terbuka untuk semua pendaftar selama periode berjalan.</li>
           </ul>
         </section>
       </div>
@@ -506,7 +492,7 @@ export default function TournamentsPage() {
             <CardHeader>
               <CardTitle className="text-lg">Daftar {ika17Category(selected.category)?.label}</CardTitle>
               <p className="text-xs text-slate-500">
-                {selected.name} · Kuota {selected.registration_count}/{selected.max_participants || IKA17_QUOTA}
+                {selected.name} · {selected.registration_count} pendaftar
               </p>
             </CardHeader>
             <CardContent className="space-y-4">

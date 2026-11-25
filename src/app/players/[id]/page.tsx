@@ -22,7 +22,7 @@ import {
   Pencil,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
-import { MPR_STARTING_RATING } from "@/lib/rating/mpr-core.mjs";
+import { MPR_STARTING_RATING, mprIsCalibrating } from "@/lib/rating/mpr-core.mjs";
 
 interface PublicPlayerProfile {
   display_name: string | null;
@@ -288,7 +288,7 @@ export default function PublicPlayerProfilePage() {
                   <div className="text-xs text-slate-600 flex justify-between py-1 border-b border-slate-100">
                     <span>Status Rating:</span>
                     <span className="font-semibold text-slate-800">
-                      {rating?.matches_played && rating.matches_played > 0 ? "Resmi" : "Provisori"}
+                      {mprIsCalibrating(rating?.matches_played) ? "Kalibrasi" : "Resmi"}
                     </span>
                   </div>
                   <div className="text-xs text-slate-600 flex justify-between py-1 border-b border-slate-100">

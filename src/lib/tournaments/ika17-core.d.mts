@@ -28,7 +28,8 @@ export const IKA17_MAIN_EVENT_END: string;
 export const IKA17_REGISTRATION_OPEN: string;
 export const IKA17_REGISTRATION_DEADLINE: string;
 /** Kuota setiap kategori: 24 peserta (single) atau 24 tim (ganda). */
-export const IKA17_QUOTA: number;
+/** null = tanpa batas kuota. */
+export const IKA17_QUOTA: number | null;
 /** Syarat lolos Main Event: minimal 17 pertandingan tercatat. */
 export const IKA17_MIN_MATCHES: number;
 /** Jumlah peserta tiap kelas yang lolos ke Main Event. */

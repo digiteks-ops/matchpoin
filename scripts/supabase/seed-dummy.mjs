@@ -306,7 +306,7 @@ async function createCompletedMatch(a, b, stateA, stateB, daysAgo, options = {})
  * Pertandingan lintas level, dibuat "dari sisi admin": admin memilih kedua
  * pemain dan hasil akhirnya, bukan pemain yang mengajukan.
  *
- * Semua pemain dummy mulai dari MPR 1300, jadi setelah rangkaian pertandingan
+ * Semua pemain dummy mulai dari MPR 1000, jadi setelah rangkaian pertandingan
  * di atas rating mereka sudah menyebar. Skenario di bawah memilih pemain
  * berating TERENDAH dan TERTINGGI yang nyata, lalu mempertandingkan keduanya
  * untuk memperlihatkan aturan poin MPR:
