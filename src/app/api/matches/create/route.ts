@@ -26,6 +26,20 @@ export async function POST(request: Request) {
     );
   }
 
+  let roles = [] as Awaited<ReturnType<typeof getUserRoles>>;
+  try {
+    roles = await getUserRoles(user.id);
+  } catch (error) {
+    logError('match.create.roles', error, { userId: user.id });
+  }
+  if (!hasRole(roles, 'host')) {
+    return NextResponse.json(
+      { success: false, message: 'Hanya Host yang dapat membuat pertandingan.' },
+      { status: 403 }
+    );
+  }
+  const isAdmin = hasRole(roles, 'admin');
+
   let payload: CreateOpenMatchInput;
   try {
     payload = (await request.json()) as CreateOpenMatchInput;
@@ -62,13 +76,6 @@ export async function POST(request: Request) {
 
   if (matchType !== 'open' && matchType !== 'private') {
     return NextResponse.json({ success: false, message: 'Tipe pertandingan tidak valid.' }, { status: 400 });
-  }
-
-  let isAdmin = false;
-  try {
-    isAdmin = hasRole(await getUserRoles(user.id), 'admin');
-  } catch (error) {
-    logError('match.create.roles', error, { userId: user.id });
   }
 
   const cleanIds = (value: unknown): string[] =>

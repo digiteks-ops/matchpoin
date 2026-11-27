@@ -26,7 +26,8 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [accountRole, setAccountRole] = useState<"player" | "host">("player");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -58,7 +59,8 @@ export default function RegisterPage() {
         password: password,
         options: {
           data: {
-            full_name: fullName.trim(),
+            full_name: fullName.trim(),
+            role: accountRole,
           },
         },
       });
@@ -171,6 +173,54 @@ export default function RegisterPage() {
                   required
                   disabled={isLoading}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Daftar Sebagai</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label
+                    className={`cursor-pointer rounded-xl border p-3 transition-colors ${
+                      accountRole === "player"
+                        ? "border-matchpoin-navy bg-slate-50 ring-1 ring-matchpoin-navy"
+                        : "border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="accountRole"
+                      value="player"
+                      checked={accountRole === "player"}
+                      onChange={() => setAccountRole("player")}
+                      className="sr-only"
+                      disabled={isLoading}
+                    />
+                    <span className="block text-sm font-bold text-slate-900">Pemain</span>
+                    <span className="mt-1 block text-[11px] leading-snug text-slate-500">
+                      Bergabung dan bertanding di komunitas.
+                    </span>
+                  </label>
+                  <label
+                    className={`cursor-pointer rounded-xl border p-3 transition-colors ${
+                      accountRole === "host"
+                        ? "border-matchpoin-navy bg-slate-50 ring-1 ring-matchpoin-navy"
+                        : "border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="accountRole"
+                      value="host"
+                      checked={accountRole === "host"}
+                      onChange={() => setAccountRole("host")}
+                      className="sr-only"
+                      disabled={isLoading}
+                    />
+                    <span className="block text-sm font-bold text-slate-900">Host</span>
+                    <span className="mt-1 block text-[11px] leading-snug text-slate-500">
+                      Kelola komunitas dan buat pertandingan.
+                    </span>
+                  </label>
+                </div>
               </div>
 
               <div className="space-y-2">
