@@ -13,6 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
 import { uploadAvatar } from "@/lib/services/player-service";
 import {
+  DEFAULT_PROVINCE,
+  findDefaultCity,
+} from "@/lib/constants/location";
+import {
   ArrowLeft,
   Camera,
   CheckCircle2,
@@ -21,7 +25,7 @@ import {
   Sparkles,
   Save,
 } from "lucide-react";
-import type { DbUser, PlayerProfile, City, PreferredHand, BackhandStyle, PlayFrequency, SkillLevel, Gender, ProfileVisibility } from "@/types/database.types";
+import type { DbUser, PlayerProfile, City, PreferredHand, BackhandStyle, PlayFrequency, Gender, ProfileVisibility } from "@/types/database.types";
 
 export default function EditProfilePage() {
   const router = useRouter();
@@ -49,10 +53,8 @@ export default function EditProfilePage() {
   const [preferredHand, setPreferredHand] = useState<PreferredHand>("right");
   const [backhand, setBackhand] = useState<BackhandStyle>("two_handed");
   const [playFrequency, setPlayFrequency] = useState<PlayFrequency>("weekly");
-  const [selfAssessedLevel, setSelfAssessedLevel] = useState<SkillLevel>("beginner");
   const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>("public");
   // Kategori awal dikunci sekali; sesudahnya rating hanya bergerak lewat hasil tanding.
-  const [startingLevelLocked, setStartingLevelLocked] = useState(false);
 
   // Arrays for preferences
   const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
@@ -83,11 +85,13 @@ const loadProfile = useCallback(async () => {
         .eq("is_active", true)
         .order("sort_order", { ascending: true });
 
+      const loadedCities = (citiesData as City[] | null) ?? [];
+      const provinces = Array.from(
+        new Set(loadedCities.map((c) => c.province).filter(Boolean))
+      ).sort();
+
       if (citiesData) {
         setCities(citiesData as City[]);
-        const provinces = Array.from(
-          new Set((citiesData as City[]).map((c) => c.province).filter(Boolean))
-        ).sort();
         setProvinceOptions(provinces);
 
         // Pre-select province after the user record is loaded (kept below).
@@ -111,6 +115,11 @@ const loadProfile = useCallback(async () => {
         if (userData.city_id) {
           const savedCity = (citiesData as City[] | null)?.find((c) => c.id === userData.city_id);
           if (savedCity) setProvince(savedCity.province);
+        } else {
+          // Lokasi bawaan: Sulawesi Selatan, Kota Makassar.
+          const defaultCity = findDefaultCity(citiesData as City[] | null);
+          if (provinces.includes(DEFAULT_PROVINCE)) setProvince(DEFAULT_PROVINCE);
+          if (defaultCity) setCityId(defaultCity.id);
         }
       }
 
@@ -127,21 +136,11 @@ const loadProfile = useCallback(async () => {
         setPreferredHand(profileData.preferred_hand || "right");
         setBackhand(profileData.backhand || "two_handed");
         setPlayFrequency(profileData.play_frequency || "weekly");
-        setSelfAssessedLevel(profileData.self_assessed_level || "beginner");
         setProfileVisibility(profileData.profile_visibility || "public");
         setPreferredCategories(profileData.preferred_categories || []);
         setPreferredTimes(profileData.preferred_times || []);
       }
 
-      const { data: ratingData } = await supabase
-        .from("player_ratings")
-        .select("matches_played, starting_rating_set_at")
-        .eq("user_id", authUser.id)
-        .maybeSingle();
-
-      setStartingLevelLocked(
-        Boolean(ratingData?.starting_rating_set_at) || (ratingData?.matches_played ?? 0) > 0
-      );
     } catch (err: any) {
       setErrorMessage(err?.message || "Gagal memuat profil.");
     } finally {
@@ -208,7 +207,6 @@ const loadProfile = useCallback(async () => {
           preferredHand,
           backhand,
           playFrequency,
-          selfAssessedLevel,
           profileVisibility,
           preferredCategories,
           preferredTimes,
@@ -328,7 +326,7 @@ const loadProfile = useCallback(async () => {
                   <h4 className="text-xs font-bold text-slate-800">Foto Profil</h4>
                   <p className="text-[11px] text-slate-500">
                     Format JPG, PNG, atau WEBP. Maksimal 10 MB. Foto dikompres otomatis
-                    (512 px, â‰¤300 KB) sebelum diunggah.
+                    (512 px, ≤300 KB) sebelum diunggah.
                   </p>
                   {photoStage && (
                     <p className="text-[11px] font-semibold text-matchpoin-navy">{photoStage}</p>
@@ -474,26 +472,9 @@ const loadProfile = useCallback(async () => {
                   </select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="selfAssessedLevel">Penilaian Level Sendiri</Label>
-                  <select
-                    id="selfAssessedLevel"
-                    value={selfAssessedLevel}
-                    onChange={(e) => setSelfAssessedLevel(e.target.value as SkillLevel)}
-                    disabled={startingLevelLocked}
-                    className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matchpoin-tennis disabled:bg-slate-100 disabled:text-slate-500"
-                  >
-                    <option value="beginner">Beginner: maksimal 2 tahun bermain</option>
-                    <option value="intermediate">Intermediate: lebih dari 2 tahun bermain</option>
-                    <option value="advanced">Advanced: pernah mengikuti PORDA, PORPROV, PON</option>
-                    <option value="expert">Expert: level turnamen</option>
-                  </select>
-                  <p className="text-[11px] text-slate-500">
-                    {startingLevelLocked
-                      ? "Kategori awal sudah ditetapkan saat pendaftaran. Rating kini bergerak mengikuti hasil pertandingan."
-                      : "Level ini disimpan sebagai kategori awal. Rating MPR tetap mulai dari 1000, lalu bergerak mengikuti hasil pertandingan."}
-                  </p>
-                </div>
+                {/* Penilaian level sendiri dihapus: kategori pemain ditentukan
+                    dari MPR hasil pertandingan, bukan dari pilihan subjektif.
+                    Semua pemain baru mulai dari MPR 1000. */}
 
                 <div className="space-y-2">
                   <Label htmlFor="playFrequency">Frekuensi Bermain</Label>

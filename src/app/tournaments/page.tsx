@@ -10,7 +10,7 @@ import { TournamentLeaderboard } from "@/components/tournaments/tournament-leade
 import { TournamentParticipants } from "@/components/tournaments/tournament-participants";
 import { AlertCircle, Calendar, CheckCircle2, Clock, Loader2, MapPin, Trophy, Users } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
-import { formatIndonesianDate } from "@/lib/utils";
+import { formatIndonesianDate, todayInPlatformTimeZone } from "@/lib/utils";
 import {
   IKA17_CATEGORIES,
   IKA17_CLASS_LABELS,
@@ -23,6 +23,7 @@ import {
   IKA17_MAIN_EVENT_START,
   IKA17_MIN_MATCHES,
   IKA17_REGISTRATION_DEADLINE,
+  IKA17_REGISTRATION_OPEN,
   IKA17_START_DATE,
   ika17Category,
 } from "@/lib/tournaments/ika17";
@@ -185,8 +186,6 @@ export default function TournamentsPage() {
       const allowed = (payload.partners ?? []).filter((partner) => {
         if (definition.genderRule === "male") return partner.gender === "male";
         if (definition.genderRule === "female") return partner.gender === "female";
-        if (currentGender === "male") return partner.gender === "female";
-        if (currentGender === "female") return partner.gender === "male";
         return true;
       });
       setPartners(allowed);
@@ -285,7 +284,7 @@ export default function TournamentsPage() {
               </h1>
               <p className="max-w-2xl text-sm leading-relaxed text-slate-200">
                 Liga musim 1 dengan {IKA17_CATEGORIES.length} kategori: Single Man, Double Man,
-                Double Woman, dan Double Mix. Pendaftaran dibuka sampai{" "}
+                dan Double Woman. Pendaftaran dibuka sampai{" "}
                 <strong className="text-white">{dateLabel(league.deadline)}</strong>. Tidak ada
                 batas jumlah peserta: setiap kategori terbuka untuk semua pendaftar selama periode
                 berjalan.
@@ -369,7 +368,12 @@ export default function TournamentsPage() {
                 row.registration_deadline &&
                   new Date(`${row.registration_deadline}T23:59:59`) < new Date()
               );
-              const isClosed = row.status !== "registration_open" || deadlinePassed;
+              // Periode pendaftaran liga: 1-31 Desember 2026. Sebelum tanggal
+              // buka kartu tidak boleh berlabel "Dibuka".
+              const registrationNotOpenYet =
+                todayInPlatformTimeZone() < IKA17_REGISTRATION_OPEN;
+              const isClosed =
+                registrationNotOpenYet || row.status !== "registration_open" || deadlinePassed;
               const myStatus = row.my_status;
               const isActive = myStatus === "pending" || myStatus === "accepted" || myStatus === "confirmed";
 
@@ -381,8 +385,12 @@ export default function TournamentsPage() {
                         <CardTitle className="text-lg font-bold text-slate-900">{definition.label}</CardTitle>
                         <p className="mt-1 text-xs text-slate-500">{definition.shortLabel}</p>
                       </div>
-                      <Badge variant={isClosed ? "destructive" : "success"}>
-                        {isClosed ? "Ditutup" : "Dibuka"}
+                      <Badge
+                        variant={
+                          registrationNotOpenYet ? "secondary" : isClosed ? "destructive" : "success"
+                        }
+                      >
+                        {registrationNotOpenYet ? "Belum dibuka" : isClosed ? "Ditutup" : "Dibuka"}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -421,9 +429,7 @@ export default function TournamentsPage() {
                   <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                       <p className="flex items-start gap-1.5">
                         <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
-                        {definition.genderRule === "mixed"
-                          ? "Wajib 1 pemain putra + 1 pemain putri dalam satu tim."
-                          : definition.genderRule === "male"
+                        {definition.genderRule === "male"
                           ? "Khusus pemain putra."
                           : "Khusus pemain putri."}
                       </p>
@@ -449,20 +455,24 @@ export default function TournamentsPage() {
                     )}
 
                     <div className="mt-auto">
-                      {!currentUser ? (
+                      {isActive ? (
+                        <Button variant="outline" size="sm" className="w-full text-xs" disabled>
+                          {myStatus === "pending" ? "Menunggu Persetujuan" : "Sudah Terdaftar"}
+                        </Button>
+                      ) : isClosed ? (
+                        // Sebelum periode pendaftaran dibuka, tamu juga melihat
+                        // tanggal buka, bukan ajakan masuk yang belum berguna.
+                        <Button variant="secondary" size="sm" className="w-full text-xs" disabled>
+                          {registrationNotOpenYet
+                            ? `Dibuka ${dateLabel(IKA17_REGISTRATION_OPEN)}`
+                            : "Pendaftaran Ditutup"}
+                        </Button>
+                      ) : !currentUser ? (
                         <Link href="/login?redirectTo=/tournaments">
                           <Button variant="outline" size="sm" className="w-full text-xs">
                             Masuk untuk Mendaftar
                           </Button>
                         </Link>
-                      ) : isActive ? (
-                        <Button variant="outline" size="sm" className="w-full text-xs" disabled>
-                          {myStatus === "pending" ? "Menunggu Persetujuan" : "Sudah Terdaftar"}
-                        </Button>
-                      ) : isClosed ? (
-                        <Button variant="secondary" size="sm" className="w-full text-xs" disabled>
-                          Pendaftaran Ditutup
-                        </Button>
                       ) : (
                         <Button
                           variant="tennis"
@@ -497,9 +507,8 @@ export default function TournamentsPage() {
               </strong>
             </li>
             <li>
-              Kategori liga: <strong>Single Man</strong>, <strong>Double Man</strong>,{" "}
-              <strong>Double Woman</strong>, dan <strong>Double Mix</strong>. Tidak ada pilihan
-              level saat mendaftar.
+              Kategori liga: <strong>Single Man</strong>, <strong>Double Man</strong>, dan{" "}
+              <strong>Double Woman</strong>. Tidak ada pilihan level saat mendaftar.
             </li>
             <li>
               Kelas liga dibentuk otomatis dari hasil pertandingan: <strong>Beginner</strong>{" "}
@@ -559,16 +568,6 @@ export default function TournamentsPage() {
                           </option>
                         ))}
                       </select>
-                      {ika17Category(selected.category)?.genderRule === "mixed" && (
-                        <p className="text-[11px] text-slate-500">
-                          Ganda campuran wajib terdiri dari 1 pemain putra dan 1 pemain putri.
-                          {currentGender === "male"
-                            ? " Pilih partner putri."
-                            : currentGender === "female"
-                            ? " Pilih partner putra."
-                            : " Lengkapi jenis kelamin profil Anda terlebih dahulu."}
-                        </p>
-                      )}
                       {partners.length === 0 && !partnersLoading && (
                         <p className="text-[11px] text-amber-700">
                           Belum ada calon partner yang sesuai. Lengkapi profil pemain lain atau hubungi admin.

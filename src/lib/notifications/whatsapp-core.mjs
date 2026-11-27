@@ -3,7 +3,7 @@
 // `whatsapp-service.ts`.
 
 /** Kontak admin MATCHPOIN untuk tombol floating "Chat Admin". */
-export const ADMIN_WHATSAPP_NUMBER = "625128066022";
+export const ADMIN_WHATSAPP_NUMBER = "6285128066022";
 
 /** Grup WhatsApp resmi Liga IKA17; pendaftar otomatis diarahkan ke sini. */
 export const LEAGUE_WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/Lea6qDW5yuNAU5YruHALTV";

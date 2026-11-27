@@ -398,7 +398,7 @@ export async function recomputeLeagueStandings(
        SUM(results.games_for),
        SUM(results.games_against),
        SUM(results.games_for) - SUM(results.games_against),
-       SUM(CASE WHEN results.is_win = 1 THEN 3 ELSE 0 END)
+       0
      FROM (
        SELECT DISTINCT
          result.match_id,
@@ -429,7 +429,7 @@ export async function recomputeLeagueStandings(
      JOIN (
        SELECT id,
               ROW_NUMBER() OVER (
-                ORDER BY points DESC, game_diff DESC, games_won DESC, entry_id
+                ORDER BY won DESC, game_diff DESC, games_won DESC, entry_id
               ) AS rank_position
        FROM league_standings
        WHERE tournament_id = ?

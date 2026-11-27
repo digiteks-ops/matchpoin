@@ -13,6 +13,7 @@ import { ERROR_CREATE_MATCH, ERROR_NETWORK, isOffline, logError } from "@/lib/er
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { toPlatformIsoString } from "@/lib/utils";
 import { RATING_TIER_OPTIONS } from "@/lib/rating/rating-tier-core.mjs";
+import { DEFAULT_CITY_NAME, DEFAULT_PROVINCE } from "@/lib/constants/location";
 import { createClient } from "@/lib/supabase/client";
 
 export interface CityOption {
@@ -21,25 +22,24 @@ export interface CityOption {
   province: string;
 }
 
-function isGenderCompatible(category: MatchCategory, gender: string | null): boolean {
-  if (category === "mixed_doubles") return true;
-  if (category.startsWith("mens_")) return gender === "male";
-  if (category.startsWith("womens_")) return gender === "female";
-  return true;
-}
+// Pertandingan umum (di luar turnamen) tidak dibatasi gender: host yang
+// menentukan susunan pemain, sehingga cewek vs cowok diperbolehkan. Aturan
+// gender hanya berlaku di kategori turnamen/liga (divalidasi di server).
 
 interface CreateMatchFormProps {
   cities: CityOption[];
   inviteUserId?: string;
   inviteName?: string;
+  /** Kategori awal, mis. dari shortcut leaderboard liga (mode tunggal/ganda). */
+  initialCategory?: MatchCategory;
   currentUserId: string;
   isAdmin?: boolean;
 }
 
-export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserId, isAdmin = false }: CreateMatchFormProps) {
+export function CreateMatchForm({ cities, inviteUserId, inviteName, initialCategory, currentUserId, isAdmin = false }: CreateMatchFormProps) {
   const router = useRouter();
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<MatchCategory>("mens_singles");
+  const [category, setCategory] = useState<MatchCategory>(initialCategory ?? "mens_singles");
   const [province, setProvince] = useState<string>("");
   const [cityName, setCityName] = useState<string>("");
   const [courtName, setCourtName] = useState<string>("");
@@ -90,9 +90,11 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
   );
 
   useEffect(() => {
-    if (!province && provinceOptions.length > 0) {
-      setProvince(provinceOptions[0]);
-    }
+    if (province) return;
+    // Lokasi bawaan: Sulawesi Selatan. Fallback ke opsi pertama bila tidak ada.
+    setProvince(
+      provinceOptions.includes(DEFAULT_PROVINCE) ? DEFAULT_PROVINCE : provinceOptions[0] ?? ""
+    );
   }, [province, provinceOptions]);
 
   const cityOptions = useMemo(
@@ -112,6 +114,15 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
     if (cityName && !cityOptions.includes(cityName)) {
       setCityName("");
     }
+  }, [cityName, cityOptions]);
+
+  useEffect(() => {
+    // Kota bawaan: Makassar, selama belum dipilih dan tersedia di provinsi ini.
+    if (cityName) return;
+    const preferred = cityOptions.find(
+      (name) => name.toLowerCase() === DEFAULT_CITY_NAME.toLowerCase()
+    );
+    if (preferred) setCityName(preferred);
   }, [cityName, cityOptions]);
 
   useEffect(() => {
@@ -185,49 +196,45 @@ export function CreateMatchForm({ cities, inviteUserId, inviteName, currentUserI
     () =>
       opponents.filter(
         (player) =>
-          isGenderCompatible(category, player.gender) &&
           player.user_id !== partnerUserId &&
           player.user_id !== opponentUserId &&
           player.user_id !== opponentPartnerUserId
       ),
-    [category, opponentPartnerUserId, opponentUserId, opponents, partnerUserId]
+    [opponentPartnerUserId, opponentUserId, opponents, partnerUserId]
   );
 
   const partnerOptions = useMemo(
     () =>
       partners.filter(
         (player) =>
-          isGenderCompatible(category, player.gender) &&
           player.user_id !== inviteUserId &&
           player.user_id !== teamACaptainUserId &&
           player.user_id !== opponentUserId &&
           player.user_id !== opponentPartnerUserId
       ),
-    [category, inviteUserId, opponentPartnerUserId, opponentUserId, partners, teamACaptainUserId]
+    [inviteUserId, opponentPartnerUserId, opponentUserId, partners, teamACaptainUserId]
   );
 
   const opponentOptions = useMemo(
     () =>
       opponents.filter(
         (player) =>
-          isGenderCompatible(category, player.gender) &&
           player.user_id !== teamACaptainUserId &&
           player.user_id !== partnerUserId &&
           player.user_id !== opponentPartnerUserId
       ),
-    [category, opponentPartnerUserId, opponents, partnerUserId, teamACaptainUserId]
+    [opponentPartnerUserId, opponents, partnerUserId, teamACaptainUserId]
   );
 
   const opponentPartnerOptions = useMemo(
     () =>
       opponents.filter(
         (player) =>
-          isGenderCompatible(category, player.gender) &&
           player.user_id !== teamACaptainUserId &&
           player.user_id !== partnerUserId &&
           player.user_id !== opponentUserId
       ),
-    [category, opponentUserId, opponents, partnerUserId, teamACaptainUserId]
+    [opponentUserId, opponents, partnerUserId, teamACaptainUserId]
   );
 
   const handleCategoryChange = (next: MatchCategory) => {

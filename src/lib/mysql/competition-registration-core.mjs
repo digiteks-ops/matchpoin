@@ -1,5 +1,10 @@
+import { IKA17_CATEGORIES } from "../tournaments/ika17-core.mjs";
+
 const MAX_ID_LENGTH = 36;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
+
+/** Kategori yang benar-benar dibuka sebagai liga (sumber: ika17-core.mjs). */
+const LEAGUE_CATEGORIES = new Set(IKA17_CATEGORIES.map((entry) => entry.id));
 
 /** Nomor WhatsApp Indonesia setelah dinormalkan ke awalan 62. */
 const WA_PATTERN = /^62(8[1-9][0-9]{6,11})$/;
@@ -139,6 +144,12 @@ export function evaluateLeagueRegistration(input) {
   const category = tournament.category || inferCategory(tournament.name || "");
   const doubles = isDoubles(category);
 
+  // Double Mix sudah dihapus dari liga IKA17. Tolak juga baris liga lama yang
+  // masih menyimpan kategori tersebut.
+  if (!LEAGUE_CATEGORIES.has(category)) {
+    return { ok: false, message: "Kategori liga tidak valid." };
+  }
+
   if (eligibilityConfirmed === false) {
     return {
       ok: false,
@@ -185,16 +196,8 @@ export function evaluateLeagueRegistration(input) {
   if (doubles && partnerUserId && partnerExists === false) {
     return { ok: false, message: "Partner tidak ditemukan." };
   }
-  if (category === "mixed_doubles" && partnerUserId) {
-    if (userExists === false) {
-      return { ok: false, message: "Akun pemain tidak ditemukan." };
-    }
-    if (userGender && partnerGender && userGender === partnerGender) {
-      return {
-        ok: false,
-        message: "Ganda Campuran wajib terdiri dari 1 pemain putra dan 1 pemain putri.",
-      };
-    }
+  if (doubles && partnerUserId && userExists === false) {
+    return { ok: false, message: "Akun pemain tidak ditemukan." };
   }
 
   // Tanpa batas kuota: pendaftaran hanya ditutup oleh periode & status liga.

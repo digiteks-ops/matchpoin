@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ensurePlayerRecordsServer, recordLastSeenServer } from "@/lib/services/player-sync";
 import { PASSWORD_RECOVERY_PATH } from "@/lib/auth/callback-url.mjs";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -11,32 +10,6 @@ const ERROR_CODES: Record<string, string> = {
   server_error: "oauth_failed",
   temporarily_unavailable: "oauth_failed",
 };
-
-/**
- * TRUE bila pemain belum pernah menetapkan kategori awal dan belum bertanding.
- * Kategori awal hanya dipilih sekali; setelah itu rating bergerak dari hasil
- * pertandingan.
- */
-async function needsStartingRating(userId: string): Promise<boolean> {
-  const admin = createAdminClient();
-  if (!admin) return false;
-
-  const { data, error } = await admin
-    .from("player_ratings")
-    .select("starting_rating_set_at, matches_played")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("OAuth starting-category read error:", error.message);
-    return false;
-  }
-
-  // Baris rating belum ada (project lama): anggap perlu memilih.
-  if (!data) return true;
-
-  return !data.starting_rating_set_at && (data.matches_played ?? 0) === 0;
-}
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -95,34 +68,13 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?error=email_missing`);
   }
 
-  let needsStartingCategory = false;
-
   try {
     const fullName =
       (data.user.user_metadata?.full_name as string | undefined) ||
       (data.user.user_metadata?.name as string | undefined);
-    const metaLevel = data.user.user_metadata?.starting_level;
-    const startingLevel =
-      metaLevel === "beginner" ||
-      metaLevel === "intermediate" ||
-      metaLevel === "advanced" ||
-      metaLevel === "expert"
-        ? metaLevel
-        : undefined;
-    await ensurePlayerRecordsServer(
-      data.user.id,
-      data.user.email,
-      fullName,
-      startingLevel
-    );
-
-    // `created` tidak bisa dipakai sebagai penanda pemain baru: trigger
-    // handle_new_user sudah membuat baris public.users lebih dulu, jadi
-    // ensurePlayerRecords selalu melaporkan created=false. Yang menentukan
-    // adalah status kategori awal di player_ratings.
-    if (!startingLevel) {
-      needsStartingCategory = await needsStartingRating(data.user.id);
-    }
+    // Tidak ada kategori awal yang perlu dipilih: semua pemain baru mulai
+    // dari MPR 1000 dan kategori ditentukan dari hasil pertandingan.
+    await ensurePlayerRecordsServer(data.user.id, data.user.email, fullName);
   } catch (err) {
     console.error("OAuth player sync error:", err);
   }
@@ -133,13 +85,6 @@ export async function GET(request: Request) {
     await recordLastSeenServer(data.user.id);
   } catch (err) {
     console.error("OAuth last-seen error:", err);
-  }
-
-  // OAuth tidak membawa pilihan kategori: pemain baru diarahkan memilih sekali.
-  if (needsStartingCategory) {
-    return NextResponse.redirect(
-      `${origin}/pilih-kategori?next=${encodeURIComponent(safeNextPath)}`
-    );
   }
 
   return NextResponse.redirect(`${origin}${safeNextPath}`);

@@ -6,7 +6,7 @@
  *   - auth.users + users + player_profiles + player_ratings untuk 25 pemain
  *     dummy (semua ditandai is_dummy = TRUE)
  *   - pertandingan selesai (4-8 per pemain) + peserta + hasil + rating_history
- *   - pendaftaran liga IKA17 (pending/accepted) untuk 4 kategori
+ *   - pendaftaran liga IKA17 (pending/accepted) untuk 3 kategori
  *   - satu pertandingan yang masih OPEN dengan 1 permohonan pending
  *     (untuk menguji tombol Terima/Tolak host)
  *   - notifikasi contoh
@@ -495,7 +495,7 @@ async function main() {
   if (DRY_RUN) {
     console.log(`  Akan membuat ${PLAYERS.length} pemain dummy.`);
     console.log(`  Setiap pemain 4-8 pertandingan selesai + riwayat rating.`);
-    console.log(`  Pendaftaran liga untuk 4 kategori + 1 match open dengan pending.`);
+    console.log(`  Pendaftaran liga untuk 3 kategori + 1 match open dengan pending.`);
     return;
   }
 

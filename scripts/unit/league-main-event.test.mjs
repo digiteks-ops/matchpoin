@@ -12,7 +12,7 @@ const read = (relative) => readFile(new URL(`../../${relative}`, import.meta.url
 const leaderboard = await read("src/components/tournaments/tournament-leaderboard.tsx");
 const tournamentsPage = await read("src/app/tournaments/page.tsx");
 const matchService = await read("src/lib/services/match-service.ts");
-const migration = await read("supabase/migrations/00042_league_classes_from_rating.sql");
+const migration = await read("supabase/migrations/00045_remove_mixed_doubles_league.sql");
 
 test("main event takes the top 8 of each class in every category", () => {
   assert.equal(IKA17_MAIN_EVENT_SLOTS, 8);
@@ -44,7 +44,7 @@ test("match capacity counts confirmed players only, never pending requests", () 
   assert.doesNotMatch(matchService, /currentPlayers = participants\.length > 0 \? confirmed\.length/);
 });
 
-test("migration 00042 removes every stale registration overload first", () => {
+test("migration 00045 removes every stale registration overload first", () => {
   assert.match(migration, /p\.proname = 'register_for_competition'/);
   assert.match(migration, /DROP FUNCTION IF EXISTS %s/);
   // Satu definisi final dengan lima parameter (parameter level dipertahankan).

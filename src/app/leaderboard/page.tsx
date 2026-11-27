@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import {
   matchesRatingTier,
 } from "@/lib/rating/rating-tier-core.mjs";
 import { MPR_STARTING_RATING, mprIsCalibrating } from "@/lib/rating/mpr-core.mjs";
+import { DEFAULT_PROVINCE, findDefaultCity } from "@/lib/constants/location";
 
 interface LeaderboardRow {
   userId: string;
@@ -104,8 +105,25 @@ export default function LeaderboardPage() {
   // Filter tingkat MPR: beginner 0–1099, intermediate 1100–1599,
   // advanced 1600–1999, expert 2000+.
   const [selectedLevel, setSelectedLevel] = useState("all");
-  const [province, setProvince] = useState<string>("");
+  // Lokasi bawaan: Sulawesi Selatan, Kota Makassar.
+  const [province, setProvince] = useState<string>(DEFAULT_PROVINCE);
   const [provinceOptions, setProvinceOptions] = useState<string[]>([]);
+  const defaultLocationApplied = useRef(false);
+
+  const applyDefaultLocation = useCallback(
+    (list: Array<{ id: string; name: string; province?: string | null }>) => {
+      if (defaultLocationApplied.current) return;
+      defaultLocationApplied.current = true;
+      if (!list.some((city) => city.province === DEFAULT_PROVINCE)) {
+        setProvince("");
+        return;
+      }
+      setProvince(DEFAULT_PROVINCE);
+      const city = findDefaultCity(list);
+      if (city) setSelectedCity(city.id);
+    },
+    []
+  );
 
   useEffect(() => {
     async function load() {
@@ -119,6 +137,7 @@ export default function LeaderboardPage() {
           }));
           setCities(cityOptions);
           setProvinceOptions(provinceOptionsFrom(cityOptions));
+          applyDefaultLocation(cityOptions);
           // Rating setiap pemain terpublish: tidak ada penyaringan tambahan.
           setRows(result.players.map(leaderboardRow));
           return;
@@ -143,6 +162,7 @@ export default function LeaderboardPage() {
         }));
         setCities(cityOptions);
         setProvinceOptions(provinceOptionsFrom(cityOptions));
+        applyDefaultLocation(cityOptions);
 
         const publicPlayers = (publicPlayersResult.data ?? []) as unknown as SupabasePublicPlayer[];
         // Rating setiap pemain terpublish: semua pemain ikut dihitung.
@@ -179,7 +199,7 @@ export default function LeaderboardPage() {
       }
     }
     load();
-  }, []);
+  }, [applyDefaultLocation]);
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {

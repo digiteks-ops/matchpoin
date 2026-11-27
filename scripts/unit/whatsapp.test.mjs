@@ -51,10 +51,10 @@ test("tautan wa.me memakai nomor yang sudah dinormalkan", () => {
 });
 
 test("tombol floating memakai nomor admin yang diminta", () => {
-  assert.equal(ADMIN_WHATSAPP_NUMBER, "625128066022");
+  assert.equal(ADMIN_WHATSAPP_NUMBER, "6285128066022");
   const url = adminWhatsappUrl("Halo Admin MATCHPOIN");
   // wa.me butuh awalan 62 tanpa tanda plus; nomor admin sudah dalam bentuk itu.
-  assert.match(url, /^https:\/\/wa\.me\/625128066022/);
+  assert.match(url, /^https:\/\/wa\.me\/6285128066022/);
   // Nomor admin bukan seluler 8xx, jadi normalisasi ketat tidak boleh
   // mengosongkannya.
   assert.ok(url.length > "https://wa.me/".length);

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserRoles } from "@/lib/supabase/rbac-service";
 import { hasRole } from "@/lib/auth/roles";
 import { CreateMatchForm, type CityOption } from "@/components/matches/create-match-form";
+import { VALID_CATEGORIES, type MatchCategory } from "@/lib/matches/constants";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -10,13 +11,21 @@ export const dynamic = "force-dynamic";
 export default async function NewMatchPage({
   searchParams,
 }: {
-  searchParams: { invite?: string };
+  searchParams: { invite?: string; category?: string };
 }) {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   const inviteUserId = typeof searchParams.invite === "string" ? searchParams.invite : undefined;
+  // Shortcut dari leaderboard liga membawa kategori peserta supaya mode
+  // tunggal/ganda langsung sesuai kategori yang diikuti.
+  const requestedCategory =
+    typeof searchParams.category === "string" ? searchParams.category : undefined;
+  const initialCategory =
+    requestedCategory && VALID_CATEGORIES.includes(requestedCategory as MatchCategory)
+      ? (requestedCategory as MatchCategory)
+      : undefined;
 
   const { data: cities } = await supabase
     .from("cities")
@@ -78,6 +87,7 @@ export default async function NewMatchPage({
           cities={options}
           inviteUserId={inviteUserId}
           inviteName={inviteName}
+          initialCategory={initialCategory}
           currentUserId={user?.id ?? ""}
           isAdmin={isAdmin}
         />

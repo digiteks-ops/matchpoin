@@ -33,6 +33,7 @@ import {
   Check,
   Camera,
   Swords,
+  MessageSquare,
 } from "lucide-react";
 
 export interface ViewerInfo {
@@ -221,6 +222,25 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
       setNotice(team === 1 ? "Permohonan bergabung ke tim host terkirim." : "Permohonan lawan terkirim.");
       router.refresh();
     }
+  };
+
+  const handleCancelRequest = async () => {
+    if (!window.confirm("Batalkan permohonan slot Anda? Host tidak akan melihat permohonan ini lagi.")) return;
+    const json = await callApi(`/api/matches/${match.id}/cancel-request`);
+    if (json) {
+      setNotice("Permohonan dibatalkan. Anda tidak lagi menunggu persetujuan host.");
+      router.refresh();
+    }
+  };
+
+  /**
+   * Membuka chat lalu pindah ke halamannya. `body` menentukan jenis percakapan:
+   * { matchId } untuk grup seluruh peserta, { userId } untuk chat pribadi.
+   */
+  const handleOpenChat = async (body: { matchId: string } | { userId: string }) => {
+    const json = await callApi("/api/chat", body);
+    const conversationId = typeof json?.conversationId === "string" ? json.conversationId : null;
+    if (conversationId) router.push(`/chat/${conversationId}`);
   };
 
   const handleAccept = async (participantUserId: string) => {
@@ -987,8 +1007,26 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                 )}
 
                 {viewer.id && viewer.isPending && (
-                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">
-                    Permohonan Anda sedang menunggu persetujuan Host.
+                  <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">
+                    <p>Permohonan Anda sedang menunggu persetujuan Host.</p>
+                    <Button
+                      variant="outline"
+                      className="w-full border-amber-300 bg-white text-red-600"
+                      disabled={isBusy}
+                      onClick={handleCancelRequest}
+                    >
+                      {isBusy ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                          Membatalkan...
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-3.5 h-3.5 mr-2" />
+                          Batalkan
+                        </>
+                      )}
+                    </Button>
                   </div>
                 )}
 
@@ -1032,6 +1070,40 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                   <Button variant="tennis" className="w-full text-matchpoin-navy font-bold" onClick={() => setShowResultForm(true)}>
                     <Send className="w-4 h-4 mr-2" />
                     Kirim Hasil
+                  </Button>
+                )}
+
+                {/* Chat: satu grup untuk semua peserta pertandingan ini. */}
+                {viewer.id && viewer.isParticipant && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={isBusy}
+                    onClick={() => handleOpenChat({ matchId: match.id })}
+                  >
+                    {isBusy ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : (
+                      <MessageSquare className="w-4 h-4 mr-2" />
+                    )}
+                    Chat Semua Peserta
+                  </Button>
+                )}
+
+                {/* Chat pribadi dengan host, untuk peserta maupun penantang. */}
+                {viewer.id && !viewer.isOrganizer && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={isBusy}
+                    onClick={() => handleOpenChat({ userId: hostId })}
+                  >
+                    {isBusy ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : (
+                      <MessageSquare className="w-4 h-4 mr-2" />
+                    )}
+                    Chat Host
                   </Button>
                 )}
 

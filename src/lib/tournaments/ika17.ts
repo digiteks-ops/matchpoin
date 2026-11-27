@@ -26,11 +26,7 @@ export {
   ika17TeamRating,
 } from "./ika17-core.mjs";
 
-export type TournamentCategory =
-  | "mens_singles"
-  | "mens_doubles"
-  | "womens_doubles"
-  | "mixed_doubles";
+export type TournamentCategory = "mens_singles" | "mens_doubles" | "womens_doubles";
 
 /** Kelas liga yang dibentuk otomatis dari hasil pertandingan (MPR). */
 export type TournamentClass = "beginner" | "intermediate";

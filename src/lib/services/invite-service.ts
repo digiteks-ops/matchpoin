@@ -6,6 +6,7 @@ import {
   type MatchCategory,
 } from "@/lib/matches/constants";
 import { hasPlayedBefore } from "@/lib/services/match-service";
+import { syncMatchChatMembers } from "@/lib/services/chat-service";
 
 export type InviteStatus = "invited" | "confirmed" | "declined" | "revoked";
 
@@ -371,6 +372,10 @@ export async function respondToInvite(
     logError("invite.accept.resync", matchUpdateError, { participantRowId, userId });
     throw matchUpdateError;
   }
+
+  // Pemain yang menerima undangan langsung ikut chat pertandingan. Best effort:
+  // kalau chat belum pernah dibuka, tidak ada percakapan kosong yang dibuat.
+  await syncMatchChatMembers(row.match_id);
 }
 
 async function getPlayerNames(userIds: string[]): Promise<Map<string, string>> {

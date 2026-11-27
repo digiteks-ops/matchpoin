@@ -49,36 +49,40 @@ test("trigger kategori awal tidak lagi mengubah rating menurut kategori", () => 
   assert.doesNotMatch(fn, /WHEN 'expert' THEN 2500/);
 });
 
-test("form pendaftaran tetap mengirim kategori sebagai self-assessed level", () => {
-  assert.match(registerPage, /starting_level: startingLevel/);
-  assert.match(registerPage, /setStartingLevel/);
-  assert.match(registerPage, /Self Rating/);
-  assert.match(registerPage, /mprStartingRating\(startingLevel\)/);
+test("form pendaftaran tidak lagi meminta self rating", () => {
+  // Fitur penilaian level sendiri dihapus: semua pemain baru mulai dari 1000.
+  assert.match(registerPage, /Tidak ada lagi pilihan self rating/);
+  assert.doesNotMatch(registerPage, /starting_level: startingLevel/);
+  assert.doesNotMatch(registerPage, /setStartingLevel/);
+  assert.doesNotMatch(registerPage, /Self Rating/);
+  // Halaman tetap menjelaskan rating awal 1000.
+  assert.match(registerPage, /MPR_STARTING_RATING/);
 });
 
-test("self rating saat mendaftar hanya menawarkan beginner dan intermediate", async () => {
+test("halaman kategori awal tidak lagi menawarkan pilihan level", async () => {
   for (const relative of [
     "src/app/(auth)/register/page.tsx",
     "src/app/(auth)/pilih-kategori/page.tsx",
   ]) {
     const source = await readFile(new URL(`../../${relative}`, import.meta.url), "utf8");
     const options = source.match(/value: "(beginner|intermediate|advanced|expert)"/g) ?? [];
-    assert.deepEqual(
-      options.map((entry) => entry.slice(8, -1)),
-      ["beginner", "intermediate"],
+    assert.deepEqual(options, [], relative);
+    // Tidak ada lagi state wajib pilih kategori awal.
+    assert.doesNotMatch(source, /useState<SkillLevel \| null>\(null\)/, relative);
+    assert.doesNotMatch(
+      source,
+      /Pilih self rating Anda: Beginner atau Intermediate\./,
       relative
     );
-    // Wajib dipilih: tidak ada nilai awal, dan submit menolak pilihan kosong.
-    assert.match(source, /useState<SkillLevel \| null>\(null\)/, relative);
-    assert.match(source, /Pilih self rating Anda: Beginner atau Intermediate\./, relative);
   }
 });
 
 test("kedua jalur player-sync memakai rating awal 1000 dan mengunci pilihan sekali", () => {
   for (const source of [playerService, playerSync]) {
-    assert.match(source, /startingLevel\?: SkillLevel/);
-    assert.match(source, /mprStartingRating\(startingLevel\)/);
+    assert.match(source, /const startingRating = MPR_STARTING_RATING/);
     assert.match(source, /starting_rating_set_at/);
+    // Tidak ada lagi perhitungan rating dari level.
+    assert.doesNotMatch(source, /mprStartingRating\(startingLevel\)/);
     // Never re-apply once the marker exists.
     assert.match(source, /\.is\("starting_rating_set_at", null\)/);
   }
@@ -89,8 +93,10 @@ test("profil menyimpan level terkunci tanpa menyetel ulang rating", () => {
   assert.match(profileService, /starting_rating_set_at/);
   assert.match(
     profileService,
-    /const selfAssessedLevel = startingLevelLocked[\s\S]*?: input\.selfAssessedLevel;/
+    /const selfAssessedLevel = startingLevelLocked[\s\S]*?: input\.selfAssessedLevel \?\? storedLevel;/
   );
+  // Form profil tidak lagi mengirim level: nilai tersimpan harus dipertahankan.
+  assert.match(profileService, /const storedLevel = \(existingProfile\?\.self_assessed_level/);
 });
 
 test("route kategori awal menolak pilihan kedua", () => {

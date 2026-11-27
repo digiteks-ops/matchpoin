@@ -23,7 +23,7 @@ import {
 
 const read = (relative) => readFile(new URL(`../../${relative}`, import.meta.url), "utf8");
 
-const migration = await read("supabase/migrations/00042_league_classes_from_rating.sql");
+const migration = await read("supabase/migrations/00045_remove_mixed_doubles_league.sql");
 const registerRoute = await read("src/app/api/tournaments/register/route.ts");
 const tournamentsPage = await read("src/app/tournaments/page.tsx");
 const leaguePage = await read("src/app/league/page.tsx");
@@ -54,20 +54,21 @@ const evaluate = (category, overrides = {}) =>
     ...overrides,
   });
 
-test("kategori turnamen tepat empat: Single Man, Double Man, Double Woman, Double Mix", () => {
+test("kategori turnamen tepat tiga: Single Man, Double Man, Double Woman", () => {
   assert.deepEqual(
     IKA17_CATEGORIES.map((entry) => entry.label),
-    ["Single Man", "Double Man", "Double Woman", "Double Mix"]
+    ["Single Man", "Double Man", "Double Woman"]
   );
   assert.deepEqual(
     IKA17_CATEGORIES.map((entry) => entry.id),
-    ["mens_singles", "mens_doubles", "womens_doubles", "mixed_doubles"]
+    ["mens_singles", "mens_doubles", "womens_doubles"]
   );
 
-  // Kategori berbasis level lama sudah tidak ada.
+  // Kategori lama (level, tunggal putri, dan Double Mix) sudah tidak ada.
   assert.equal(ika17Category("womens_doubles_intermediate"), null);
   assert.equal(IKA17_CATEGORIES.some((entry) => entry.id === "womens_singles"), false);
   assert.equal(ika17Category("womens_singles"), null);
+  assert.equal(ika17Category("mixed_doubles"), null);
 });
 
 test("setiap kategori punya aturan gender dan status ganda yang jelas", () => {
@@ -76,7 +77,7 @@ test("setiap kategori punya aturan gender dan status ganda yang jelas", () => {
   assert.equal(byId.get("mens_singles").genderRule, "male");
   assert.equal(byId.get("mens_doubles").doubles, true);
   assert.equal(byId.get("womens_doubles").genderRule, "female");
-  assert.equal(byId.get("mixed_doubles").genderRule, "mixed");
+  assert.equal(byId.has("mixed_doubles"), false);
 });
 
 test("tanpa batas kuota; minimal 17 pertandingan untuk semua kategori", () => {
@@ -138,13 +139,27 @@ test("inferensi kategori tidak lagi menghasilkan kategori level", () => {
   assert.equal(inferCategory("Double Mix"), "mixed_doubles");
 });
 
-test("migrasi 00042 memakai 4 kategori dan tidak memvalidasi level", () => {
-  for (const category of ["mens_singles", "mens_doubles", "womens_doubles", "mixed_doubles"]) {
+test("migrasi 00045 memakai tiga kategori dan tidak memvalidasi level", () => {
+  for (const category of ["mens_singles", "mens_doubles", "womens_doubles"]) {
     assert.match(migration, new RegExp(`''${category}''`), category);
   }
-  // Kategori lama digabung, bukan dibiarkan aktif.
-  assert.match(migration, /merged_into/);
-  assert.match(migration, /SET category = 'womens_doubles'/);
+  // Double Mix dihapus dari liga, bukan dibiarkan aktif.
+  assert.doesNotMatch(migration, /''mixed_doubles''/);
+  assert.match(migration, /removed_category/);
+  assert.match(migration, /is_league = false/);
+  // Regresi 23514: baris lama dengan kategori terhapus harus dikosongkan
+  // SEBELUM constraint tiga kategori dipasang.
+  assert.match(migration, /category = NULL/);
+  assert.match(migration, /ALTER COLUMN category DROP NOT NULL/);
+  assert.ok(
+    migration.indexOf("category = NULL") <
+      migration.indexOf("ADD CONSTRAINT tournaments_category_check"),
+    "category harus dikosongkan sebelum constraint dipasang"
+  );
+  // Regresi 22P02: `status` adalah enum, jadi jangan membandingkan dengan
+  // literal yang belum tentu ada di enum (mis. 'active').
+  assert.doesNotMatch(migration, /status IN \([^)]*'active'/);
+  assert.match(migration, /status = 'cancelled'/);
   // Tidak ada lagi penolakan berdasarkan level.
   assert.doesNotMatch(migration, /Kategori ini khusus beginner/);
   assert.doesNotMatch(migration, /v_experience NOT IN/);

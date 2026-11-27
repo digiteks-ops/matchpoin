@@ -1,8 +1,4 @@
-export type TournamentCategory =
-  | "mens_singles"
-  | "mens_doubles"
-  | "womens_doubles"
-  | "mixed_doubles";
+export type TournamentCategory = "mens_singles" | "mens_doubles" | "womens_doubles";
 
 /** Kelas liga yang dibentuk otomatis dari hasil pertandingan (MPR). */
 export type TournamentClass = "beginner" | "intermediate";
@@ -12,7 +8,7 @@ export interface Ika17Category {
   label: string;
   shortLabel: string;
   doubles: boolean;
-  genderRule: "male" | "female" | "mixed";
+  genderRule: "male" | "female";
   slug: string;
   eligibilityLabel: string;
 }

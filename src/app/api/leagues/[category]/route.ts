@@ -7,7 +7,7 @@ import { IKA17_CATEGORIES } from "@/lib/tournaments/ika17";
 export const dynamic = "force-dynamic";
 
 // Sumber tunggal kategori: `ika17-core.mjs` (Single Man, Double Man,
-// Double Woman, Double Mix).
+// Double Woman).
 const CATEGORIES = new Set<string>(IKA17_CATEGORIES.map((entry) => entry.id));
 
 export async function GET(

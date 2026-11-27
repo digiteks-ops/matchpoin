@@ -19,6 +19,7 @@ import {
   ChevronDown,
   Trophy,
   Bell,
+  MessageSquare,
 } from "lucide-react";
 
 export function Navbar() {
@@ -96,6 +97,7 @@ export function Navbar() {
 
   const dashboardHref = "/dashboard";
   const profileHref = "/profile";
+  const chatHref = "/chat";
   const loginHref = "/login";
   const registerHref = "/register";
   const navLinks = [
@@ -172,6 +174,17 @@ export function Navbar() {
                     >
                       <UserIcon className="w-4 h-4 text-slate-600" />
                       Profil
+                    </Button>
+                  </Link>
+
+                  <Link href={chatHref}>
+                    <Button
+                      variant={pathname.startsWith(chatHref) ? "secondary" : "ghost"}
+                      size="sm"
+                      className="gap-2 text-slate-700"
+                    >
+                      <MessageSquare className="w-4 h-4 text-slate-600" />
+                      Chat
                     </Button>
                   </Link>
                 </>
@@ -270,6 +283,14 @@ export function Navbar() {
                     Notifikasi
                   </Button>
                 </Link>
+                {!isAdmin && (
+                  <Link href={chatHref} onClick={() => setIsOpen(false)}>
+                    <Button variant="outline" className="w-full justify-start gap-2 text-sm">
+                      <MessageSquare className="w-4 h-4" />
+                      Chat
+                    </Button>
+                  </Link>
+                )}
                 <Button
                   variant="ghost"
                   onClick={() => {

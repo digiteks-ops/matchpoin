@@ -3,6 +3,7 @@ const PRIMARY_PROTECTED_PREFIXES = [
   "/profile",
   "/matches/new",
   "/notifications",
+  "/chat",
   "/admin",
 ];
 

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { assertValidImageFile, compressImage } from "@/lib/utils/image";
-import { MPR_DEFAULT_RATING, mprStartingRating } from "@/lib/rating/mpr-core.mjs";
+import { MPR_STARTING_RATING } from "@/lib/rating/mpr-core.mjs";
 import type { DbUser, PlayerProfile, PlayerRating, SkillLevel } from "@/types/database.types";
 
 type AnySupabase = SupabaseClient<any, any, any>;
@@ -108,7 +108,7 @@ export async function ensurePlayerRecordsWithClient(
       preferred_hand: "right",
       backhand: "two_handed",
       play_frequency: "weekly",
-      self_assessed_level: startingLevel ?? "beginner",
+      self_assessed_level: "beginner",
       completion_score: 40,
     });
     if (profileError) {
@@ -122,7 +122,9 @@ export async function ensurePlayerRecordsWithClient(
     .eq("user_id", userId)
     .maybeSingle();
 
-  const startingRating = startingLevel ? mprStartingRating(startingLevel) : MPR_DEFAULT_RATING;
+  // Rating awal selalu 1000 untuk semua pemain baru. Kategori tidak lagi
+  // dipilih saat mendaftar, jadi startingLevel tidak memengaruhi rating.
+  const startingRating = MPR_STARTING_RATING;
 
   if (!existingRating) {
     const { error: ratingError } = await supabase.from("player_ratings").insert({
@@ -133,26 +135,19 @@ export async function ensurePlayerRecordsWithClient(
       wins: 0,
       losses: 0,
       draws: 0,
-      // Kategori awal hanya dipakai sekali saat pendaftaran.
-      ...(startingLevel ? { starting_rating_set_at: new Date().toISOString() } : {}),
+      // Ditandai sudah ditetapkan supaya tidak ada permintaan memilih
+      // kategori awal di alur mana pun.
+      starting_rating_set_at: new Date().toISOString(),
     });
     if (ratingError) {
       throw new Error(`Gagal menyiapkan rating pemain: ${ratingError.message}`);
     }
-  } else if (
-    startingLevel &&
-    existingRating.matches_played === 0 &&
-    !existingRating.starting_rating_set_at
-  ) {
-    // Baris rating dibuat sebelum kategori dipilih (mis. trigger signup lama):
-    // terapkan sekali, lalu kunci.
+  } else if (existingRating.matches_played === 0 && !existingRating.starting_rating_set_at) {
+    // Baris lama dibuat sebelum kategori dihapus: tandai saja, jangan
+    // menimpa rating pemain yang sudah ada.
     const { error: ratingError } = await supabase
       .from("player_ratings")
-      .update({
-        current_rating: startingRating,
-        peak_rating: startingRating,
-        starting_rating_set_at: new Date().toISOString(),
-      })
+      .update({ starting_rating_set_at: new Date().toISOString() })
       .eq("user_id", userId)
       .is("starting_rating_set_at", null)
       .eq("matches_played", 0);

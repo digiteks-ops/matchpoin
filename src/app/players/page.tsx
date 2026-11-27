@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { GuestModal } from "@/components/ui/guest-modal";
 import { createClient } from "@/lib/supabase/client";
 import { MPR_STARTING_RATING, mprIsCalibrating } from "@/lib/rating/mpr-core.mjs";
+import {
+  DEFAULT_PROVINCE,
+  findDefaultCity,
+} from "@/lib/constants/location";
 import {
   fetchMySqlPublicPlayers,
   isMySqlPublicPlayerReads,
@@ -92,11 +96,29 @@ export default function PlayersDirectoryPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedProvince, setSelectedProvince] = useState<string>("all");
+  const [selectedProvince, setSelectedProvince] = useState<string>(DEFAULT_PROVINCE);
   const [selectedCityId, setSelectedCityId] = useState<string>("all");
   const [selectedLevel, setSelectedLevel] = useState<string>("all");
   // Default: pemain yang paling baru login tampil paling atas.
   const [sortBy, setSortBy] = useState<PlayerSort>("last_active");
+  // Lokasi bawaan hanya dipasang sekali, saat daftar kota pertama kali dimuat,
+  // supaya tombol "Reset" tidak langsung tertimpa lagi.
+  const defaultLocationApplied = useRef(false);
+
+  const applyDefaultLocation = useCallback(
+    (list: CityOption[]) => {
+      if (defaultLocationApplied.current) return;
+      defaultLocationApplied.current = true;
+      if (!list.some((city) => city.province === DEFAULT_PROVINCE)) {
+        setSelectedProvince("all");
+        return;
+      }
+      setSelectedProvince(DEFAULT_PROVINCE);
+      const city = findDefaultCity(list);
+      if (city) setSelectedCityId(city.id);
+    },
+    []
+  );
 
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [selectedPlayerForInvite, setSelectedPlayerForInvite] = useState<FullPlayerProfile | null>(null);
@@ -110,9 +132,13 @@ export default function PlayersDirectoryPage() {
         if (isMySqlPublicPlayerReads()) {
           setCurrentUser(null);
           const result = await fetchMySqlPublicPlayers(100, "name");
-          setCities(
-            result.cities.map(({ id, name, province }) => ({ id, name, province }))
-          );
+          const cityOptions = result.cities.map(({ id, name, province }) => ({
+            id,
+            name,
+            province,
+          }));
+          setCities(cityOptions);
+          applyDefaultLocation(cityOptions);
           setPlayers(result.players.map(mapMySqlPlayer));
           return;
         }
@@ -148,13 +174,13 @@ export default function PlayersDirectoryPage() {
         if (citiesResult.error) throw citiesResult.error;
         if (publicPlayersResult.error) throw publicPlayersResult.error;
         if (citiesResult.data) {
-          setCities(
-            (citiesResult.data as City[]).map(({ id, name, province }) => ({
-              id,
-              name,
-              province,
-            }))
-          );
+          const cityOptions = (citiesResult.data as City[]).map(({ id, name, province }) => ({
+            id,
+            name,
+            province,
+          }));
+          setCities(cityOptions);
+          applyDefaultLocation(cityOptions);
         }
 
         const rawPlayers = (publicPlayersResult.data ?? []) as any[];
@@ -219,7 +245,7 @@ export default function PlayersDirectoryPage() {
     }
 
     loadData();
-  }, []);
+  }, [applyDefaultLocation]);
 
   const provinces = useMemo(() => {
     const set = new Set<string>();

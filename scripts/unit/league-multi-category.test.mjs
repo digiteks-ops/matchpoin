@@ -48,7 +48,14 @@ test("a player may register in a second category", () => {
   // list is scoped to the category being registered, so it arrives empty here.
   assert.equal(evaluate("mens_singles").ok, true);
   assert.equal(evaluate("mens_doubles").ok, true);
-  assert.equal(evaluate("mixed_doubles").ok, true);
+  assert.equal(evaluate("womens_doubles", { userGender: "female", partnerGender: "female" }).ok, true);
+});
+
+test("Double Mix is no longer a league category", () => {
+  assert.deepEqual(evaluate("mixed_doubles"), {
+    ok: false,
+    message: "Kategori liga tidak valid.",
+  });
 });
 
 test("a duplicate inside the same category is still rejected", () => {

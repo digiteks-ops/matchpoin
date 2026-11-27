@@ -221,7 +221,7 @@ async function getOpponentNames(matchIds: string[]): Promise<Map<string, string>
 
   (participants ?? []).forEach((p) => {
     const meta = metadataObject(p.metadata);
-    if (meta.status === "pending" || meta.status === "rejected") return;
+    if (meta.status === "pending" || meta.status === "rejected" || meta.status === "cancelled") return;
     const team = p.team === 2 ? 2 : 1;
     map.set(`${p.match_id}:${team}`, nameByUser.get(p.user_id) ?? "Pemain MATCHPOIN");
   });

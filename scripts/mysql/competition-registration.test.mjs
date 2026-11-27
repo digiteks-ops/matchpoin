@@ -219,22 +219,12 @@ test("missing partner row and mixed doubles gender rule are enforced", () => {
       tournament: mixedLeague,
       partnerUserId: PARTNER,
       userGender: "male",
-      partnerGender: "male",
+      partnerGender: "female",
     }),
     {
       ok: false,
-      message: "Ganda Campuran wajib terdiri dari 1 pemain putra dan 1 pemain putri.",
+      message: "Kategori liga tidak valid.",
     }
-  );
-
-  assert.deepEqual(
-    evaluate({
-      tournament: mixedLeague,
-      partnerUserId: PARTNER,
-      userGender: "male",
-      partnerGender: "female",
-    }),
-    { ok: true, category: "mixed_doubles", doubles: true }
   );
 });
 

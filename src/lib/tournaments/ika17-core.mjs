@@ -1,10 +1,9 @@
 // Kategori Liga Tennis IKA17 — sumber tunggal (dipakai UI, API, dan test).
 //
-// Empat kategori final:
+// Tiga kategori final:
 //   1. Single Man
 //   2. Double Man
 //   3. Double Woman
-//   4. Double Mix
 //
 // Pemain TIDAK memilih level (beginner/intermediate) saat mendaftar. Klasifikasi
 // ditentukan otomatis dari hasil pertandingan liga:
@@ -118,15 +117,6 @@ export const IKA17_CATEGORIES = [
     genderRule: "female",
     slug: "league-q1-2027-womens-doubles",
     eligibilityLabel: "Khusus pemain putri, satu tim 2 pemain.",
-  },
-  {
-    id: "mixed_doubles",
-    label: "Double Mix",
-    shortLabel: "Ganda Campuran",
-    doubles: true,
-    genderRule: "mixed",
-    slug: "league-q1-2027-mixed-doubles",
-    eligibilityLabel: "Satu tim terdiri dari 1 pemain putra dan 1 pemain putri.",
   },
 ];
 

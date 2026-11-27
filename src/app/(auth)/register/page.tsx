@@ -14,26 +14,11 @@ import { ensurePlayerRecords } from "@/lib/services/player-service";
 import { recordLastSeen } from "@/lib/services/last-seen";
 import { mapSignUpError } from "@/lib/auth/auth-errors-core.mjs";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
-import { mprStartingRating } from "@/lib/rating/mpr-core.mjs";
-import type { SkillLevel } from "@/types/database.types";
+import { MPR_STARTING_RATING } from "@/lib/rating/mpr-core.mjs";
 import { AlertCircle, ArrowLeft, Loader2, CheckCircle2, ShieldCheck } from "lucide-react";
 
-// Self rating wajib dipilih saat mendaftar: hanya dua pilihan. Kategori
-// disimpan sebagai level awal; rating MPR selalu dimulai dari 1000.
-const STARTING_LEVELS: { value: SkillLevel; label: string; hint: string; leaderboard: string }[] = [
-  {
-    value: "beginner",
-    label: "Beginner",
-    hint: "Maksimal 2 tahun bermain",
-    leaderboard: "Rating awal MPR 1000, resmi setelah 2 pertandingan kalibrasi",
-  },
-  {
-    value: "intermediate",
-    label: "Intermediate",
-    hint: "Lebih dari 2 tahun bermain",
-    leaderboard: "Rating awal MPR 1000, resmi setelah 2 pertandingan kalibrasi",
-  },
-];
+// Tidak ada lagi pilihan self rating saat mendaftar: semua pemain baru
+// mulai dari MPR 1000 dan kategori ditentukan dari hasil pertandingan.
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -41,10 +26,7 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  // Wajib dipilih sendiri; sengaja tidak diberi nilai awal agar tidak ada
-  // pemain yang terdaftar tanpa sadar dengan rating default.
-  const [startingLevel, setStartingLevel] = useState<SkillLevel | null>(null);
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -61,12 +43,7 @@ export default function RegisterPage() {
       setErrorMessage("Kata sandi melebihi batas 72 byte (UTF-8).");
       return;
     }
-
-    if (!startingLevel) {
-      setErrorMessage("Pilih self rating Anda: Beginner atau Intermediate.");
-      return;
-    }
-
+
     if (password !== confirmPassword) {
       setErrorMessage("Konfirmasi kata sandi tidak cocok.");
       return;
@@ -81,9 +58,7 @@ export default function RegisterPage() {
         password: password,
         options: {
           data: {
-            full_name: fullName.trim(),
-            // Dibaca trigger handle_new_user untuk menetapkan rating awal.
-            starting_level: startingLevel,
+            full_name: fullName.trim(),
           },
         },
       });
@@ -99,8 +74,7 @@ export default function RegisterPage() {
           await ensurePlayerRecords(
             data.user.id,
             data.user.email || email,
-            fullName.trim(),
-            startingLevel
+            fullName.trim()
           );
         } catch (e) {
           console.warn("Player sync on register:", e);
@@ -239,56 +213,21 @@ export default function RegisterPage() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label>
-                  Self Rating <span className="text-rose-600">*</span>
-                </Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {STARTING_LEVELS.map((level) => {
-                    const active = startingLevel === level.value;
-                    return (
-                      <button
-                        key={level.value}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => setStartingLevel(level.value)}
-                        disabled={isLoading}
-                        className={`rounded-xl border p-2.5 text-left transition-colors disabled:opacity-60 ${
-                          active
-                            ? "border-matchpoin-navy bg-matchpoin-navy/5 ring-1 ring-matchpoin-navy"
-                            : "border-slate-200 hover:border-slate-300"
-                        }`}
-                      >
-                        <span className="flex items-center justify-between text-xs font-bold text-slate-900">
-                          {level.label}
-                          <span className="text-[11px] font-semibold text-matchpoin-navy">
-                            {mprStartingRating(level.value)}
-                          </span>
-                        </span>
-                        <span className="mt-0.5 block text-[10px] leading-snug text-slate-500">
-                          {level.hint}
-                        </span>
-                        <span className="mt-0.5 block text-[10px] leading-snug text-slate-400">
-                          {level.leaderboard}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Kategori ini disimpan sebagai level awal dan tidak dapat diubah lewat halaman
-                  profil setelahnya. Rating MPR dimulai dari 1000 untuk semua pemain baru, lalu
-                  naik atau turun mengikuti hasil pertandingan.
+              {/* Tidak ada pilihan self rating: semua pemain baru mulai dari MPR 1000. */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="flex items-center justify-between text-sm font-bold text-slate-900">
+                  Rating awal Anda
+                  <span className="font-semibold text-matchpoin-navy">MPR {MPR_STARTING_RATING}</span>
                 </p>
-              </div>
-
-              <div className="p-3 rounded-lg bg-slate-100 flex items-start gap-2 text-[11px] text-slate-600">
-                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <span>
-                  Autentikasi aman via Supabase. Rating awal MPR Anda{" "}
-                  {startingLevel ? mprStartingRating(startingLevel) : "—"} sesuai self rating
-                  yang dipilih.
-                </span>
+                <p className="mt-1 text-[11px] leading-snug text-slate-500">
+                  Semua pemain baru mulai dari MPR {MPR_STARTING_RATING}. Kategori Anda
+                  (Beginner/Intermediate/Advanced/Expert) ditentukan otomatis dari hasil
+                  pertandingan, bukan dari pilihan saat mendaftar.
+                </p>
+                <p className="mt-1 text-[11px] leading-snug text-slate-400">
+                  Dua pertandingan pertama adalah masa kalibrasi sebelum rating menjadi ranking
+                  resmi.
+                </p>
               </div>
             </CardContent>
 

@@ -13,7 +13,11 @@ export interface ProfileInput {
   preferredHand: PreferredHand;
   backhand: BackhandStyle;
   playFrequency: PlayFrequency;
-  selfAssessedLevel: SkillLevel;
+  /**
+   * Level penilaian diri. Form profil tidak lagi menanyakan ini, jadi `null`
+   * berarti "pertahankan nilai yang tersimpan" (bukan direset ke beginner).
+   */
+  selfAssessedLevel: SkillLevel | null;
   profileVisibility: ProfileVisibility;
   preferredCategories: string[];
   preferredTimes: string[];
@@ -104,9 +108,13 @@ export async function updateProfile(userId: string, input: ProfileInput) {
   const startingLevelLocked =
     Boolean(existingRating?.starting_rating_set_at) || (existingRating?.matches_played ?? 0) > 0;
 
+  // Bila form tidak mengirim level (null), pakai nilai tersimpan. Ini mencegah
+  // form profil menimpa level awal pemain hanya karena field itu tidak lagi
+  // ditampilkan.
+  const storedLevel = (existingProfile?.self_assessed_level as SkillLevel | null) ?? null;
   const selfAssessedLevel = startingLevelLocked
-    ? ((existingProfile?.self_assessed_level as SkillLevel | null) ?? input.selfAssessedLevel)
-    : input.selfAssessedLevel;
+    ? storedLevel ?? input.selfAssessedLevel
+    : input.selfAssessedLevel ?? storedLevel;
 
   const profileRow = {
     user_id: userId,
@@ -116,7 +124,9 @@ export async function updateProfile(userId: string, input: ProfileInput) {
     preferred_hand: input.preferredHand,
     backhand: input.backhand,
     play_frequency: input.playFrequency,
-    self_assessed_level: selfAssessedLevel,
+    // Hanya tulis level bila ada nilainya, agar upsert tidak mengosongkan
+    // kolom yang sudah terisi.
+    ...(selfAssessedLevel ? { self_assessed_level: selfAssessedLevel } : {}),
     profile_visibility: input.profileVisibility,
     is_profile_public: input.profileVisibility === "public",
     preferred_categories: input.preferredCategories,

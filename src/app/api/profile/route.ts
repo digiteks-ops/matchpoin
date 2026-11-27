@@ -35,8 +35,12 @@ function parseProfileInput(value: unknown): ProfileInput | null {
     !backhands.has(body.backhand) ||
     typeof body.playFrequency !== "string" ||
     !frequencies.has(body.playFrequency) ||
-    typeof body.selfAssessedLevel !== "string" ||
-    !levels.has(body.selfAssessedLevel) ||
+    // Level penilaian diri sudah tidak dipilih di form profil. Field ini
+    // opsional: bila tidak dikirim, level tersimpan dipertahankan.
+    (body.selfAssessedLevel !== null &&
+      body.selfAssessedLevel !== undefined &&
+      (typeof body.selfAssessedLevel !== "string" ||
+        !levels.has(body.selfAssessedLevel))) ||
     typeof body.profileVisibility !== "string" ||
     !visibilities.has(body.profileVisibility) ||
     !isStringArray(body.preferredCategories) ||
@@ -63,7 +67,8 @@ function parseProfileInput(value: unknown): ProfileInput | null {
     preferredHand: body.preferredHand as ProfileInput["preferredHand"],
     backhand: body.backhand as ProfileInput["backhand"],
     playFrequency: body.playFrequency as ProfileInput["playFrequency"],
-    selfAssessedLevel: body.selfAssessedLevel as ProfileInput["selfAssessedLevel"],
+    selfAssessedLevel:
+      (body.selfAssessedLevel as ProfileInput["selfAssessedLevel"] | undefined) ?? null,
     profileVisibility: body.profileVisibility as ProfileInput["profileVisibility"],
     preferredCategories: body.preferredCategories,
     preferredTimes: body.preferredTimes,

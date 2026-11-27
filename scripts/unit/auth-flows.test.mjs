@@ -104,18 +104,17 @@ test("recovery links use the fragment, so the callback must not treat them as er
   assert.match(page, /window\.location\.hash/);
 });
 
-test("Google sign-up asks for the starting category once, from the database", async () => {
+test("Google sign-up tidak lagi meminta kategori awal", async () => {
   const callback = await read("src/app/auth/callback/route.ts");
 
-  // `created` dari ensurePlayerRecords selalu false karena trigger
-  // handle_new_user sudah membuat baris users lebih dulu.
-  assert.match(callback, /needsStartingRating/);
-  assert.match(callback, /starting_rating_set_at/);
-  assert.match(callback, /matches_played/);
-  assert.match(callback, /pilih-kategori/);
+  // Fitur penilaian level sendiri dihapus: callback tidak memeriksa penanda
+  // kategori awal dan langsung membuat profil + rating 1000.
+  assert.doesNotMatch(callback, /needsStartingRating/);
+  assert.doesNotMatch(callback, /pilih-kategori/);
+  assert.match(callback, /ensurePlayerRecordsServer/);
+  assert.match(callback, /Tidak ada kategori awal yang perlu dipilih/);
 
-  // Pilihan hanya sekali: route API menolak bila sudah pernah ditetapkan
-  // atau sudah ada pertandingan.
+  // Route kategori awal tetap ada dan tetap menolak pilihan kedua.
   const route = await read("src/app/api/profile/starting-level/route.ts");
   assert.match(route, /Kategori awal sudah pernah ditetapkan/);
   assert.match(route, /\.is\("starting_rating_set_at", null\)/);

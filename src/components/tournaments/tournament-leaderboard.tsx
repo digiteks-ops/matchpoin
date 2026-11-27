@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, Crown, Loader2, Medal, Trophy } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { AlertCircle, Crown, Loader2, Medal, Swords, Trophy } from "lucide-react";
 import {
   IKA17_CATEGORIES,
   IKA17_CLASSES,
@@ -26,6 +28,13 @@ interface Standing {
   rank: number;
   level: string | null;
   rating: number | null;
+}
+
+/** Peserta yang sudah diterima di kategori liga (dari API yang sama). */
+interface LeagueParticipant {
+  entryId: string;
+  userId: string;
+  name: string;
 }
 
 type ClassFilter = "all" | "beginner" | "intermediate";
@@ -52,6 +61,8 @@ export function TournamentLeaderboard() {
   const [category, setCategory] = useState(IKA17_CATEGORIES[0]?.id ?? "mens_singles");
   const [classFilter, setClassFilter] = useState<ClassFilter>("all");
   const [standings, setStandings] = useState<Standing[]>([]);
+  const [participants, setParticipants] = useState<LeagueParticipant[]>([]);
+  const [viewerId, setViewerId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,15 +75,18 @@ export function TournamentLeaderboard() {
       });
       const payload = (await response.json()) as {
         standings?: Standing[];
+        participants?: LeagueParticipant[];
         message?: string;
       };
       if (!response.ok) {
         throw new Error(payload.message || "Gagal memuat leaderboard turnamen.");
       }
       setStandings(Array.isArray(payload.standings) ? payload.standings : []);
+      setParticipants(Array.isArray(payload.participants) ? payload.participants : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal memuat leaderboard turnamen.");
       setStandings([]);
+      setParticipants([]);
     } finally {
       setIsLoading(false);
     }
@@ -81,6 +95,30 @@ export function TournamentLeaderboard() {
   useEffect(() => {
     load(category);
   }, [category, load]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth
+      .getUser()
+      .then(({ data: { user } }) => setViewerId(user?.id ?? null))
+      .catch(() => setViewerId(null));
+  }, []);
+
+  // Shortcut hanya untuk peserta yang SUDAH DITERIMA di kategori yang sedang
+  // dibuka. Peserta pending/rejected tidak ada di daftar `participants`.
+  const myEntryId = useMemo(() => {
+    if (!viewerId) return null;
+    return participants.find((entry) => entry.userId === viewerId)?.entryId ?? null;
+  }, [participants, viewerId]);
+
+  // Satu user id per entry untuk preselect lawan (kapten = pendaftar pertama).
+  const userIdByEntry = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of participants) {
+      if (!map.has(entry.entryId)) map.set(entry.entryId, entry.userId);
+    }
+    return map;
+  }, [participants]);
 
   // Delapan besar Beginner DAN delapan besar Intermediate tiap kategori lolos ke
   // Main Event. Syarat tambahan: minimal IKA17_MIN_MATCHES pertandingan tercatat.
@@ -196,6 +234,8 @@ export function TournamentLeaderboard() {
                   <th className="pb-2 pr-2 text-center">M-K</th>
                   <th className="pb-2 pr-2 text-right">MPR</th>
                   <th className="pb-2 text-right">Status Main Event</th>
+                  {/* Kolom shortcut hanya muncul untuk peserta yang sudah diterima. */}
+                  {myEntryId && <th className="pb-2 pl-2 text-right">Lawan</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -246,6 +286,36 @@ export function TournamentLeaderboard() {
                           <span className="text-[10px] text-slate-400">Belum lolos</span>
                         )}
                       </td>
+                      {myEntryId && (
+                        <td className="py-2.5 pl-2 text-right">
+                          {row.entryId === myEntryId ? (
+                            <span className="text-[10px] font-semibold text-slate-400">Tim Anda</span>
+                          ) : (
+                            (() => {
+                              const opponentUserId = userIdByEntry.get(row.entryId);
+                              if (!opponentUserId) return null;
+                              // Mode tunggal/ganda mengikuti kategori liga yang
+                              // sedang dibuka, bukan pilihan bebas.
+                              return (
+                                <Link
+                                  href={`/matches/new?invite=${encodeURIComponent(opponentUserId)}&category=${encodeURIComponent(category)}`}
+                                  className="inline-flex"
+                                >
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 text-[10px] font-bold"
+                                  >
+                                    <Swords className="mr-1 h-3 w-3" />
+                                    Pilih Lawan
+                                  </Button>
+                                </Link>
+                              );
+                            })()
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

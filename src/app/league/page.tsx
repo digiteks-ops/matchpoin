@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,8 @@ import {
 } from "@/lib/tournaments/ika17";
 import { isValidWhatsapp } from "@/lib/mysql/competition-registration-core.mjs";
 import { LEAGUE_WHATSAPP_GROUP_URL } from "@/lib/notifications/whatsapp-core.mjs";
+import { formatIndonesianDate } from "@/lib/utils";
+import { DEFAULT_CITY_NAME, DEFAULT_PROVINCE } from "@/lib/constants/location";
 
 interface StandingRow {
   entryId: string;
@@ -35,6 +37,7 @@ interface StandingRow {
   gameDiff: number;
   rank: number;
   needsTiebreak: boolean;
+  rating?: number | null;
 }
 
 interface ParticipantRow {
@@ -56,6 +59,36 @@ interface LeagueRow {
   end_date: string;
   status: string;
   max_participants: number;
+}
+
+/** Bentuk respons `/api/leagues/[category]` (server-side, melewati RLS). */
+interface LeagueOverviewPayload {
+  participants?: Array<{
+    entryId: string;
+    userId: string;
+    name: string;
+    avatarUrl: string | null;
+    province: string | null;
+    cityName: string | null;
+    joinedAt: string | null;
+  }>;
+  standings?: Array<{
+    entryId: string;
+    name: string;
+    avatarUrl: string | null;
+    province: string | null;
+    cityName: string | null;
+    points: number;
+    wins: number;
+    losses: number;
+    matchesPlayed: number;
+    gamesFor: number;
+    gamesAgainst: number;
+    gameDiff: number;
+    rank: number;
+    needsTiebreak: boolean;
+    rating?: number | null;
+  }>;
 }
 
 // Satu sumber kategori: lihat src/lib/tournaments/ika17-core.mjs. Daftar lokal
@@ -91,6 +124,36 @@ function isRegistrationPeriodOpen(): boolean {
 
 function isRegistrationClosed(): boolean {
   return todayJakarta() > REG_CLOSE;
+}
+
+/** Status liga dari database (enum) ditampilkan dalam Bahasa Indonesia. */
+function leagueStatusLabel(status: string | null | undefined): string {
+  switch (status) {
+    case "registration_open":
+      return "Pendaftaran dibuka";
+    case "registration_closed":
+      return "Pendaftaran ditutup";
+    case "in_progress":
+    case "ongoing":
+      return "Sedang berlangsung";
+    case "completed":
+    case "finished":
+      return "Selesai";
+    case "cancelled":
+      return "Dibatalkan";
+    case "upcoming":
+      return "Akan datang";
+    default:
+      return "Tidak tersedia";
+  }
+}
+
+/** Tanggal ISO (YYYY-MM-DD) -> "1 Des 2026"; nilai kosong -> "-". */
+function formatLeagueDate(value: string | null | undefined): string {
+  if (!value) return "-";
+  const date = new Date(`${value.slice(0, 10)}T00:00:00+08:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return formatIndonesianDate(date, { day: "numeric", month: "short", year: "numeric" });
 }
 
 function pickCity(rel: unknown): { name: string; province: string } | null {
@@ -161,132 +224,56 @@ export default function LeaguePage() {
         return;
       }
 
-      const { data: partRows } = await supabase
-        .from("tournament_participants")
-        .select("entry_id, user_id, joined_at, status")
-        .eq("tournament_id", lg.id)
-        .neq("status", "rejected")
-        .order("joined_at", { ascending: true });
-
-      const entries = (partRows ?? []) as {
-        entry_id: string;
-        user_id: string;
-        joined_at: string | null;
-        status: string;
-      }[];
-
-      const userIds = Array.from(new Set(entries.map((e) => e.user_id)));
-      const joinedMap = new Map<string, string | null>();
-      const statusMap = new Map<string, string>();
-      entries.forEach((e) => {
-        joinedMap.set(e.user_id, e.joined_at ?? null);
-        statusMap.set(e.user_id, e.status);
-      });
-
-      let participantList: ParticipantRow[] = [];
-      const profileMap = new Map<string, any>();
-
-      if (userIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from("player_profiles")
-          .select("user_id, display_name, users(city_id, cities(name, province))")
-          .in("user_id", userIds);
-
-        (profiles ?? []).forEach((p: any) => profileMap.set(p.user_id, p));
-
-        participantList = userIds.map((uid) => {
-          const p = profileMap.get(uid);
-          const city = pickCity(p?.users ?? null);
-          return {
-            userId: uid,
-            name: p?.display_name || "Pemain MATCHPOIN",
-            avatarUrl: null,
-            province: city?.province ?? null,
-            cityName: city?.name ?? null,
-            joinedAt: joinedMap.get(uid) ?? null,
-            status: statusMap.get(uid) ?? "confirmed",
-          };
-        });
-      }
-      setParticipants(participantList);
-
-      if (userIds.length === 0) {
+      // Peserta & klasemen dibaca lewat API server. RLS
+      // `tournament_participants` hanya membuka baris milik sendiri untuk
+      // pemain login, sehingga query langsung dari browser selalu kosong dan
+      // halaman tampil "Belum ada peserta" padahal liga sudah terisi.
+      const overviewResponse = await fetch(
+        `/api/leagues/${encodeURIComponent(category)}`,
+        { cache: "no-store" }
+      );
+      if (!overviewResponse.ok) {
+        setParticipants([]);
         setStandings([]);
         return;
       }
 
-      const entryUsers = new Map<string, string[]>();
-      entries.forEach((e) => {
-        const list = entryUsers.get(e.entry_id) ?? [];
-        list.push(e.user_id);
-        entryUsers.set(e.entry_id, list);
-      });
+      const overview = (await overviewResponse.json()) as LeagueOverviewPayload;
+      const apiParticipants = overview.participants ?? [];
 
-      const labelFor = (entryId: string): string => {
-        const names = (entryUsers.get(entryId) ?? [])
-          .map((uid) => profileMap.get(uid)?.display_name)
-          .filter(Boolean);
-        return names.length > 0 ? names.join(" & ") : "Peserta";
-      };
-
-      // Standings are computed by `recompute_league_standings` in the database
-      // (3 points per win, ranked by points -> game diff -> games won). The page
-      // only reads them; duplicating the ranking here is what previously let the
-      // client and the server disagree.
-      const { data: standingRows } = await supabase
-        .from("league_standings")
-        .select("entry_id, position, played, won, lost, games_won, games_lost, game_diff, points, needs_tiebreak")
-        .eq("tournament_id", lg.id)
-        .order("position", { ascending: true, nullsFirst: false });
-
-      const base = (
-        entryId: string,
-        position: number,
-        s?: {
-          played: number;
-          won: number;
-          lost: number;
-          games_won: number;
-          games_lost: number;
-          game_diff: number;
-          points: number;
-          needs_tiebreak: boolean;
-        }
-      ): StandingRow => {
-        const first = profileMap.get(entryUsers.get(entryId)?.[0] ?? "");
-        const city = pickCity(first?.users ?? null);
-        return {
-          entryId,
-          name: labelFor(entryId),
-          avatarUrl: null,
-          province: city?.province ?? null,
-          cityName: city?.name ?? null,
-          points: s?.points ?? 0,
-          wins: s?.won ?? 0,
-          losses: s?.lost ?? 0,
-          matchesPlayed: s?.played ?? 0,
-          gamesFor: s?.games_won ?? 0,
-          gamesAgainst: s?.games_lost ?? 0,
-          gameDiff: s?.game_diff ?? 0,
-          rank: position,
-          needsTiebreak: s?.needs_tiebreak ?? false,
-        };
-      };
-
-      const standingList: StandingRow[] = (standingRows ?? []).map((r: any, i) =>
-        base(r.entry_id, r.position ?? i + 1, r)
+      setParticipants(
+        apiParticipants.map((p) => ({
+          userId: p.userId,
+          name: p.name || "Pemain MATCHPOIN",
+          avatarUrl: p.avatarUrl ?? null,
+          province: p.province ?? null,
+          cityName: p.cityName ?? null,
+          joinedAt: p.joinedAt ?? null,
+          status: "confirmed",
+        }))
       );
 
-      if (standingList.length === 0) {
-        // Before the first result is verified the table is empty: show every
-        // registered entry with zeroes instead of an empty panel.
-        setStandings(
-          Array.from(entryUsers.keys()).map((entryId, i) => base(entryId, i + 1))
-        );
-        return;
-      }
-
-      setStandings(standingList);
+      const apiStandings = overview.standings ?? [];
+      setStandings(
+        apiStandings.map((s) => ({
+          entryId: s.entryId,
+          name: s.name || "Peserta",
+          avatarUrl: s.avatarUrl ?? null,
+          province: s.province ?? null,
+          cityName: s.cityName ?? null,
+          points: Number(s.points ?? 0),
+          wins: Number(s.wins ?? 0),
+          losses: Number(s.losses ?? 0),
+          matchesPlayed: Number(s.matchesPlayed ?? 0),
+          gamesFor: Number(s.gamesFor ?? 0),
+          gamesAgainst: Number(s.gamesAgainst ?? 0),
+          gameDiff: Number(s.gameDiff ?? 0),
+          rank: Number(s.rank ?? 0) || 0,
+          needsTiebreak: Boolean(s.needsTiebreak),
+          rating: s.rating === null || s.rating === undefined ? null : Number(s.rating),
+        }))
+      );
+      return;
     } catch (err) {
       console.error("Error loading league:", err);
       setParticipants([]);
@@ -428,10 +415,7 @@ export default function LeaguePage() {
           const own = (payload.partners ?? []).filter((partner) => {
             if (definition.genderRule === "male") return partner.gender === "male";
             if (definition.genderRule === "female") return partner.gender === "female";
-            // Ganda campuran: partner harus lawan jenis dari pemain yang mendaftar.
-            if (gender === "male") return partner.gender === "female";
-            if (gender === "female") return partner.gender === "male";
-            return partner.gender === "male" || partner.gender === "female";
+            return true;
           });
           setRegPartners(own);
         } catch {
@@ -521,6 +505,24 @@ export default function LeaguePage() {
     return Array.from(set).sort();
   }, [participants]);
 
+  // Lokasi bawaan: Sulawesi Selatan, Kota Makassar. Diterapkan sekali saja
+  // (setelah peserta termuat) agar tombol "Reset Filter Lokasi" tidak
+  // langsung tertimpa kembali.
+  const defaultLocationApplied = useRef(false);
+  useEffect(() => {
+    if (defaultLocationApplied.current) return;
+    if (participants.length === 0) return;
+    defaultLocationApplied.current = true;
+    if (!provinces.includes(DEFAULT_PROVINCE)) return;
+    setProvinceFilter(DEFAULT_PROVINCE);
+    const makassar = participants.find(
+      (p) =>
+        p.province === DEFAULT_PROVINCE &&
+        p.cityName?.toLowerCase().includes(DEFAULT_CITY_NAME.toLowerCase())
+    );
+    if (makassar?.cityName) setCityFilter(makassar.cityName);
+  }, [participants, provinces]);
+
   const citiesForProvince = useMemo(() => {
     const set = new Set<string>();
     participants.forEach((p) => {
@@ -540,11 +542,20 @@ export default function LeaguePage() {
     return true;
   }), [participants, provinceFilter, cityFilter]);
 
-  const filteredStandings = useMemo(() => standings.filter((s) => {
-    if (provinceFilter !== "all" && s.province !== provinceFilter) return false;
-    if (cityFilter !== "all" && s.cityName !== cityFilter) return false;
-    return true;
-  }), [standings, provinceFilter, cityFilter]);
+  const filteredStandings = useMemo(() => {
+    const filtered = standings.filter((s) => {
+      if (provinceFilter !== "all" && s.province !== provinceFilter) return false;
+      if (cityFilter !== "all" && s.cityName !== cityFilter) return false;
+      return true;
+    });
+    return [...filtered].sort(
+      (a, b) =>
+        (b.rating ?? 0) - (a.rating ?? 0) ||
+        b.wins - a.wins ||
+        b.matchesPlayed - a.matchesPlayed ||
+        a.name.localeCompare(b.name)
+    );
+  }, [standings, provinceFilter, cityFilter]);
 
   const regCatMeta = CATEGORIES.find((c) => c.id === regCategory) ?? CATEGORIES[0];
   const regPeriodOpen = isRegistrationPeriodOpen();
@@ -563,16 +574,28 @@ export default function LeaguePage() {
             </div>
             <h1 className="text-3xl font-extrabold font-heading text-slate-900 tracking-tight">Liga Season 1 MATCHPOIN</h1>
             <p className="text-slate-600 text-xs sm:text-sm max-w-xl leading-relaxed">
-              Daftar per kategori (Single Man, Double Man, Double Woman, Double Mix), lihat peserta
+              Daftar per kategori (Single Man, Double Man, Double Woman), lihat peserta
               &amp; klasemen. Pendaftaran: 1–31 Desember 2026 (WITA). Kelas Beginner/Intermediate
-              dibentuk otomatis dari hasil pertandingan. Poin: Menang 3 · Kalah 0 · WO 8–0 (3 poin).
+              dibentuk otomatis dari hasil pertandingan. Peringkat ditentukan berdasarkan MatchPoin Rating (MPR).
             </p>
             <Badge variant={regPeriodOpen ? "outline" : "secondary"} className={regPeriodOpen ? "border-emerald-200 text-emerald-700 bg-emerald-50 w-fit" : "w-fit"}>
-              Status Pendaftaran: {regPeriodOpen ? "OPEN" : regClosed ? "CLOSED" : "Belum Dibuka"}
+              Status Pendaftaran: {regPeriodOpen ? "OPEN" : regClosed ? "CLOSED" : `Dibuka ${formatLeagueDate(REG_OPEN)}`}
             </Badge>
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <Button variant="tennis" className="text-matchpoin-navy font-bold" onClick={openRegistration}>
+            <Button
+              variant="tennis"
+              className="text-matchpoin-navy font-bold"
+              onClick={openRegistration}
+              disabled={!regPeriodOpen}
+              title={
+                regPeriodOpen
+                  ? "Daftar liga"
+                  : regClosed
+                  ? "Pendaftaran liga sudah ditutup"
+                  : `Pendaftaran dibuka ${formatLeagueDate(REG_OPEN)}`
+              }
+            >
               Daftar Season 1 League
             </Button>
             <div className="bg-white border border-slate-200 rounded-xl p-3 text-center">
@@ -614,7 +637,7 @@ export default function LeaguePage() {
                   </div>
                   <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
                     <div className="font-semibold text-slate-800">{regCatMeta.label} — {regLeague?.season ?? "-"}</div>
-                    <div>Status Pendaftaran: <Badge variant={regOpenOk ? "outline" : "secondary"} className="text-[10px]">{regPeriodOpen ? "OPEN" : regClosed ? "CLOSED" : "Belum Dibuka"}</Badge></div>
+                    <div>Status Pendaftaran: <Badge variant={regOpenOk ? "outline" : "secondary"} className="text-[10px]">{regPeriodOpen ? "OPEN" : regClosed ? "CLOSED" : `Dibuka ${formatLeagueDate(REG_OPEN)}`}</Badge></div>
                     <div>Pendaftar: {regParticipantsCount} peserta · {regOpenOk ? "Dapat mendaftar" : "Tidak dapat mendaftar (periode/status)"}</div>
                     {regAlready && <div className="text-emerald-700 font-semibold">Anda sudah terdaftar di kategori ini.</div>}
                     {!regLeague && <div className="text-amber-700">Data liga kategori ini belum tersedia.</div>}
@@ -670,11 +693,6 @@ export default function LeaguePage() {
                           {regPartners.length === 0 && !regPartnersLoading && (
                             <p className="text-[11px] text-amber-700">
                               Belum ada calon partner yang sesuai untuk kategori ini.
-                            </p>
-                          )}
-                          {ika17Category(regCategory)?.genderRule === "mixed" && !regProfile?.gender && (
-                            <p className="text-[11px] text-amber-700">
-                              Lengkapi jenis kelamin di profil agar partner ganda campuran dapat divalidasi.
                             </p>
                           )}
                         </div>
@@ -791,12 +809,16 @@ export default function LeaguePage() {
           <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div className="space-y-1">
               <div className="font-bold text-slate-800">{selectedCategoryMeta.label} · {league?.season ?? "-"}</div>
-              <div className="text-slate-500">Status liga: <strong className="capitalize">{league?.status ?? "tidak tersedia"}</strong> · Peserta terdaftar: <strong>{participants.length}</strong></div>
-              <div className="text-slate-500">Periode liga: {league?.start_date ?? "-"} s/d {league?.end_date ?? "-"}</div>
-              <div className="text-slate-500">Periode pendaftaran: 15 Nov 2026 – 31 Des 2026 (WITA)</div>
+              <div className="text-slate-500">Status liga: <strong>{leagueStatusLabel(league?.status)}</strong> · Peserta terdaftar: <strong>{participants.length}</strong></div>
+              <div className="text-slate-500">
+                Periode liga: {formatLeagueDate(league?.start_date)} s/d {formatLeagueDate(league?.end_date)}
+              </div>
+              <div className="text-slate-500">
+                Periode pendaftaran: {formatLeagueDate(REG_OPEN)} – {formatLeagueDate(REG_CLOSE)} (WITA)
+              </div>
             </div>
             <Badge variant={regPeriodOpen ? "outline" : "secondary"} className="w-fit">
-              {regPeriodOpen ? "Pendaftaran OPEN" : regClosed ? "Pendaftaran CLOSED" : "Pendaftaran belum dibuka"}
+              {regPeriodOpen ? "Pendaftaran OPEN" : regClosed ? "Pendaftaran CLOSED" : `Pendaftaran dibuka ${formatLeagueDate(REG_OPEN)}`}
             </Badge>
           </CardContent>
         </Card>
@@ -825,8 +847,19 @@ export default function LeaguePage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="border-slate-200">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2"><Users className="w-4 h-4" /> Peserta Terdaftar ({filteredParticipants.length})</CardTitle>
-                <CardDescription className="text-xs">Hanya pemain terdaftar di kategori {selectedCategoryMeta.label}.</CardDescription>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Users className="w-4 h-4" /> Peserta Terdaftar ({filteredParticipants.length}
+                  {filteredParticipants.length !== participants.length
+                    ? ` dari ${participants.length}`
+                    : ""}
+                  )
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Pemain terdaftar di kategori {selectedCategoryMeta.label}
+                  {filteredParticipants.length !== participants.length
+                    ? " (difilter sesuai lokasi)."
+                    : "."}
+                </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
                 {filteredParticipants.length === 0 ? (
@@ -869,23 +902,25 @@ export default function LeaguePage() {
             <Card className="border-slate-200 lg:col-span-1">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2"><ListChecks className="w-4 h-4" /> Klasemen Kategori</CardTitle>
-                <CardDescription className="text-xs">Peserta terdaftar + poin dari hasil pertandingan terverifikasi (kategori {selectedCategoryMeta.label}).</CardDescription>
+                <CardDescription className="text-xs">Peserta terdaftar &amp; peringkat MatchPoin Rating (MPR) (kategori {selectedCategoryMeta.label}).</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
                 {filteredStandings.length === 0 ? (
                   <p className="p-4 text-xs text-slate-500">Belum ada data klasemen untuk ditampilkan.</p>
                 ) : (
                   <div className="divide-y divide-slate-100">
-                    {filteredStandings.map((s) => (
+                    {filteredStandings.map((s, index) => (
                       <div key={s.entryId} className="px-4 py-3 grid grid-cols-12 gap-2 items-center text-xs">
-                        <div className="col-span-1 font-bold text-slate-500">{s.rank}</div>
+                        {/* Nomor urut dihitung ulang setelah filter lokasi, agar tidak
+                            melompat (3, 4, 6, ...) saat sebagian peserta disembunyikan. */}
+                        <div className="col-span-1 font-bold text-slate-500">{index + 1}</div>
                         <div className="col-span-6 min-w-0">
                           <div className="font-semibold text-slate-800 truncate">{s.name}</div>
                           <div className="text-[10px] text-slate-500 truncate">{[s.cityName, s.province].filter(Boolean).join(", ") || "Lokasi belum diisi"}</div>
                         </div>
                         <div className="col-span-2 text-center">
-                          <div className="font-extrabold text-matchpoin-navy">{s.points}</div>
-                          <div className="text-[10px] text-slate-400">poin</div>
+                          <div className="font-extrabold text-matchpoin-navy">{s.rating === null || s.rating === undefined ? "-" : Math.round(s.rating)}</div>
+                          <div className="text-[10px] text-slate-400">MPR</div>
                         </div>
                         <div className="col-span-3 text-right text-[10px] text-slate-600">
                           <div><span className="text-emerald-600 font-bold">{s.wins}</span>W · <span className="text-rose-600 font-bold">{s.losses}</span>L · {s.matchesPlayed}M</div>
@@ -903,7 +938,7 @@ export default function LeaguePage() {
         <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-start gap-3 text-xs text-slate-500">
           <Trophy className="w-4 h-4 text-matchpoin-tennis shrink-0 mt-0.5" />
           <p>
-            Poin: Menang 3 · Kalah 0 · WO menang 3 (8–0) · WO kalah 0 (0–8). Klasemen dipisah per kategori, hanya peserta terdaftar & hasil terverifikasi (confirmed). Urutan: poin, selisih game, total game menang, jumlah menang.
+            Peringkat klasemen ditentukan berdasarkan MatchPoin Rating (MPR) tertinggi, jumlah kemenangan, jumlah pertandingan, lalu urutan nama. Pertandingan Walkover (WO) dicatat 8–0 / 0–8 dan tidak mengubah MPR. Klasemen dipisah per kategori, hanya peserta terdaftar &amp; hasil terverifikasi (confirmed).
           </p>
         </div>
       </div>

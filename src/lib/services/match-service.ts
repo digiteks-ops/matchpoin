@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logError, toUserMessage } from "@/lib/errors";
+import { syncMatchChatMembers } from "@/lib/services/chat-service";
 import { ensurePlayerRecords } from "@/lib/services/player-sync";
 import { toPlatformIsoString, todayInPlatformTimeZone } from "@/lib/utils";
 import {
@@ -69,6 +70,78 @@ export async function hasPlayedBefore(
   }
 
   return false;
+}
+
+type LeaguePairingRow = {
+  match_participants?: { user_id: string; team: number | null }[] | null;
+};
+
+/**
+ * Liga: setiap peserta hanya boleh bertemu lawan yang sama maksimal 1x.
+ *
+ * Dipanggil saat jadwal liga akan dibuat. Semua pertandingan liga pada
+ * turnamen yang sama (kecuali yang dibatalkan) dibaca, lalu setiap pasangan
+ * pemain dari dua sisi yang berbeda diperiksa. Bila pasangan itu sudah
+ * dipertemukan, pembuatan jadwal ditolak dengan pesan yang jelas — ini menutup
+ * jadwal/tantangan duplikat, termasuk yang belum punya hasil (belum selesai).
+ *
+ * Daftar pertandingan dibaca dengan service role bila tersedia: jadwal liga
+ * bersifat privat, sehingga RLS bisa menyembunyikan jadwal yang dibuat admin
+ * lain dan pemeriksaan anti-rematch jadi bolong.
+ */
+async function assertNewLeaguePairing(
+  supabase: ReturnType<typeof createClient>,
+  tournamentId: string,
+  participants: RosterParticipant[]
+): Promise<void> {
+  const sideOne = participants.filter((p) => p.team === 1).map((p) => p.userId);
+  const sideTwo = participants.filter((p) => p.team === 2).map((p) => p.userId);
+  if (sideOne.length === 0 || sideTwo.length === 0) return;
+
+  const reader = createAdminClient() ?? supabase;
+  const { data: rows, error } = await reader
+    .from("matches")
+    .select("id, status, match_participants(user_id, team)")
+    .eq("tournament_id", tournamentId)
+    .neq("status", "cancelled");
+
+  if (error) {
+    logError("match.league.pairings", error, { tournamentId });
+    throw new Error("Jadwal liga tidak dapat diperiksa. Coba lagi.");
+  }
+
+  // Lawan yang sudah pernah dipertemukan, per pemain (dua arah).
+  const metOpponents = new Map<string, Set<string>>();
+  const remember = (a: string, b: string) => {
+    if (a === b) return;
+    if (!metOpponents.has(a)) metOpponents.set(a, new Set());
+    metOpponents.get(a)!.add(b);
+  };
+
+  for (const row of (rows ?? []) as LeaguePairingRow[]) {
+    const members = row.match_participants ?? [];
+    const first = members.filter((member) => (member.team ?? 1) !== 2).map((member) => member.user_id);
+    const second = members.filter((member) => member.team === 2).map((member) => member.user_id);
+    for (const a of first) {
+      for (const b of second) {
+        remember(a, b);
+        remember(b, a);
+      }
+    }
+  }
+
+  const clash = sideOne
+    .flatMap((a) => sideTwo.map((b) => [a, b] as const))
+    .find(([a, b]) => metOpponents.get(a)?.has(b));
+  if (!clash) return;
+
+  const [playerA, playerB] = clash;
+  const profiles = await getProfilesForUsers([playerA, playerB]);
+  const nameOf = (id: string) => profiles.get(id)?.full_name || "Pemain";
+  throw new Error(
+    `${nameOf(playerA)} dan ${nameOf(playerB)} sudah pernah dipertemukan di liga ini. ` +
+      "Setiap peserta hanya boleh bertemu lawan yang sama maksimal 1x."
+  );
 }
 
 type MatchMetadata = {
@@ -361,15 +434,6 @@ export async function createOpenMatch(
     }
   }
 
-  const { data: genderRows } = await supabase
-    .from("users")
-    .select("id, gender")
-    .in("id", playerIds);
-  const genderById = new Map<string, string | null>(
-    (genderRows ?? []).map((row) => [row.id, row.gender ?? null])
-  );
-  assertCategoryGender(input.category, roster.participants, genderById, Boolean(tournamentId));
-
   if (tournamentId) {
     const { data: tournament, error: tournamentError } = await supabase
       .from("tournaments")
@@ -387,6 +451,17 @@ export async function createOpenMatch(
       throw new Error("Kategori pertandingan tidak sesuai dengan kategori turnamen.");
     }
 
+    // Aturan gender hanya berlaku di turnamen/liga. Pertandingan umum di luar
+    // turnamen bebas: host yang mengatur, termasuk cewek vs cowok.
+    const { data: genderRows } = await supabase
+      .from("users")
+      .select("id, gender")
+      .in("id", playerIds);
+    const genderById = new Map<string, string | null>(
+      (genderRows ?? []).map((row) => [row.id, row.gender ?? null])
+    );
+    assertCategoryGender(input.category, roster.participants, genderById, true);
+
     const { data: registrations, error: registrationError } = await supabase
       .from("tournament_participants")
       .select("user_id, status")
@@ -403,6 +478,9 @@ export async function createOpenMatch(
     if (playerIds.some((id) => !acceptedPlayers.has(id))) {
       throw new Error("Semua pemain harus terdaftar dan sudah diterima di kategori turnamen ini.");
     }
+
+    // Liga: satu pasangan lawan hanya boleh bertemu 1x sepanjang turnamen.
+    await assertNewLeaguePairing(supabase, tournamentId, roster.participants);
   }
 
   const metadata: MatchMetadata = {
@@ -484,6 +562,16 @@ export async function createOpenMatch(
     // Roll back the match so we never leave an orphaned match behind.
     await supabase.from("match_participants").delete().eq("match_id", matchData.id);
     await supabase.from("matches").delete().eq("id", matchData.id);
+    // Trigger 00043 menolak pasangan lawan yang sudah pernah dipertemukan.
+    if (
+      participantError.code === "23505" &&
+      /maksimal 1x/i.test(participantError.message ?? "")
+    ) {
+      throw new Error(
+        "Setiap peserta hanya boleh bertemu lawan yang sama maksimal 1x. " +
+          "Pasangan ini sudah pernah dijadwalkan di liga ini."
+      );
+    }
     throw new Error(toUserMessage(participantError, "Pertandingan gagal dibuat."));
   }
 
@@ -764,6 +852,10 @@ export async function acceptParticipantRequest(
     .eq("id", matchId);
 
   if (matchUpdateError) throw matchUpdateError;
+
+  // Peserta yang baru diterima ikut chat pertandingan. Best effort: kalau chat
+  // belum pernah dibuka, RPC ini tidak membuat percakapan kosong.
+  await syncMatchChatMembers(matchId);
 }
 
 /**
@@ -796,6 +888,49 @@ export async function rejectParticipantRequest(
   if (error) {
     logError("match.reject", error, { matchId, participantUserId });
     throw new Error(toUserMessage(error, "Gagal menolak peserta."));
+  }
+
+  await resyncPlayerCount(supabase, matchId);
+}
+
+/**
+ * Membatalkan permohonan slot milik sendiri (hanya pemohon).
+ *
+ * Permohonan yang masih "pending" diubah menjadi "cancelled" sehingga hilang
+ * dari daftar permohonan host tanpa menghapus riwayatnya. Alur approve/reject
+ * milik host tidak berubah: keduanya tetap membaca status "pending" saja.
+ */
+export async function cancelJoinRequest(matchId: string, userId: string): Promise<void> {
+  const supabase = createClient();
+
+  const { data: row, error: readError } = await supabase
+    .from("match_participants")
+    .select("id, user_id, is_organizer, metadata")
+    .eq("match_id", matchId)
+    .eq("user_id", userId)
+    .eq("is_organizer", false)
+    .maybeSingle();
+
+  if (readError) {
+    logError("match.cancel_request.read", readError, { matchId, userId });
+    throw new Error(toUserMessage(readError, "Permohonan tidak dapat dibaca."));
+  }
+  if (!row) throw new Error("Permohonan tidak ditemukan.");
+
+  const metadata = asParticipantMetadata(row.metadata);
+  if (metadata.status !== "pending") {
+    throw new Error("Hanya permohonan yang masih menunggu persetujuan yang dapat dibatalkan.");
+  }
+
+  const { error } = await supabase
+    .from("match_participants")
+    .update({ metadata: { ...metadata, status: "cancelled" } })
+    .eq("id", row.id)
+    .eq("user_id", userId);
+
+  if (error) {
+    logError("match.cancel_request", error, { matchId, userId });
+    throw new Error(toUserMessage(error, "Permohonan gagal dibatalkan."));
   }
 
   await resyncPlayerCount(supabase, matchId);
@@ -937,7 +1072,12 @@ export async function getMyMatches(userId: string, limit = 10): Promise<OpenMatc
       (participations ?? [])
         .filter((row) => {
           const status = asParticipantMetadata(row.metadata).status;
-          return status !== "pending" && status !== "invited" && status !== "rejected";
+          return (
+            status !== "pending" &&
+            status !== "invited" &&
+            status !== "rejected" &&
+            status !== "cancelled"
+          );
         })
         .map((row) => row.match_id)
     )

@@ -81,8 +81,9 @@ function normalizeResultStatus(
 }
 
 function isActiveParticipant(metadata: unknown): boolean {
+  // "cancelled" = permohonan slot yang dibatalkan sendiri oleh pemohon.
   const status = metadataObject(metadata).status;
-  return status !== "pending" && status !== "invited" && status !== "rejected";
+  return status !== "pending" && status !== "invited" && status !== "rejected" && status !== "cancelled";
 }
 
 /**

@@ -6,30 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Logo } from "@/components/layout/logo";
 import { createClient } from "@/lib/supabase/client";
-import { mprStartingRating } from "@/lib/rating/mpr-core.mjs";
-import type { SkillLevel } from "@/types/database.types";
+import { MPR_CALIBRATION_MATCHES, MPR_STARTING_RATING } from "@/lib/rating/mpr-core.mjs";
 import { AlertCircle, Loader2, Sparkles } from "lucide-react";
 
-// Self rating hanya dua pilihan, sama seperti formulir pendaftaran. Kategori
-// tidak lagi menentukan rating: semua pemain baru mulai dari MPR 1000.
-const LEVELS: { value: SkillLevel; label: string; hint: string }[] = [
-  {
-    value: "beginner",
-    label: "Beginner",
-    hint: "Maksimal 2 tahun bermain. Rating awal MPR 1000, resmi setelah 2 pertandingan kalibrasi.",
-  },
-  {
-    value: "intermediate",
-    label: "Intermediate",
-    hint: "Lebih dari 2 tahun bermain. Rating awal MPR 1000, resmi setelah 2 pertandingan kalibrasi.",
-  },
-];
-
 /**
- * One-time starting category picker, used when an account was created through
- * OAuth (Google) where the registration form never ran.
+ * Konfirmasi rating awal untuk pemain yang mendaftar lewat OAuth (Google).
+ *
+ * Dulu halaman ini meminta pemain memilih Beginner atau Intermediate. Pilihan
+ * itu dihapus: semua pemain baru mulai dari MPR 1000 dan kategori ditentukan
+ * otomatis dari hasil pertandingan. Halaman ini sekarang hanya menginformasikan
+ * rating awal dan melanjutkan ke tujuan — tidak ada pilihan yang perlu dibuat.
  */
-export default function StartingLevelPage() {
+export default function StartingRatingPage() {
   return (
     <Suspense
       fallback={
@@ -41,20 +29,17 @@ export default function StartingLevelPage() {
         </div>
       }
     >
-      <StartingLevelForm />
+      <StartingRatingInfo />
     </Suspense>
   );
 }
 
-function StartingLevelForm() {
+function StartingRatingInfo() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/dashboard";
 
-  // Wajib dipilih sendiri, tanpa nilai awal.
-  const [selected, setSelected] = useState<SkillLevel | null>(null);
   const [isChecking, setIsChecking] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -71,20 +56,6 @@ function StartingLevelForm() {
           router.replace("/login");
           return;
         }
-
-        const { data: rating } = await supabase
-          .from("player_ratings")
-          .select("matches_played, starting_rating_set_at")
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        // Already decided (or already played): nothing left to choose.
-        if (rating?.starting_rating_set_at || (rating?.matches_played ?? 0) > 0) {
-          const safeNext = next.startsWith("/") ? next : "/dashboard";
-          router.replace(safeNext);
-          return;
-        }
-
         if (!cancelled) setIsChecking(false);
       } catch {
         if (!cancelled) setIsChecking(false);
@@ -95,38 +66,13 @@ function StartingLevelForm() {
     return () => {
       cancelled = true;
     };
-  }, [next, router]);
+  }, [router]);
 
-  const handleSubmit = async () => {
-    if (!selected) {
-      setErrorMessage("Pilih self rating Anda: Beginner atau Intermediate.");
-      return;
-    }
-    setIsSaving(true);
+  const handleContinue = () => {
     setErrorMessage(null);
-
-    try {
-      const response = await fetch("/api/profile/starting-level", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ level: selected }),
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | { success?: boolean; message?: string }
-        | null;
-
-      if (!response.ok || !payload?.success) {
-        throw new Error(payload?.message || "Gagal menyimpan kategori awal.");
-      }
-
-      const safeNext = next.startsWith("/") ? next : "/dashboard";
-      router.replace(safeNext);
-      router.refresh();
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Gagal menyimpan kategori awal.");
-    } finally {
-      setIsSaving(false);
-    }
+    const safeNext = next.startsWith("/") ? next : "/dashboard";
+    router.replace(safeNext);
+    router.refresh();
   };
 
   if (isChecking) {
@@ -148,11 +94,10 @@ function StartingLevelForm() {
             <Logo showText={false} />
           </div>
           <CardTitle className="text-xl font-bold font-heading text-matchpoin-navy">
-            Pilih Kategori Awal Anda
+            Akun Anda Siap
           </CardTitle>
           <CardDescription>
-            Kategori ini disimpan sebagai level awal Anda. Rating MPR selalu dimulai dari 1000
-            dan bergerak mengikuti hasil pertandingan.
+            Tidak ada kategori yang perlu dipilih. Semua pemain baru mulai dari rating yang sama.
           </CardDescription>
         </CardHeader>
 
@@ -164,59 +109,32 @@ function StartingLevelForm() {
             </div>
           )}
 
-          <div className="space-y-2">
-            {LEVELS.map((level) => {
-              const active = selected === level.value;
-              return (
-                <button
-                  key={level.value}
-                  type="button"
-                  aria-pressed={active}
-                  disabled={isSaving}
-                  onClick={() => setSelected(level.value)}
-                  className={`w-full rounded-xl border p-3 text-left transition-colors disabled:opacity-60 ${
-                    active
-                      ? "border-matchpoin-navy bg-matchpoin-navy/5 ring-1 ring-matchpoin-navy"
-                      : "border-slate-200 hover:border-slate-300"
-                  }`}
-                >
-                  <span className="flex items-center justify-between text-sm font-bold text-slate-900">
-                    {level.label}
-                    <span className="text-xs font-semibold text-matchpoin-navy">
-                      MPR {mprStartingRating(level.value)}
-                    </span>
-                  </span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">
-                    {level.hint}
-                  </span>
-                </button>
-              );
-            })}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="flex items-center justify-between text-sm font-bold text-slate-900">
+              Rating awal Anda
+              <span className="text-matchpoin-navy">MPR {MPR_STARTING_RATING}</span>
+            </p>
+            <p className="mt-1 text-[11px] leading-snug text-slate-500">
+              Kategori Anda — Beginner, Intermediate, Advanced, atau Expert — ditentukan otomatis
+              dari rating hasil pertandingan, bukan dari penilaian sendiri.
+            </p>
           </div>
 
           <p className="text-[11px] text-slate-500">
-            Pilihan ini hanya bisa dilakukan satu kali dan tidak dapat diubah setelah pertandingan
-            pertama selesai.
+            {MPR_CALIBRATION_MATCHES} pertandingan pertama adalah masa kalibrasi. Rating tetap
+            bergerak selama kalibrasi, lalu menjadi ranking resmi setelahnya.
           </p>
 
           <Button
             type="button"
             variant="tennis"
             className="w-full text-matchpoin-navy font-bold"
-            disabled={isSaving}
-            onClick={handleSubmit}
+            onClick={handleContinue}
           >
-            {isSaving ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Menyimpan...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4" />
-                Simpan Kategori Awal
-              </span>
-            )}
+            <span className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4" />
+              Lanjut ke MATCHPOIN
+            </span>
           </Button>
         </CardContent>
       </Card>

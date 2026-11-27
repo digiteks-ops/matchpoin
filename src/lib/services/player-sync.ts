@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logError } from "@/lib/errors";
-import { MPR_DEFAULT_RATING, mprStartingRating } from "@/lib/rating/mpr-core.mjs";
+import { MPR_STARTING_RATING } from "@/lib/rating/mpr-core.mjs";
 import type { SkillLevel } from "@/types/database.types";
 
 export interface PlayerSyncResult {
@@ -76,7 +76,7 @@ export async function ensurePlayerRecords(
       preferred_hand: "right",
       backhand: "two_handed",
       play_frequency: "weekly",
-      self_assessed_level: startingLevel ?? "beginner",
+      self_assessed_level: "beginner",
       completion_score: 40,
     });
 
@@ -89,7 +89,9 @@ export async function ensurePlayerRecords(
     .eq("user_id", userId)
     .maybeSingle();
 
-  const startingRating = startingLevel ? mprStartingRating(startingLevel) : MPR_DEFAULT_RATING;
+  // Rating awal selalu 1000 untuk semua pemain baru. Kategori tidak lagi
+  // dipilih saat mendaftar, jadi startingLevel tidak memengaruhi rating.
+  const startingRating = MPR_STARTING_RATING;
 
   if (!existingRating) {
     const { error: ratingError } = await admin.from("player_ratings").insert({
@@ -100,23 +102,17 @@ export async function ensurePlayerRecords(
       wins: 0,
       losses: 0,
       draws: 0,
-      ...(startingLevel ? { starting_rating_set_at: new Date().toISOString() } : {}),
+      starting_rating_set_at: new Date().toISOString(),
     });
 
     if (ratingError) logError("onboarding.insert_rating", ratingError, { userId });
-  } else if (
-    startingLevel &&
-    existingRating.matches_played === 0 &&
-    !existingRating.starting_rating_set_at
-  ) {
-    // Kategori awal hanya berlaku sekali, sebelum pertandingan pertama.
+  } else if (existingRating.matches_played === 0 && !existingRating.starting_rating_set_at) {
+    // Baris lama bisa dibuat trigger signup tanpa penanda kategori.
+    // Rating pemain lama TIDAK ditimpa; cukup tandai agar tidak ada
+    // permintaan memilih kategori awal lagi.
     const { error: ratingError } = await admin
       .from("player_ratings")
-      .update({
-        current_rating: startingRating,
-        peak_rating: startingRating,
-        starting_rating_set_at: new Date().toISOString(),
-      })
+      .update({ starting_rating_set_at: new Date().toISOString() })
       .eq("user_id", userId)
       .is("starting_rating_set_at", null)
       .eq("matches_played", 0);
