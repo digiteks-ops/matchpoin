@@ -25,8 +25,8 @@ import {
   Clock,
   Edit,
   MapPin,
-  Plus,
   Send,
+  Settings,
   Sparkles,
   Trophy,
   Users,
@@ -59,9 +59,11 @@ export default async function DashboardPage() {
 
   // Admin accounts use the dedicated admin area; players keep this dashboard.
   let isAdminAccount = false;
+  let isHostAccount = false;
   try {
     const roles = await getUserRoles(authUser.id);
     isAdminAccount = roles.includes("admin") || roles.includes("super_admin");
+    isHostAccount = roles.includes("host");
   } catch (error) {
     logError("dashboard.roles", error, { userId: authUser.id });
   }
@@ -121,16 +123,18 @@ export default async function DashboardPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {isHostAccount && (
+              <Link href="/host">
+                <Button variant="tennis" size="sm" className="gap-1.5 text-xs font-bold text-matchpoin-navy">
+                  <Settings className="h-4 w-4" />
+                  Dasbor Host
+                </Button>
+              </Link>
+            )}
             <Link href="/players">
               <Button variant="outline" size="sm" className="gap-1.5 text-xs">
                 <Users className="h-4 w-4" />
                 Cari Lawan
-              </Button>
-            </Link>
-            <Link href="/matches/new">
-              <Button variant="tennis" size="sm" className="gap-1.5 text-xs font-bold text-matchpoin-navy">
-                <Plus className="h-4 w-4" />
-                Buat Pertandingan
               </Button>
             </Link>
           </div>
@@ -194,7 +198,7 @@ export default async function DashboardPage() {
                   <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center">
                     <Calendar className="mx-auto h-6 w-6 text-slate-400" />
                     <p className="mt-2 text-xs text-slate-500">
-                      Belum ada jadwal. Buat pertandingan atau cari lawan.
+                      Belum ada jadwal. Cari lawan untuk mulai bertanding.
                     </p>
                     <Link href="/matches" className="mt-3 inline-block">
                       <Button size="sm" variant="outline" className="text-xs">

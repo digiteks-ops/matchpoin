@@ -5,6 +5,7 @@ const PRIMARY_PROTECTED_PREFIXES = [
   "/notifications",
   "/chat",
   "/admin",
+  "/host",
 ];
 
 const MYSQL_PROTECTED_PREFIXES = [
