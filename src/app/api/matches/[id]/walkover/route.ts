@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireApiRole } from "@/lib/auth/guards";
+import { hasRole } from "@/lib/auth/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logError } from "@/lib/errors";
 
@@ -9,18 +10,11 @@ export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const supabase = createClient();
+  const guard = await requireApiRole("host");
+  if (guard instanceof NextResponse) return guard;
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json(
-      { success: false, message: "Anda harus masuk untuk mencatat WO." },
-      { status: 401 }
-    );
-  }
+  const user = guard.session.user;
+  const isAdmin = hasRole(guard.roles, "admin");
 
   let payload: { winnerTeam?: number; reason?: string };
   try {
@@ -58,6 +52,13 @@ export async function POST(
       return NextResponse.json(
         { success: false, message: "Pertandingan tidak ditemukan." },
         { status: 404 }
+      );
+    }
+
+    if (!isAdmin && match.organizer_id !== user.id) {
+      return NextResponse.json(
+        { success: false, message: "Hanya Host pertandingan ini atau Admin yang dapat mencatat WO." },
+        { status: 403 }
       );
     }
 

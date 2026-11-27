@@ -167,8 +167,31 @@ CREATE TABLE IF NOT EXISTS public.communities (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- The live database already had a legacy communities table (owner_id, city_id)
+-- before this phase. CREATE TABLE IF NOT EXISTS is a no-op there, so add the
+-- phase-1 columns explicitly before the index below references admin_id.
 ALTER TABLE public.communities
-  ADD COLUMN IF NOT EXISTS admin_phone TEXT;
+  ADD COLUMN IF NOT EXISTS admin_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS admin_phone TEXT,
+  ADD COLUMN IF NOT EXISTS city TEXT;
+
+-- Backfill ownership/location from the legacy columns when they exist.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'communities' AND column_name = 'owner_id'
+  ) THEN
+    EXECUTE 'UPDATE public.communities SET admin_id = owner_id WHERE admin_id IS NULL AND owner_id IS NOT NULL';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'communities' AND column_name = 'city_id'
+  ) AND to_regclass('public.cities') IS NOT NULL THEN
+    EXECUTE 'UPDATE public.communities c SET city = ci.name FROM public.cities ci WHERE c.city IS NULL AND c.city_id = ci.id';
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_communities_admin
   ON public.communities (admin_id);
