@@ -49,3 +49,6 @@ supabase/.temp/
 playwright-report/
 test-results/
 
+
+# Local database backups (contain personal data)
+backups/
