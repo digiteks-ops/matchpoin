@@ -9,7 +9,13 @@ export type MatchType = "private" | "open";
 
 export type UmpirePreference = "dengan_wasit" | "tanpa_wasit";
 
-export type MatchStatus = "open" | "full" | "in_progress" | "completed" | "cancelled";
+export type MatchStatus =
+  | "open"
+  | "full"
+  | "in_progress"
+  | "pending"
+  | "completed"
+  | "cancelled";
 
 export interface CreateOpenMatchInput {
   title: string;

@@ -20,7 +20,7 @@ import {
   type CommunityWithMeta,
 } from "@/lib/supabase/community-service";
 import { getPublicPlayers } from "@/lib/supabase/public-player-service";
-import { ExternalLink, MapPin, MessageCircle, Users } from "lucide-react";
+import { ClipboardList, ExternalLink, MapPin, MessageCircle, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -82,12 +82,20 @@ export default async function HostDashboardPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             {community && (
-              <Link href={`/communities/${community.id}`}>
-                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-                  <ExternalLink className="h-4 w-4" />
-                  Halaman Komunitas
-                </Button>
-              </Link>
+              <>
+                <Link href="/host/matches/new">
+                  <Button variant="tennis" size="sm" className="gap-1.5 text-xs font-bold text-matchpoin-navy">
+                    <ClipboardList className="h-4 w-4" />
+                    Catat Hasil
+                  </Button>
+                </Link>
+                <Link href={`/communities/${community.id}`}>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                    <ExternalLink className="h-4 w-4" />
+                    Halaman Komunitas
+                  </Button>
+                </Link>
+              </>
             )}
             <Link href="/dashboard">
               <Button variant="ghost" size="sm" className="gap-1.5 text-xs">

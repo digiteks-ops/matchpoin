@@ -31,7 +31,14 @@ import {
 
 export * from "@/lib/matches/constants";
 
-const VALID_STATUSES: MatchStatus[] = ["open", "full", "in_progress", "completed", "cancelled"];
+const VALID_STATUSES: MatchStatus[] = [
+  "open",
+  "full",
+  "in_progress",
+  "pending",
+  "completed",
+  "cancelled",
+];
 
 /**
  * Cek apakah dua pemain sudah pernah bertanding dalam match yang Completed.
@@ -1088,7 +1095,7 @@ export async function getMyMatches(userId: string, limit = 10): Promise<OpenMatc
     .from("matches")
     .select(MATCH_SELECT)
     .in("id", matchIds)
-    .in("status", ["open", "full", "in_progress"])
+    .in("status", ["open", "full", "in_progress", "pending"])
     .gte("match_date", todayInPlatformTimeZone())
     .order("match_date", { ascending: true })
     .order("start_time", { ascending: true })

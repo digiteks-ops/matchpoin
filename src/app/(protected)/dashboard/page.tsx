@@ -38,6 +38,7 @@ const STATUS_LABEL: Record<string, string> = {
   open: "Open",
   full: "Penuh",
   in_progress: "Berlangsung",
+  pending: "Menunggu Konfirmasi",
   completed: "Selesai",
   cancelled: "Dibatalkan",
 };

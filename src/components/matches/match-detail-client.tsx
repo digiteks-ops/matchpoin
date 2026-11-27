@@ -163,9 +163,10 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
     return (
       match.participants.find((p) => p.userId === result.submittedBy)?.fullName ||
       match.pendingRequests.find((p) => p.userId === result.submittedBy)?.fullName ||
+      (result.submittedBy === match.organizerId ? match.organizerName : null) ||
       "Pemain"
     );
-  }, [match.participants, match.pendingRequests, result?.submittedBy]);
+  }, [match.participants, match.pendingRequests, match.organizerId, match.organizerName, result?.submittedBy]);
 
   // Kedua belah pihak boleh mengirim skor: host maupun lawan yang sudah
   // terkonfirmasi. Pengirim pertama menjadi hasil "pending", pihak lain lalu
@@ -173,7 +174,8 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
   const canSubmitResult =
     (viewer.isOrganizer || viewer.isParticipant) &&
     match.status !== "cancelled" &&
-    (!result || result.status === "pending");
+    (!result ||
+      (result.status === "pending" && result.submittedBy === viewer.id));
   const canConfirm =
     Boolean(result) &&
     result?.status === "pending" &&
@@ -423,6 +425,8 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                   ? "Penuh"
                   : match.status === "cancelled"
                   ? "Dibatalkan"
+                  : match.status === "pending"
+                  ? "Menunggu Konfirmasi"
                   : match.status}
               </Badge>
             </div>
@@ -765,7 +769,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                           ) : (
                             <>
                               <Check className="w-4 h-4 mr-2" />
-                              Konfirmasi Skor
+                              Terima Hasil
                             </>
                           )}
                         </Button>
