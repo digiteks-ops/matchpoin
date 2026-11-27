@@ -11,6 +11,7 @@ import {
 import { CommunityCreateForm } from "@/components/community/community-create-form";
 import { CommunityMemberManager } from "@/components/community/community-member-manager";
 import { CommunitySettingsForm } from "@/components/community/community-settings-form";
+import { ReferralLinkCard } from "@/components/community/referral-link-card";
 import { requirePageRole } from "@/lib/auth/guards";
 import { logError } from "@/lib/errors";
 import {
@@ -19,6 +20,7 @@ import {
   type CommunityMember,
   type CommunityWithMeta,
 } from "@/lib/supabase/community-service";
+import { getCommunityReferralSummary } from "@/lib/supabase/referral-service";
 import { getPublicPlayers } from "@/lib/supabase/public-player-service";
 import { ClipboardList, ExternalLink, MapPin, MessageCircle, Users } from "lucide-react";
 
@@ -37,6 +39,7 @@ export default async function HostDashboardPage() {
     loadError = true;
   }
 
+  let referral = { code: null as string | null, count: 0 };
   let members: CommunityMember[] = [];
   let candidates: {
     userId: string;
@@ -46,7 +49,7 @@ export default async function HostDashboardPage() {
   }[] = [];
 
   if (community) {
-    const [memberResult, playerResult] = await Promise.all([
+    const [memberResult, playerResult, referralResult] = await Promise.all([
       listCommunityMembers(community.id).catch((error) => {
         logError("host.dashboard.members", error, { communityId: community?.id });
         return [] as CommunityMember[];
@@ -55,8 +58,13 @@ export default async function HostDashboardPage() {
         logError("host.dashboard.players", error, { userId: hostId });
         return [];
       }),
+      getCommunityReferralSummary(community.id).catch((error) => {
+        logError("host.dashboard.referral", error, { communityId: community?.id });
+        return { code: null, count: 0 };
+      }),
     ]);
     members = memberResult;
+    referral = referralResult;
     candidates = playerResult.map((player) => ({
       userId: player.userId,
       displayName: player.displayName,
@@ -166,6 +174,8 @@ export default async function HostDashboardPage() {
                     </span>
                   </div>
                 </div>
+
+                <ReferralLinkCard code={referral.code} count={referral.count} />
 
                 <div className="border-t border-slate-100 pt-4">
                   <h3 className="mb-3 font-heading text-sm font-bold text-slate-900">

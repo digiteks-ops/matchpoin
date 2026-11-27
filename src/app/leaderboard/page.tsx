@@ -8,16 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { createClient } from "@/lib/supabase/client";
-import {
-  fetchMySqlPublicPlayers,
-  isMySqlPublicPlayerReads,
-  type MySqlPlayerCity,
-} from "@/lib/mysql/public-player-client";
-import { Trophy, Search, MapPin, Medal, Crown, TrendingUp } from "lucide-react";
+import { Trophy, Search, MapPin, Medal, Crown, TrendingUp, Building2 } from "lucide-react";
 import {
   RATING_TIER_OPTIONS,
   matchesRatingTier,
+  ratingTierLabel,
 } from "@/lib/rating/rating-tier-core.mjs";
 import { MPR_STARTING_RATING, mprIsCalibrating } from "@/lib/rating/mpr-core.mjs";
 import { DEFAULT_PROVINCE, findDefaultCity } from "@/lib/constants/location";
@@ -31,6 +26,7 @@ interface LeaderboardRow {
   wins: number;
   losses: number;
   winRate: number;
+  province: string;
   cityName: string;
   cityId: string | null;
   isProvisional: boolean;
@@ -43,19 +39,7 @@ interface CityOption {
   province: string;
 }
 
-interface SupabasePublicPlayer {
-  user_id: string;
-  display_name: string | null;
-  full_name: string | null;
-  current_rating: number | string | null;
-  peak_rating: number | string | null;
-  matches_played: number | null;
-  wins: number | null;
-  losses: number | null;
-  city_name: string | null;
-  city_id: string | null;
-  self_assessed_level: string | null;
-}
+
 
 interface LeaderboardPlayerData {
   userId: string;
@@ -67,8 +51,26 @@ interface LeaderboardPlayerData {
   wins: number | null;
   losses: number | null;
   selfAssessedLevel: string | null;
+  province: string | null;
   cityName: string;
   cityId: string | null;
+}
+
+interface CommunityRanking {
+  id: string;
+  name: string;
+  city: string | null;
+  memberCount: number;
+  averageRating: number;
+  totalWins: number;
+}
+
+interface LeaderboardResponse {
+  success: boolean;
+  players: LeaderboardPlayerData[];
+  cities: CityOption[];
+  communities?: CommunityRanking[];
+  message?: string;
 }
 
 function leaderboardRow(player: LeaderboardPlayerData): LeaderboardRow {
@@ -83,6 +85,7 @@ function leaderboardRow(player: LeaderboardPlayerData): LeaderboardRow {
     wins,
     losses: player.losses ?? 0,
     winRate: matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : 0,
+    province: player.province || "",
     cityName: player.cityName || "Makassar",
     cityId: player.cityId,
     // Kalibrasi = 2 pertandingan pertama; sesudahnya rating jadi ranking resmi.
@@ -98,6 +101,7 @@ function provinceOptionsFrom(cities: CityOption[]): string[] {
 export default function LeaderboardPage() {
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
   const [cities, setCities] = useState<CityOption[]>([]);
+  const [communityRankings, setCommunityRankings] = useState<CommunityRanking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -128,60 +132,22 @@ export default function LeaderboardPage() {
   useEffect(() => {
     async function load() {
       try {
-        if (isMySqlPublicPlayerReads()) {
-          const result = await fetchMySqlPublicPlayers(500, "rating");
-          const cityOptions = result.cities.map(({ id, name, province }: MySqlPlayerCity) => ({
-            id,
-            name,
-            province,
-          }));
-          setCities(cityOptions);
-          setProvinceOptions(provinceOptionsFrom(cityOptions));
-          applyDefaultLocation(cityOptions);
-          // Rating setiap pemain terpublish: tidak ada penyaringan tambahan.
-          setRows(result.players.map(leaderboardRow));
-          return;
+        const response = await fetch("/api/leaderboard", { cache: "no-store" });
+        const result = (await response.json()) as LeaderboardResponse;
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || "Respons leaderboard tidak valid.");
         }
 
-        const supabase = createClient();
-        const [citiesResult, publicPlayersResult] = await Promise.all([
-          supabase.from("cities").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
-          supabase
-            .from("public_players")
-            .select("*")
-            .limit(500),
-        ]);
-
-        if (citiesResult.error) throw citiesResult.error;
-        if (publicPlayersResult.error) throw publicPlayersResult.error;
-
-        const cityOptions = (citiesResult.data ?? []).map((city) => ({
-          id: city.id,
-          name: city.name,
-          province: city.province,
+        const cityOptions = result.cities.map(({ id, name, province }) => ({
+          id,
+          name,
+          province,
         }));
         setCities(cityOptions);
         setProvinceOptions(provinceOptionsFrom(cityOptions));
         applyDefaultLocation(cityOptions);
 
-        const publicPlayers = (publicPlayersResult.data ?? []) as unknown as SupabasePublicPlayer[];
-        // Rating setiap pemain terpublish: semua pemain ikut dihitung.
-        const merged: LeaderboardRow[] = publicPlayers
-          .map((player) =>
-            leaderboardRow({
-              userId: player.user_id,
-              fullName: player.full_name || "",
-              displayName: player.display_name || "",
-              currentRating: player.current_rating === null ? null : Number(player.current_rating),
-              peakRating: player.peak_rating === null ? null : Number(player.peak_rating),
-              matchesPlayed: player.matches_played,
-              wins: player.wins,
-              losses: player.losses,
-              selfAssessedLevel: player.self_assessed_level ?? null,
-              cityName: player.city_name || "Makassar",
-              cityId: player.city_id,
-            })
-          );
+        const merged = result.players.map(leaderboardRow);
         merged.sort(
           (a, b) =>
             b.rating - a.rating ||
@@ -191,6 +157,7 @@ export default function LeaderboardPage() {
         );
 
         setRows(merged);
+        setCommunityRankings(result.communities ?? []);
       } catch (err) {
         console.error("Error loading leaderboard:", err);
         setLoadError("Gagal memuat leaderboard. Coba lagi.");
@@ -214,7 +181,17 @@ export default function LeaderboardPage() {
     });
   }, [rows, searchQuery, selectedCity, province, cities, selectedLevel]);
 
-  const ranked = filtered.map((row, index) => ({ ...row, rank: index + 1 }));
+  const provinceByCity = useMemo(
+    () => new Map(cities.map((city) => [city.id, city.province])),
+    [cities]
+  );
+
+  const ranked = filtered.map((row, index) => ({
+    ...row,
+    rank: index + 1,
+    province: row.province || (row.cityId ? provinceByCity.get(row.cityId) ?? "" : ""),
+    level: ratingTierLabel(row.rating),
+  }));
   const podium = ranked.slice(0, 3);
 
   return (
@@ -254,66 +231,75 @@ export default function LeaderboardPage() {
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-            <Input
-              type="search"
-              placeholder="Cari pemain..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 bg-slate-50 border-slate-200 text-sm"
-            />
-          </div>
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-2">
+              <Label htmlFor="leaderboard-search" className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pemain</Label>
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <Input
+                  id="leaderboard-search"
+                  type="search"
+                  placeholder="Cari pemain..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-10 pl-9 bg-slate-50 border-slate-200 text-sm"
+                />
+              </div>
+            </div>
 
-          <div className="space-y-2 w-full sm:w-56">
-            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Provinsi</Label>
-            <select
-              value={province}
-              onChange={(e) => {
-                const val = e.target.value;
-                setProvince(val);
-                setSelectedCity("all");
-              }}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus:border-matchpoin-tennis"
-            >
-              <option value="">Pilih Provinsi...</option>
-              {provinceOptions.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2 w-full sm:w-56">
-            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Kota / Kabupaten</Label>
-            <select
-              value={selectedCity}
-              onChange={(e) => setSelectedCity(e.target.value)}
-              disabled={!province}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus:border-matchpoin-tennis disabled:opacity-50"
-            >
-              <option value="all">Semua Kota</option>
-              {cities
-                .filter((c) => !province || c.province === province)
-                .map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+            <div className="space-y-2">
+              <Label htmlFor="leaderboard-province" className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Provinsi</Label>
+              <select
+                id="leaderboard-province"
+                value={province}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setProvince(val);
+                  setSelectedCity("all");
+                }}
+                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus:border-matchpoin-tennis"
+              >
+                <option value="">Pilih Provinsi...</option>
+                {provinceOptions.map((p) => (
+                  <option key={p} value={p}>{p}</option>
                 ))}
-            </select>
-          </div>
+              </select>
+            </div>
 
-          <div className="space-y-2 w-full sm:w-48">
-            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Level</Label>
-            <select
-              value={selectedLevel}
-              onChange={(e) => setSelectedLevel(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus:border-matchpoin-tennis"
-            >
-              {RATING_TIER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-2">
+              <Label htmlFor="leaderboard-city" className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Kota/Kab</Label>
+              <select
+                id="leaderboard-city"
+                value={selectedCity}
+                onChange={(e) => setSelectedCity(e.target.value)}
+                disabled={!province}
+                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus:border-matchpoin-tennis disabled:opacity-50"
+              >
+                <option value="all">Semua Kota</option>
+                {cities
+                  .filter((c) => !province || c.province === province)
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="leaderboard-level" className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Level</Label>
+              <select
+                id="leaderboard-level"
+                value={selectedLevel}
+                onChange={(e) => setSelectedLevel(e.target.value)}
+                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus:border-matchpoin-tennis"
+              >
+                {RATING_TIER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -397,44 +383,103 @@ export default function LeaderboardPage() {
 
         {!isLoading && !loadError && ranked.length > 0 && (
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
-            <div className="hidden sm:grid grid-cols-12 gap-3 px-5 py-3 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200">
-              <span className="col-span-1">#</span>
-              <span className="col-span-5">Pemain</span>
-              <span className="col-span-2">Kota</span>
-              <span className="col-span-2 text-right">Rating</span>
-              <span className="col-span-2 text-right">Rekor</span>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {ranked.map((p) => (
-                <div key={p.userId} className="grid grid-cols-12 gap-3 px-5 py-3 items-center text-sm">
-                  <div className="col-span-2 sm:col-span-1">
-                    <span className="font-bold text-slate-500">{p.rank}</span>
-                  </div>
-                  <div className="col-span-10 sm:col-span-5 min-w-0">
-                    <Link href={`/players/${p.userId}`} className="font-semibold text-slate-900 hover:text-matchpoin-navy truncate block">
-                      {p.name}
-                    </Link>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {p.isProvisional && (
-                        <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200">
-                          Kalibrasi
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] table-fixed text-sm">
+                <colgroup>
+                  <col className="w-[40%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[20%]" />
+                </colgroup>
+                <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200">
+                  <tr>
+                    <th scope="col" className="px-5 py-3 text-left">Pemain</th>
+                    <th scope="col" className="px-5 py-3 text-left">Provinsi</th>
+                    <th scope="col" className="px-5 py-3 text-left">Kota/Kab</th>
+                    <th scope="col" className="px-5 py-3 text-left">Level</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {ranked.map((p) => (
+                    <tr key={p.userId} className="h-14">
+                      <td className="px-5 py-2 align-middle">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="w-6 shrink-0 text-center text-xs font-bold text-slate-500">{p.rank}</span>
+                          <div className="min-w-0">
+                            <Link href={`/players/${p.userId}`} className="block truncate font-semibold text-slate-900 hover:text-matchpoin-navy">
+                              {p.name}
+                            </Link>
+                            <span className="block truncate text-[10px] text-slate-400">
+                              MPR {Math.round(p.rating)} · {p.wins}W {p.losses}L
+                              {p.isProvisional ? " · Kalibrasi" : ""}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-2 align-middle text-xs text-slate-600">
+                        <span className="block truncate">{p.province || "-"}</span>
+                      </td>
+                      <td className="px-5 py-2 align-middle text-xs text-slate-600">
+                        <span className="block truncate">{p.cityName || "-"}</span>
+                      </td>
+                      <td className="px-5 py-2 align-middle">
+                        <Badge variant="outline" className="text-[10px] font-semibold text-slate-600">
+                          {p.level}
                         </Badge>
-                      )}
-                      <span className="text-[10px] text-slate-400 sm:hidden">{p.cityName}</span>
-                    </div>
-                  </div>
-                  <div className="col-span-4 hidden sm:block sm:col-span-2 text-xs text-slate-500">{p.cityName}</div>
-                  <div className="col-span-4 sm:col-span-2 text-right">
-                    <span className="font-extrabold font-heading text-matchpoin-navy">{Math.round(p.rating)}</span>
-                  </div>
-                  <div className="col-span-8 sm:col-span-2 text-right text-xs text-slate-600">
-                    <span className="font-bold text-emerald-600">{p.wins}W</span>
-                    <span className="text-slate-300"> · </span>
-                    <span className="font-bold text-rose-600">{p.losses}L</span>
-                    <span className="text-slate-400"> · {p.winRate}%</span>
-                  </div>
-                </div>
-              ))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !loadError && communityRankings.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 border-b border-slate-200 px-5 py-4">
+              <Building2 className="h-4 w-4 text-matchpoin-tennis" />
+              <h2 className="font-heading text-sm font-bold text-slate-900">Peringkat Komunitas</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] table-fixed text-sm">
+                <colgroup>
+                  <col className="w-[10%]" />
+                  <col className="w-[42%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[15%]" />
+                </colgroup>
+                <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200">
+                  <tr>
+                    <th scope="col" className="px-5 py-3 text-left">#</th>
+                    <th scope="col" className="px-5 py-3 text-left">Komunitas</th>
+                    <th scope="col" className="px-5 py-3 text-left">Kota</th>
+                    <th scope="col" className="px-5 py-3 text-left">Anggota</th>
+                    <th scope="col" className="px-5 py-3 text-left">Rata-rata MPR</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {communityRankings.map((c, index) => (
+                    <tr key={c.id} className="h-14">
+                      <td className="px-5 py-2 align-middle text-xs font-bold text-slate-500">{index + 1}</td>
+                      <td className="px-5 py-2 align-middle">
+                        <Link href={`/communities/${c.id}`} className="block truncate font-semibold text-slate-900 hover:text-matchpoin-navy">
+                          {c.name}
+                        </Link>
+                        <span className="block truncate text-[10px] text-slate-400">{c.totalWins} kemenangan anggota</span>
+                      </td>
+                      <td className="px-5 py-2 align-middle text-xs text-slate-600">
+                        <span className="block truncate">{c.city || "-"}</span>
+                      </td>
+                      <td className="px-5 py-2 align-middle text-xs text-slate-600">{c.memberCount}</td>
+                      <td className="px-5 py-2 align-middle">
+                        <span className="font-extrabold font-heading text-matchpoin-navy">{c.averageRating}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

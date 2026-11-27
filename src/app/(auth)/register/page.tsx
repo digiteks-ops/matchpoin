@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { recordLastSeen } from "@/lib/services/last-seen";
 import { mapSignUpError } from "@/lib/auth/auth-errors-core.mjs";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { MPR_STARTING_RATING } from "@/lib/rating/mpr-core.mjs";
+import { normalizeReferralCode } from "@/lib/referral/referral-core.mjs";
 import { AlertCircle, ArrowLeft, Loader2, CheckCircle2, ShieldCheck } from "lucide-react";
 
 // Tidak ada lagi pilihan self rating saat mendaftar: semua pemain baru
@@ -28,6 +29,13 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [accountRole, setAccountRole] = useState<"player" | "host">("player");
+  const [referralCode, setReferralCode] = useState("");
+
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    setReferralCode(normalizeReferralCode(ref));
+  }, []);
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -61,6 +69,7 @@ export default function RegisterPage() {
           data: {
             full_name: fullName.trim(),
             role: accountRole,
+            ...(referralCode ? { referral_code: referralCode } : {}),
           },
         },
       });
