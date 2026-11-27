@@ -278,6 +278,7 @@ export async function recordHostMatch(
         court_address: null,
         recorded_by_host: true,
         submitted_by: hostId,
+        status_actor: hostId,
         confirm_deadline: confirmDeadline,
       },
     });
@@ -340,6 +341,7 @@ export async function recordHostMatch(
         photo_urls: photoUrls,
         dispute_deadline: confirmDeadline,
         submitted_via: "host_record",
+        status_actor: hostId,
       },
     });
 

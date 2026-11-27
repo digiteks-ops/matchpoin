@@ -15,7 +15,7 @@ export interface MatchHistoryEntry {
   scoreA: number | null;
   scoreB: number | null;
   result: "win" | "loss" | "draw" | "unknown";
-  resultStatus: "pending" | "confirmed" | "under_review" | "none";
+  resultStatus: "pending" | "confirmed" | "under_review" | "rejected" | "none";
   photoUrls: string[];
   createdAt: string;
   /** Perubahan rating MPR pada pertandingan ini (null bila belum dihitung). */
@@ -87,6 +87,7 @@ function firstResult(value: MatchResultRow | MatchResultRow[] | null): MatchResu
 
 function normalizeResultStatus(status: string | null | undefined): MatchHistoryEntry["resultStatus"] {
   if (status === "confirmed") return "confirmed";
+  if (status === "rejected") return "rejected";
   if (status === "under_review" || status === "disputed") return "under_review";
   if (status === "pending") return "pending";
   return "none";
@@ -241,7 +242,10 @@ export async function getPlayerStats(userId: string, recentLimit = 5): Promise<P
     .eq("user_id", userId)
     .maybeSingle();
 
-  const history = await getMatchHistory(userId, 100);
+  const allHistory = await getMatchHistory(userId, 100);
+  // Ranking and history only count CONFIRMED matches; pending/disputed/rejected
+  // results never contribute to wins, losses, or rating history.
+  const history = allHistory.filter((entry) => entry.resultStatus === "confirmed");
 
   // Perubahan rating per pertandingan: diambil dari rating_history, yang ditulis
   // saat hasil dikonfirmasi. Pemain bisa melihat naik/turun rating tiap match.

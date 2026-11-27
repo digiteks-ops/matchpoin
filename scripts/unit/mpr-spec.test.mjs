@@ -50,7 +50,7 @@ test("/matches menampilkan aktivitas pertandingan untuk semua pemain", async () 
   assert.match(service, /players: MatchActivityPlayer\[\]/);
   assert.match(service, /score: number \| null/);
   // Hanya pertandingan selesai yang tampil: skor pending tidak bocor.
-  assert.match(service, /\.eq\("status", "completed"\)/);
+  assert.match(service, /\.eq\("status", "confirmed"\)/);
 });
 
 test("kalibrasi memakai 2 pertandingan, bukan 10 seperti kode lama", async () => {

@@ -36,6 +36,9 @@ const VALID_STATUSES: MatchStatus[] = [
   "full",
   "in_progress",
   "pending",
+  "confirmed",
+  "disputed",
+  "rejected",
   "completed",
   "cancelled",
 ];

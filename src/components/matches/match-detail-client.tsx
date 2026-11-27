@@ -45,6 +45,7 @@ export interface ViewerInfo {
   inviteId: string | null;
   team: 1 | 2 | null;
   isAdmin?: boolean;
+  isHost?: boolean;
 }
 
 interface MatchDetailClientProps {
@@ -57,6 +58,7 @@ const RESULT_STATUS_LABEL: Record<MatchResultView["status"], string> = {
   pending: "Menunggu Konfirmasi",
   confirmed: "Terkonfirmasi",
   under_review: "Dalam Peninjauan",
+  rejected: "Ditolak",
 };
 
 function remainingTime(deadline: string | null): string {
@@ -80,6 +82,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
   const [showResultForm, setShowResultForm] = useState(false);
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
+  const [resolutionReason, setResolutionReason] = useState("");
   const [team1Score, setTeam1Score] = useState("");
   const [team2Score, setTeam2Score] = useState("");
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
@@ -156,7 +159,7 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
   const liveHostScore = showResultForm && team1Score !== "" ? Math.max(0, Number(team1Score) || 0) : hostSideScore;
   const liveOppScore = showResultForm && team2Score !== "" ? Math.max(0, Number(team2Score) || 0) : oppSideScore;
   const courtChangeReached = Math.max(liveHostScore, liveOppScore) >= switchAt && Math.min(liveHostScore, liveOppScore) < switchAt;
-  const matchHasStartedOrScoring = Boolean(result) || showResultForm || match.status === "in_progress" || match.status === "full";
+  const matchHasStartedOrScoring = Boolean(result) || showResultForm || match.status === "in_progress" || match.status === "full" || match.status === "confirmed" || match.status === "disputed" || match.status === "rejected";
 
   const submitterName = useMemo(() => {
     if (!result?.submittedBy) return "Pemain";
@@ -174,6 +177,10 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
   const canSubmitResult =
     (viewer.isOrganizer || viewer.isParticipant) &&
     match.status !== "cancelled" &&
+    match.status !== "confirmed" &&
+    match.status !== "disputed" &&
+    match.status !== "rejected" &&
+    match.status !== "completed" &&
     (!result ||
       (result.status === "pending" && result.submittedBy === viewer.id));
   const canConfirm =
@@ -181,6 +188,10 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
     result?.status === "pending" &&
     (viewer.isParticipant || viewer.isOrganizer) &&
     result?.submittedBy !== viewer.id;
+  const canResolveDispute =
+    Boolean(result) &&
+    result?.status === "under_review" &&
+    (viewer.isAdmin || viewer.isHost || viewer.isOrganizer);
 
   const callApi = async (
     url: string,
@@ -371,6 +382,26 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
     }
   };
 
+  const handleResolve = async (resolution: "confirmed" | "rejected") => {
+    if (resolution === "rejected" && !resolutionReason.trim()) {
+      setError("Alasan penolakan wajib diisi.");
+      return;
+    }
+    const json = await callApi(`/api/matches/${match.id}/resolve`, {
+      resolution,
+      reason: resolutionReason,
+    });
+    if (json) {
+      setResolutionReason("");
+      setNotice(
+        resolution === "confirmed"
+          ? "Sanggahan diselesaikan. Hasil dikonfirmasi dan MPR diperbarui."
+          : "Sanggahan diselesaikan. Hasil ditolak."
+      );
+      router.refresh();
+    }
+  };
+
   return (
     <div className="flex-1 bg-slate-50 py-8 md:py-12">
       <div className="container mx-auto px-4 sm:px-6 max-w-5xl space-y-6">
@@ -427,6 +458,14 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                   ? "Dibatalkan"
                   : match.status === "pending"
                   ? "Menunggu Konfirmasi"
+                  : match.status === "confirmed"
+                  ? "Terkonfirmasi"
+                  : match.status === "disputed"
+                  ? "Disanggah"
+                  : match.status === "rejected"
+                  ? "Ditolak"
+                  : match.status === "completed"
+                  ? "Selesai"
                   : match.status}
               </Badge>
             </div>
@@ -664,13 +703,15 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                       variant={
                         result.status === "confirmed"
                           ? "success"
-                          : result.status === "under_review"
+                          : result.status === "under_review" || result.status === "rejected"
                           ? "outline"
                           : "secondary"
                       }
                       className={
                         result.status === "under_review"
                           ? "border-amber-200 text-amber-700"
+                          : result.status === "rejected"
+                          ? "border-rose-200 text-rose-700"
                           : result.status === "pending"
                           ? "bg-amber-50 text-amber-700"
                           : ""
@@ -731,6 +772,12 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                       )}
                       {result.status === "confirmed" && (
                         <p className="text-emerald-700">Hasil terkonfirmasi. MPR telah diperbarui.</p>
+                      )}
+                      {result.status === "rejected" && (
+                        <p className="text-rose-700">
+                          Hasil ditolak oleh Host/Admin.
+                          {result.resolutionReason ? ` Alasan: ${result.resolutionReason}` : ""}
+                        </p>
                       )}
                     </div>
 
@@ -807,6 +854,41 @@ export function MatchDetailClient({ match, result: initialResult, viewer }: Matc
                           </Button>
                         </div>
                       </form>
+                    )}
+
+                    {canResolveDispute && (
+                      <div className="space-y-2 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <p className="text-xs font-semibold text-slate-700">Selesaikan Sanggahan (Host/Admin)</p>
+                        <Textarea
+                          rows={2}
+                          value={resolutionReason}
+                          onChange={(e) => setResolutionReason(e.target.value)}
+                          placeholder="Alasan keputusan (wajib untuk penolakan)..."
+                        />
+                        <div className="flex flex-wrap gap-2 justify-end">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={isBusy}
+                            onClick={() => handleResolve("rejected")}
+                          >
+                            <XCircle className="w-3.5 h-3.5 mr-1.5" />
+                            Tolak Hasil
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="tennis"
+                            className="text-matchpoin-navy font-bold"
+                            disabled={isBusy}
+                            onClick={() => handleResolve("confirmed")}
+                          >
+                            <Check className="w-3.5 h-3.5 mr-1.5" />
+                            Konfirmasi Hasil
+                          </Button>
+                        </div>
+                      </div>
                     )}
 
                     {canSubmitResult && result.status === "pending" && !showResultForm && (

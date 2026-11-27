@@ -24,7 +24,7 @@ export interface MatchActivityEntry {
   matchDate: string;
   startTime: string;
   courtName: string;
-  resultStatus: "confirmed" | "pending" | "under_review";
+  resultStatus: "confirmed" | "pending" | "under_review" | "rejected";
   winnerTeam: 1 | 2 | null;
   teams: [MatchActivityTeam, MatchActivityTeam];
 }
@@ -76,6 +76,7 @@ function normalizeResultStatus(
   status: string | null | undefined
 ): MatchActivityEntry["resultStatus"] {
   if (status === "confirmed") return "confirmed";
+  if (status === "rejected") return "rejected";
   if (status === "under_review" || status === "disputed") return "under_review";
   return "pending";
 }
@@ -87,11 +88,11 @@ function isActiveParticipant(metadata: unknown): boolean {
 }
 
 /**
- * Recent completed matches with the players who competed and the final score.
+ * Recent confirmed matches with the players who competed and the final score.
  *
  * Public on purpose: every player (and guests) can see recent match activity on
- * `/matches`. Only completed matches are returned, so a score that is still
- * pending confirmation never leaks publicly. Private matches are excluded by the
+ * `/matches`. Only CONFIRMED matches are returned, so a score that is still
+ * pending or disputed never leaks publicly. Private matches are excluded by the
  * `matches are publicly readable` RLS policy.
  */
 export async function getRecentMatchActivity(limit = 8): Promise<MatchActivityEntry[]> {
@@ -123,7 +124,7 @@ export async function getRecentMatchActivity(limit = 8): Promise<MatchActivityEn
         )
       `
     )
-    .eq("status", "completed")
+    .eq("status", "confirmed")
     .order("match_date", { ascending: false })
     .order("start_time", { ascending: false })
     .limit(limit);

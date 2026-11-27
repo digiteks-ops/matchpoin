@@ -1,6 +1,12 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logError } from "@/lib/errors";
+import {
+  disputeDeadlineFrom,
+  isDisputeWindowOpen,
+  normalizeResultViewStatus,
+} from "@/lib/matches/result-status-core.mjs";
 import {
   calculateSinglesMatchRating,
   calculateDoublesMatchRating,
@@ -43,12 +49,13 @@ export interface MatchResultView {
   team2Score: number;
   winnerTeam: 1 | 2;
   submittedBy: string | null;
-  status: "pending" | "confirmed" | "under_review";
+  status: "pending" | "confirmed" | "under_review" | "rejected";
   submittedAt: string | null;
   confirmedAt: string | null;
   disputedAt: string | null;
   disputeDeadline: string | null;
   disputeReason: string | null;
+  resolutionReason: string | null;
   photoUrls: string[];
 }
 
@@ -66,16 +73,10 @@ export interface ApplyRatingResponse {
   results: RatingChangeSummary[];
 }
 
-const DISPUTE_WINDOW_HOURS = 24;
-
 function metadataObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-}
-
-function addHours(date: Date, hours: number): Date {
-  return new Date(date.getTime() + hours * 60 * 60 * 1000);
 }
 
 /** rating_history.change_reason is varchar(50); keep reasons within that limit. */
@@ -97,12 +98,7 @@ export function toMatchResultView(row: MatchResultRow): MatchResultView {
   const meta = metadataObject(row.metadata);
   const deadline =
     typeof meta.dispute_deadline === "string" ? meta.dispute_deadline : null;
-  const status =
-    row.status === "confirmed"
-      ? "confirmed"
-      : row.status === "under_review" || row.status === "disputed"
-      ? "under_review"
-      : "pending";
+  const status = normalizeResultViewStatus(row.status);
 
   const photoUrls = Array.isArray(meta.photo_urls)
     ? (meta.photo_urls as unknown[]).filter((u): u is string => typeof u === "string")
@@ -121,12 +117,14 @@ export function toMatchResultView(row: MatchResultRow): MatchResultView {
     disputedAt: row.disputed_at,
     disputeDeadline: deadline,
     disputeReason: typeof meta.dispute_reason === "string" ? meta.dispute_reason : null,
+    resolutionReason:
+      typeof meta.resolution_reason === "string" ? meta.resolution_reason : null,
     photoUrls,
   };
 }
 
-async function getMatchContext(matchId: string) {
-  const supabase = createClient();
+async function getMatchContext(matchId: string, client?: SupabaseClient) {
+  const supabase = client ?? createClient();
 
   const { data: match, error: matchError } = await supabase
     .from("matches")
@@ -158,8 +156,8 @@ async function getMatchContext(matchId: string) {
   return { supabase, match, meta, category, team1, team2 };
 }
 
-async function getResult(matchId: string): Promise<MatchResultRow | null> {
-  const supabase = createClient();
+async function getResult(matchId: string, client?: SupabaseClient): Promise<MatchResultRow | null> {
+  const supabase = client ?? createClient();
   const { data } = await supabase
     .from("match_results")
     .select("*")
@@ -296,7 +294,7 @@ export async function submitMatchResult(
     }
 
     const now = new Date();
-    const deadline = new Date(addHours(now, DISPUTE_WINDOW_HOURS).toISOString());
+    const deadline = disputeDeadlineFrom(now)!;
     const nextMetadata = {
       ...metadataObject(existing.metadata),
       dispute_deadline: deadline.toISOString(),
@@ -327,8 +325,10 @@ export async function submitMatchResult(
   const { error: statusError } = await (admin ?? supabase)
     .from("matches")
     .update({
-      status: asAdmin ? "completed" : "in_progress",
+      status: "pending",
       result_submitted_at: now.toISOString(),
+      confirm_deadline: deadline.toISOString(),
+      metadata: { ...meta, status_actor: userId },
     })
     .eq("id", input.matchId);
 
@@ -344,7 +344,7 @@ export async function submitMatchResult(
   }
 
   const now = new Date();
-  const deadline = addHours(now, DISPUTE_WINDOW_HOURS);
+  const deadline = disputeDeadlineFrom(now)!;
 
   const { data, error } = await supabase
     .from("match_results")
@@ -373,8 +373,10 @@ export async function submitMatchResult(
   const { error: statusError } = await (admin ?? supabase)
     .from("matches")
     .update({
-      status: asAdmin ? "completed" : "in_progress",
+      status: "pending",
       result_submitted_at: now.toISOString(),
+      confirm_deadline: deadline.toISOString(),
+      metadata: { ...meta, status_actor: userId },
     })
     .eq("id", input.matchId);
 
@@ -398,27 +400,10 @@ export async function confirmMatchResult(
   matchId: string
 ): Promise<ApplyRatingResponse> {
   const supabase = await assertParticipant(matchId, userId);
-  const result = await getResult(matchId);
 
-  if (!result) throw new Error("Belum ada hasil pertandingan yang dikirim.");
-  if (result.status === "confirmed") {
-    return applyVerifiedMatchRatings(matchId);
-  }
-  if (result.status === "under_review") {
-    throw new Error("Hasil sedang ditinjau dan belum dapat dikonfirmasi.");
-  }
-  if (result.submitted_by === userId) {
-    throw new Error("Anda tidak dapat mengonfirmasi hasil yang Anda kirim sendiri.");
-  }
-
-  const { error } = await supabase
-    .from("match_results")
-    .update({
-      status: "confirmed",
-      confirmed_at: new Date().toISOString(),
-    })
-    .eq("id", result.id);
-
+  const { error } = await supabase.rpc("confirm_match_result", {
+    p_match_id: matchId,
+  });
   if (error) throw new Error(error.message);
 
   return applyVerifiedMatchRatings(matchId);
@@ -433,80 +418,135 @@ export async function disputeMatchResult(
   reason: string
 ): Promise<MatchResultView> {
   const supabase = await assertParticipant(matchId, userId);
-  const result = await getResult(matchId);
-
-  if (!result) throw new Error("Belum ada hasil pertandingan yang dikirim.");
-  if (result.status === "confirmed") {
-    throw new Error("Hasil sudah dikonfirmasi dan tidak dapat disanggah.");
-  }
-  if (result.status === "under_review") {
-    throw new Error("Hasil ini sudah berada dalam peninjauan.");
-  }
-  if (result.submitted_by === userId) {
-    throw new Error("Anda tidak dapat menyanggah hasil yang Anda kirim sendiri.");
-  }
-  if (!reason.trim()) {
+  const trimmed = reason.trim();
+  if (!trimmed) {
     throw new Error("Alasan sanggahan wajib diisi.");
   }
 
-const meta = metadataObject(result.metadata);
-  const now = new Date();
-  const { data, error } = await supabase
-    .from("match_results")
-    .update({
-      status: "under_review",
-      disputed_at: now.toISOString(),
-      metadata: { ...meta, dispute_reason: reason.trim() },
-    })
-    .eq("id", result.id)
-    .select("*")
-    .single();
-
+  const { error } = await supabase.rpc("raise_match_dispute", {
+    p_match_id: matchId,
+    p_reason: trimmed,
+  });
   if (error) throw new Error(error.message);
 
-  const admin = createAdminClient();
-  const { error: disputeMatchError } = await (admin ?? supabase)
-    .from("matches")
-    .update({ dispute_raised_at: now.toISOString() })
-    .eq("id", matchId);
-
-  if (disputeMatchError) {
-    logError("result.dispute_status", disputeMatchError, { matchId });
-  }
-
-  return toMatchResultView(data as MatchResultRow);
+  const updated = await getResult(matchId);
+  if (!updated) throw new Error("Belum ada hasil pertandingan yang dikirim.");
+  return toMatchResultView(updated);
 }
 
 /**
- * Auto-confirms a pending result once the 24-hour server-side window has elapsed.
- * Call this when loading match details.
+ * Auto-confirms pending results once the 24-hour server-side window has elapsed.
+ * Runs the same idempotent batch as the scheduled job; safe to call on view.
  */
 export async function syncMatchResultStatus(matchId: string): Promise<void> {
-  const supabase = createClient();
   const result = await getResult(matchId);
   if (!result || result.status !== "pending") return;
 
   const meta = metadataObject(result.metadata);
-  const deadlineRaw = meta.dispute_deadline;
-  const deadline = typeof deadlineRaw === "string" ? new Date(deadlineRaw) : null;
-  const submittedAt = result.submitted_at ? new Date(result.submitted_at) : null;
-  const fallbackDeadline = submittedAt ? addHours(submittedAt, DISPUTE_WINDOW_HOURS) : null;
-  const effectiveDeadline = deadline ?? fallbackDeadline;
+  const deadline =
+    typeof meta.dispute_deadline === "string"
+      ? meta.dispute_deadline
+      : disputeDeadlineFrom(result.submitted_at);
+  if (isDisputeWindowOpen(deadline, new Date())) return;
 
-  if (!effectiveDeadline) return;
-  if (Date.now() < effectiveDeadline.getTime()) return;
+  await autoConfirmDueMatches(50);
+}
 
-  const { error } = await supabase
+export interface AutoConfirmSummary {
+  confirmed: number;
+  failed: number;
+  matchIds: string[];
+}
+
+/**
+ * Scheduled-job entry point. Uses the service-role client so it works with
+ * nobody logged in. The RPC transitions are atomic and idempotent; ratings are
+ * applied exactly once per match (rating_history guard).
+ */
+export async function autoConfirmDueMatches(limit = 100): Promise<AutoConfirmSummary> {
+  const admin = createAdminClient();
+  if (!admin) throw new Error("Konfigurasi server admin belum lengkap.");
+
+  const { data, error } = await admin.rpc("auto_confirm_due_matches", { p_limit: limit });
+  if (error) throw new Error(error.message);
+
+  const matchIds = ((data ?? []) as string[]).filter((id): id is string => typeof id === "string");
+  let failed = 0;
+  for (const id of matchIds) {
+    try {
+      await applyVerifiedMatchRatings(id, admin);
+    } catch (err) {
+      failed += 1;
+      logError("rating.auto_confirm", err, { matchId: id });
+    }
+  }
+
+  // Repair: a previous run may have confirmed the status but failed to persist
+  // the rating. Re-applying is idempotent because rating_history is checked.
+  const { data: confirmedResults } = await admin
     .from("match_results")
-    .update({
-      status: "confirmed",
-      confirmed_at: new Date().toISOString(),
-      metadata: { ...meta, auto_confirmed: true },
-    })
-    .eq("id", result.id);
+    .select("match_id, is_walkover, metadata")
+    .eq("status", "confirmed")
+    .order("confirmed_at", { ascending: false })
+    .limit(limit);
 
-  if (error) return;
-  await applyVerifiedMatchRatings(matchId);
+  const repairIds = Array.from(
+    new Set(
+      (confirmedResults ?? [])
+        .filter((row) => {
+          if (row.is_walkover === true) return false;
+          return metadataObject(row.metadata).is_walkover !== true;
+        })
+        .map((row) => row.match_id as string)
+        .filter((id): id is string => typeof id === "string" && !matchIds.includes(id))
+    )
+  );
+
+  if (repairIds.length > 0) {
+    const { data: historyRows } = await admin
+      .from("rating_history")
+      .select("match_id")
+      .in("match_id", repairIds);
+    const rated = new Set((historyRows ?? []).map((row) => row.match_id as string));
+    for (const id of repairIds.filter((matchId) => !rated.has(matchId))) {
+      try {
+        await applyVerifiedMatchRatings(id, admin);
+      } catch (err) {
+        failed += 1;
+        logError("rating.repair", err, { matchId: id });
+      }
+    }
+  }
+
+  return { confirmed: matchIds.length, failed, matchIds };
+}
+
+/**
+ * Host/Admin resolves an open dispute. Server-side RPC enforces permissions and
+ * the CONFIRMED/REJECTED transition; ratings are recalculated only on CONFIRMED.
+ */
+export async function resolveMatchDispute(
+  matchId: string,
+  resolution: "confirmed" | "rejected",
+  reason: string
+): Promise<ApplyRatingResponse | MatchResultView | null> {
+  const supabase = createClient();
+  const trimmed = reason.trim();
+  if (resolution === "rejected" && !trimmed) {
+    throw new Error("Alasan penolakan wajib diisi.");
+  }
+
+  const { error } = await supabase.rpc("resolve_match_dispute", {
+    p_match_id: matchId,
+    p_resolution: resolution,
+    p_reason: trimmed || null,
+  });
+  if (error) throw new Error(error.message);
+
+  if (resolution === "confirmed") {
+    return applyVerifiedMatchRatings(matchId);
+  }
+  return getMatchResult(matchId);
 }
 
 /**
@@ -514,17 +554,17 @@ export async function syncMatchResultStatus(matchId: string): Promise<void> {
  */
 export async function applyVerifiedMatchRatings(
   matchId: string,
-  client?: ReturnType<typeof createClient>
+  client?: SupabaseClient
 ): Promise<ApplyRatingResponse> {
   const supabase = client ?? createClient();
 
-  const { supabase: _s, match, meta, category, team1, team2 } = await getMatchContext(matchId);
+  const { supabase: _s, match, meta, category, team1, team2 } = await getMatchContext(matchId, supabase);
 
   if (match.status === "cancelled") {
     throw new Error("Pertandingan yang dibatalkan tidak memengaruhi rating.");
   }
 
-  const result = await getResult(matchId);
+  const result = await getResult(matchId, supabase);
   if (!result || result.status !== "confirmed") {
     throw new Error(
       "Integritas Rating: hanya pertandingan dengan status 'confirmed' yang dapat mengubah MPR."
@@ -760,12 +800,12 @@ export async function applyVerifiedMatchRatings(
   }
 
   // The confirming player is often not the organizer, and only organizers may
-  // update matches under RLS, so the completion is written with the admin client.
+  // update matches under RLS, so the confirmation is written with the admin client.
   const admin = createAdminClient();
   const { error: completeError } = await (admin ?? supabase)
     .from("matches")
     .update({
-      status: "completed",
+      status: "confirmed",
       result_confirmed_at: new Date().toISOString(),
     })
     .eq("id", matchId);

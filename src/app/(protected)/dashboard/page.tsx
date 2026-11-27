@@ -39,6 +39,9 @@ const STATUS_LABEL: Record<string, string> = {
   full: "Penuh",
   in_progress: "Berlangsung",
   pending: "Menunggu Konfirmasi",
+  confirmed: "Terkonfirmasi",
+  disputed: "Disanggah",
+  rejected: "Ditolak",
   completed: "Selesai",
   cancelled: "Dibatalkan",
 };

@@ -240,6 +240,8 @@ export default async function MatchesPage() {
                         ? "Selesai"
                         : entry.resultStatus === "under_review"
                         ? "Ditinjau"
+                        : entry.resultStatus === "rejected"
+                        ? "Ditolak"
                         : "Menunggu konfirmasi"}
                     </Badge>
                   </div>

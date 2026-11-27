@@ -309,7 +309,9 @@ export async function respondToInvite(
   }
 
   if (match.status === "cancelled") throw new Error("Pertandingan telah dibatalkan.");
-  if (match.status === "completed") throw new Error("Pertandingan telah selesai.");
+  if (match.status === "completed" || match.status === "confirmed" || match.status === "rejected") {
+    throw new Error("Pertandingan telah selesai.");
+  }
   if (match.status !== "open") throw new Error("Pendaftaran pertandingan ini sudah ditutup.");
 
   const { data: roster, error: rosterError } = await supabase

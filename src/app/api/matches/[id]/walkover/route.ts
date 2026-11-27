@@ -61,7 +61,7 @@ export async function POST(
       );
     }
 
-    if (match.status === "completed") {
+    if (match.status === "completed" || match.status === "confirmed" || match.status === "rejected") {
       return NextResponse.json(
         { success: false, message: "Pertandingan sudah selesai." },
         { status: 400 }
@@ -109,8 +109,9 @@ export async function POST(
     const { error: statusError } = await admin
       .from("matches")
       .update({
-        status: "completed",
+        status: "confirmed",
         result_submitted_at: new Date().toISOString(),
+        result_confirmed_at: new Date().toISOString(),
       })
       .eq("id", params.id);
 

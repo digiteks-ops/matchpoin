@@ -40,6 +40,7 @@ export default async function MatchDetailPage({
     inviteId: null,
     team: null,
     isAdmin: false,
+    isHost: false,
   };
 
   if (user) {
@@ -48,11 +49,14 @@ export default async function MatchDetailPage({
     const invited = match.invitedPlayers.find((p) => p.userId === user.id);
     const participant = confirmed ?? pending ?? invited;
     let isAdmin = false;
+    let isHost = false;
     try {
       const roles = await getUserRoles(user.id);
       isAdmin = roles.includes("admin") || roles.includes("super_admin");
+      isHost = roles.includes("host");
     } catch {
       isAdmin = false;
+      isHost = false;
     }
 
     viewer = {
@@ -64,6 +68,7 @@ export default async function MatchDetailPage({
       inviteId: invited?.id ?? null,
       team: participant?.team ?? null,
       isAdmin,
+      isHost,
     };
   }
 

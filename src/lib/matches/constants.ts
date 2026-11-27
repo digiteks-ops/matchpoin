@@ -14,6 +14,9 @@ export type MatchStatus =
   | "full"
   | "in_progress"
   | "pending"
+  | "confirmed"
+  | "disputed"
+  | "rejected"
   | "completed"
   | "cancelled";
 

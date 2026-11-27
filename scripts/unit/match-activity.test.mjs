@@ -27,7 +27,7 @@ test("/matches menampilkan aktivitas pertandingan terbaru untuk semua pemain", (
 
 test("aktivitas hanya memakai pertandingan selesai dan data publik", () => {
   // Hasil yang masih pending tidak boleh bocor ke halaman publik.
-  assert.match(service, /\.eq\("status", "completed"\)/);
+  assert.match(service, /\.eq\("status", "confirmed"\)/);
   assert.match(service, /match_results/);
   assert.match(service, /match_participants/);
   assert.match(service, /public_players/);
